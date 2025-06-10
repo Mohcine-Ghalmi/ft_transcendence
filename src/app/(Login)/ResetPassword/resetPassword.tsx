@@ -7,10 +7,34 @@ export default function ResetPassword() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = async (e: any) => {
+  const handleemailChange = (e: any) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    
+    // Clear error first
+    setError('');
+    
+    if (newEmail.trim()) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        setError('Please enter a valid email address');
+      }
+    }
+  };
+
+  const handleSubmit = async (e : any) => {
     e.preventDefault();
-    if (!email) return;
+    
+    if (!email.trim()) {
+      setError('Email is required');
+      return;
+    }
+    
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     
     setIsLoading(true);
     
@@ -20,7 +44,7 @@ export default function ResetPassword() {
       setIsSubmitted(true);
       console.log('Reset link sent to:', email);
     }, 1500);
-  };
+  }
 
   return (
     <div className="w-full bg-[#121417] text-white">
@@ -57,16 +81,22 @@ export default function ResetPassword() {
                     type="email"
                     placeholder="Email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-400 text-sm sm:text-base"
-                    required
-                  />
+                    onChange={handleemailChange}
+                     className={`w-full px-4 py-3 bg-gray-800 border rounded-lg focus:outline-none transition-colors placeholder-gray-400 ${
+                      error
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-gray-700 focus:border-blue-500'
+                }`}
+              />
+              { error && (
+                <p className="text-red-500 text-sm mt-1">{error}</p>
+              )}
                 </div>
 
                 {/* Submit Button */}
                 <button
                   onClick={handleSubmit}
-                  disabled={!email || isLoading}
+                  disabled={!email.trim() || !!error || isLoading}
                   className="w-full py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded-lg font-medium transition-colors text-sm sm:text-base"
                 >
                   {isLoading ? 'Sending...' : 'Send Reset Link'}
@@ -100,6 +130,7 @@ export default function ResetPassword() {
                   onClick={() => {
                     setIsSubmitted(false);
                     setEmail('');
+                    setError('');
                   }}
                   className="w-full py-2.5 sm:py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors text-sm sm:text-base"
                 >
