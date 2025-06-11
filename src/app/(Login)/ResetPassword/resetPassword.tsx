@@ -50,10 +50,12 @@ export default function ResetPassword() {
     <div className="w-full bg-[#121417] text-white">
       {/* Header */}
       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-700">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8" />
-          <h1 className="text-white font-semibold text-base sm:text-lg">PingPong</h1>
-        </div>
+        <Link href="/">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8" />
+            <h1 className="text-white font-semibold text-base sm:text-lg">PingPong</h1>
+          </div>
+        </Link>
         <Link href="/" passHref>
           <button className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
             LogIn
@@ -63,14 +65,14 @@ export default function ResetPassword() {
 
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-80px)] px-4 sm:px-6 py-8">
-        <div className="w-full max-w-sm sm:max-w-md ">
+        <div className="w-full max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           {!isSubmitted ? (
             <>
-              <h1 className="text-xl sm:text-2xl font-bold text-center mb-3">
+              <h1 className="text-xl sm:text-2xl md:text-3xl xl:text-4xl font-bold text-center mb-3">
                 Forgot your password?
               </h1>
               
-              <p className="text-gray-400 text-center mb-6 sm:mb-8 text-sm leading-relaxed px-2">
+              <p className="text-gray-400 text-center mb-6 sm:mb-8 text-sm md:text-base xl:text-lg leading-relaxed px-2">
                 Enter the email address associated with your account and we'll send you a link to reset your password.
               </p>
 
@@ -82,22 +84,22 @@ export default function ResetPassword() {
                     placeholder="Email"
                     value={email}
                     onChange={handleemailChange}
-                     className={`w-full px-4 py-3 bg-gray-800 border rounded-lg focus:outline-none transition-colors placeholder-gray-400 ${
+                    className={`w-full px-4 md:px-6 xl:px-10 py-3 md:py-4 xl:py-6 bg-gray-800 border rounded-lg md:rounded-xl xl:rounded-2xl focus:outline-none transition-colors placeholder-gray-400 text-base md:text-lg xl:text-2xl ${
                       error
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-700 focus:border-blue-500'
-                }`}
-              />
-              { error && (
-                <p className="text-red-500 text-sm mt-1">{error}</p>
-              )}
+                        ? 'border-red-500 focus:border-red-500'
+                        : 'border-gray-700 focus:border-blue-500'
+                    }`}
+                  />
+                  { error && (
+                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">{error}</p>
+                  )}
                 </div>
 
                 {/* Submit Button */}
                 <button
                   onClick={handleSubmit}
                   disabled={!email.trim() || !!error || isLoading}
-                  className="w-full py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded-lg font-medium transition-colors text-sm sm:text-base"
+                  className="w-full py-2.5 sm:py-3 md:py-4 xl:py-6 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-sm sm:text-base md:text-lg xl:text-2xl"
                 >
                   {isLoading ? 'Sending...' : 'Send Reset Link'}
                 </button>
@@ -105,7 +107,7 @@ export default function ResetPassword() {
 
               {/* Back to Login */}
               <div className="text-center mt-6">
-                <span className="text-gray-400 text-xs sm:text-sm">
+                <span className="text-gray-400 text-xs sm:text-sm md:text-base xl:text-lg">
                   Remember your password?{' '}
                   <Link href="/">
                     <button className="text-blue-400 hover:text-blue-300 transition-colors underline sm:no-underline sm:hover:underline">
@@ -117,11 +119,11 @@ export default function ResetPassword() {
             </>
           ) : (
             <>
-              <h1 className="text-xl sm:text-2xl font-bold text-center mb-3">
+              <h1 className="text-xl sm:text-2xl md:text-3xl xl:text-4xl font-bold text-center mb-3">
                 Check your email
               </h1>
               
-              <p className="text-gray-400 text-center mb-6 sm:mb-8 text-sm leading-relaxed px-2">
+              <p className="text-gray-400 text-center mb-6 sm:mb-8 text-sm md:text-base xl:text-lg leading-relaxed px-2">
                 We've sent a password reset link to <span className="text-white break-all">{email}</span>
               </p>
 
@@ -132,13 +134,13 @@ export default function ResetPassword() {
                     setEmail('');
                     setError('');
                   }}
-                  className="w-full py-2.5 sm:py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors text-sm sm:text-base"
+                  className="w-full py-2.5 sm:py-3 md:py-4 xl:py-6 bg-gray-700 hover:bg-gray-600 rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-sm sm:text-base md:text-lg xl:text-2xl"
                 >
                   Try another email
                 </button>
                 
                 <Link href="/">
-                  <button className="w-full py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors text-sm sm:text-base">
+                  <button className="w-full py-2.5 sm:py-3 md:py-4 xl:py-6 bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-sm sm:text-base md:text-lg xl:text-2xl">
                     Back to Login
                   </button>
                 </Link>
