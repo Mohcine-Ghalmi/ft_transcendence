@@ -291,12 +291,13 @@ export default function Signup() {
     <div className="min-h-screen bg-[#121417] text-white">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-        <Link href="/">
-          <div className="flex items-center gap-3">
-            <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-8 h-8" />
-            <h1 className="text-white font-semibold text-lg">PingPong</h1>
-          </div>
-        </Link>
+        {/* Logo */}
+        <div className="hover:text-white">
+          <Link href="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
+            <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-7 h-7 sm:w-8 sm:h-8" />
+            <h1 className="text-white font-semibold text-base sm:text-lg">PingPong</h1>
+          </Link>
+        </div>
         <Link href="/" passHref>
           <button className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
             Login
