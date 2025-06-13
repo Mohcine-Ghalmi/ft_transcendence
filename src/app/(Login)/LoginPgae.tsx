@@ -70,9 +70,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121417] flex flex-col">
+    <div className="min-h-screen  flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+      <header className="flex items-center bg-[#121417] justify-between px-6 py-4 border-b border-gray-700">
         <Link href="/">
           <div className="flex items-center gap-3">
             <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-8 h-8" />

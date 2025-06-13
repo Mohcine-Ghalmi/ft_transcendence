@@ -47,7 +47,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="w-full bg-[#121417] text-white">
+    <div className="w-full text-white">
       {/* Header */}
       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-700">
         <Link href="/">

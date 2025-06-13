@@ -288,9 +288,9 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121417] text-white">
+    <div className="min-h-screen text-white">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+      <header className="flex items-center bg-[#121417] justify-between px-6 py-4 border-b border-gray-700">
         {/* Logo */}
         <div className="hover:text-white">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 // Game Mode Cards Component
@@ -7,9 +8,10 @@ export const GameModeCards = () => {
       <Link href="/" className="w-full sm:w-auto">
         <div className="bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl sm:rounded-3xl w-full sm:w-72 md:w-80 lg:w-96 xl:w-[28rem] h-48 sm:h-56 md:h-64 lg:h-72 shadow-xl sm:shadow-2xl cursor-pointer hover:scale-105 transition-transform duration-300 relative overflow-hidden">
           <div className="absolute inset-0 rounded-2xl sm:rounded-3xl overflow-hidden">
-            <img
+            <Image
               src="/1v1.png"
               alt="Play 1v1"
+              fill
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-black/20"></div>
@@ -24,9 +26,10 @@ export const GameModeCards = () => {
       <Link href="/" className="w-full sm:w-auto">
         <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl sm:rounded-3xl w-full sm:w-72 md:w-80 lg:w-96 xl:w-[28rem] h-48 sm:h-56 md:h-64 lg:h-72 shadow-xl sm:shadow-2xl cursor-pointer hover:scale-105 transition-transform duration-300 relative overflow-hidden">
           <div className="absolute inset-0 rounded-2xl sm:rounded-3xl overflow-hidden">
-            <img
+            <Image
               src="/Tournament.png"
               alt="Tournament"
+              fill
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-black/20"></div>

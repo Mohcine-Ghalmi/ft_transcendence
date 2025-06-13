@@ -10,7 +10,7 @@ import { StatisticsChart } from "../../../components/dashboard/StatisticsChart";
 
 export default function PingPongDashboard() {
   return (
-    <div className="min-h-screen bg-[#121417] text-white">
+    <div className="h-full text-white">
 
       {/* Main Dashboard Content */}
       <main className="pt-20 p-3 sm:p-4 lg:p-6 w-full min-h-screen">

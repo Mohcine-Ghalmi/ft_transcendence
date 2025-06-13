@@ -78,9 +78,9 @@ export default function PasswordResetForm() {
   };
 
   return (
-    <div className="w-full bg-[#121417] text-white">
+    <div className="w-full  text-white">
       {/* Header */}
-       <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-700">
+       <header className="flex items-center justify-between px-4 bg-[#121417] sm:px-6 py-4 border-b border-gray-700">
         <Link href="/">
           <div className="flex items-center gap-2 sm:gap-3">
             <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8" />
@@ -95,7 +95,7 @@ export default function PasswordResetForm() {
       </header>
 
       {/* Main Content */}
-      <div className="flex items-center justify-center min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-80px)] px-4 sm:px-6 py-8">
+      <div className="flex items-center  justify-center h-full sm:min-h-[calc(100vh-80px)] px-4 sm:px-6 py-8">
         <div className="w-full max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           {!isSubmitted ? (
             <>

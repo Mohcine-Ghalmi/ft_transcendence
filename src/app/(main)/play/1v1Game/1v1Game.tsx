@@ -1,0 +1,265 @@
+"use client"
+import React, { useState } from 'react';
+import {user} from "../../../../data/mockData";
+// Add Player Modal Component
+const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
+  const [username, setUsername] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [errors, setErrors] = useState({});
+  const [avatar, setAvatar] = useState(null);
+
+   const handleSubmit = () => {
+    const newErrors = {};
+    
+    if (!username.trim()) {
+      newErrors.username = 'Username is required';
+    }
+    
+    if (!nickname.trim()) {
+      newErrors.nickname = 'Nickname is required';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    // Clear errors if validation passes
+    setErrors({});
+    
+    onAddPlayer({
+      username: username.trim(),
+      nickname: nickname.trim(),
+      avatar: avatar || '/mghalmi.png'
+    });
+    
+    // Reset form
+    setUsername('');
+    setNickname('');
+    setAvatar(null);
+  };
+   const handleUsernameChange = (e) => {
+    setUsername(e.target.value);
+    if (errors.username) {
+      setErrors(prev => ({ ...prev, username: '' }));
+    }
+  };
+
+  const handleNicknameChange = (e) => {
+    setNickname(e.target.value);
+    if (errors.nickname) {
+      setErrors(prev => ({ ...prev, nickname: '' }));
+    }
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => setAvatar(e.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0  backdrop-blur-xs flex items-center justify-center z-50">
+      <div className="bg-[#121417] rounded-lg p-8 w-full max-w-md mx-4 border border-gray-700">
+        <h2 className="text-xl font-bold text-white mb-6 text-center">Player 2</h2>
+        
+        <div className="space-y-4">
+          <div>
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={handleUsernameChange}
+              className={`w-full px-4 py-3 bg-[#4a5568] text-white rounded-lg border-none outline-none focus:bg-[#5a6578] transition-colors ${
+                errors.username ? 'ring-2 ring-red-500' : ''
+              }`}
+            />
+            {errors.username && (
+              <p className="text-red-400 text-sm mt-1">{errors.username}</p>
+            )}
+          </div>
+          
+          <div>
+            <input
+              type="text"
+              placeholder="Nickname"
+              value={nickname}
+              onChange={handleNicknameChange}
+              className={`w-full px-4 py-3 bg-[#4a5568] text-white rounded-lg border-none outline-none focus:bg-[#5a6578] transition-colors ${
+                errors.nickname ? 'ring-2 ring-red-500' : ''
+              }`}
+            />
+            {errors.nickname && (
+              <p className="text-red-400 text-sm mt-1">{errors.nickname}</p>
+            )}
+          </div>
+          
+          <div className="border-2 border-dashed border-gray-500 rounded-lg p-8 text-center">
+            <div className="mb-4">
+              <h3 className="text-white font-semibold mb-2">Upload Avatar</h3>
+              <p className="text-gray-400 text-sm mb-4">Select an avatar for Player 2.</p>
+              
+              {avatar && (
+                <div className="mb-4">
+                  <img
+                    src={avatar}
+                    alt="Avatar preview"
+                    className="w-16 h-16 rounded-full mx-auto object-cover"
+                  />
+                </div>
+              )}
+              
+              <label className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-4 py-2 rounded-lg cursor-pointer transition-colors inline-block">
+                Choose Avatar
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-4 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 text-gray-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+            >
+              Update
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Player Card Component
+const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
+  if (!player) {
+    return (
+      <div className="text-center">
+        <h3 className="text-2xl md:text-3xl font-semibold text-white mb-8">Player {playerNumber}</h3>
+        <div className="border-2 border-dashed border-gray-500 rounded-2xl p-10 md:p-20 mb-8">
+          <div className="text-center">
+            <h4 className="text-white font-semibold mb-4 text-xl md:text-2xl">Add Player {playerNumber}</h4>
+            <p className="text-gray-400 text-lg md:text-xl mb-6">Add a local player to start a 1v1 game.</p>
+            <button
+              onClick={onAddPlayer}
+              className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-8 py-4 md:px-12 md:py-5 rounded-xl text-lg md:text-2xl transition-colors"
+            >
+              Add Player
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center">
+      <h3 className="text-2xl md:text-3xl font-semibold text-white mb-8">Player {playerNumber}</h3>
+      <div className="mb-8">
+        <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
+          <img
+            src={player.avatar}
+            alt={player.name || player.nickname}
+            className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
+            onError={(e) => {
+              e.target.src = '/default-avatar.png';
+            }}
+          />
+        </div>
+        <h4 className="text-white font-semibold text-2xl md:text-3xl">
+          {player.name || player.nickname}
+        </h4>
+        <p className="text-gray-400 text-lg md:text-xl">@{player.username}</p>
+      </div>
+    </div>
+  );
+};
+
+// Main Local 1v1 Component
+export default function Local1v1() {
+  const [player2, setPlayer2] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleAddPlayer = (playerData) => {
+    setPlayer2(playerData);
+    setIsModalOpen(false);
+  };
+
+  const handleStartGame = () => {
+    if (!player2) {
+      alert('Please add Player 2 before starting the game');
+      return;
+    }
+    
+    console.log('Starting Local 1v1 Game:', {
+      player1: user,
+      player2: player2
+    });
+    
+    // Here you would navigate to the actual game or perform game start logic
+    alert('Game starting...');
+  };
+
+  return (
+    <div className="h-full  text-white">
+      {/* Main Content */}
+      <main className="pt-20  w-full h-full">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-4xl md:text-6xl font-bold text-center mb-12 md:mb-20">Local 1v1</h1>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 mb-12 md:mb-20">
+            {/* Player 1 - Current User */}
+            <PlayerCard player={user} playerNumber={1} />
+            
+            {/* Player 2 - To be added */}
+            <PlayerCard 
+              player={player2} 
+              playerNumber={2} 
+              onAddPlayer={() => setIsModalOpen(true)}
+            />
+          </div>
+          
+          {/* Start Game Button */}
+          <div className="text-center">
+            <button
+              onClick={handleStartGame}
+              disabled={!player2}
+              className={`px-10 py-4 md:px-16 md:py-6 rounded-xl text-xl md:text-3xl font-semibold transition-all duration-300 ${
+                player2
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              Start Game
+            </button>
+          </div>
+        </div>
+      </main>
+
+      {/* Add Player Modal */}
+      <AddPlayerModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onAddPlayer={handleAddPlayer}
+      />
+    </div>
+  );
+}
