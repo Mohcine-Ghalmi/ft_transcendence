@@ -2,8 +2,8 @@ import Link from 'next/link';
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-[#121417] text-white flex items-center justify-center">
-      <div className="text-center p-6 sm:p-8 max-w-lg mx-auto">
+    <div className="fixed inset-0 bg-black text-white flex items-center justify-center">
+      <div className="text-center mx-auto w-full h-full flex flex-col justify-center items-center">
         <div className="mb-8">
           <h1 className="text-8xl sm:text-9xl font-bold text-transparent bg-gray-600 bg-clip-text">
             404
@@ -20,7 +20,6 @@ export default function NotFound() {
             It might have been moved, deleted, or you entered the wrong URL.
           </p>
         </div>
-
         <div className="space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
           <Link
             href="/dashboard"

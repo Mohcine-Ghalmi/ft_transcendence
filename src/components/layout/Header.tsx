@@ -1,5 +1,5 @@
 "use client"
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { notifications } from "../../data/mockData";
 import Image from 'next/image';
 import Link from 'next/link';
@@ -7,6 +7,7 @@ import { user } from "../../data/mockData";
 import { Menu, X } from 'lucide-react';
 import { SearchBar } from './SearchBar';
 import { NotificationDropdown } from './Notification';
+import { usePathname } from 'next/navigation';
 
 export const Navigation = ({ navigationItems, activeTab, onNavClick, className = "" }: {
         navigationItems: NavigationItem[];
@@ -33,8 +34,6 @@ export const Navigation = ({ navigationItems, activeTab, onNavClick, className =
     </nav>
   );
 };
-
-type NavigationItem = { label: string; href: string };
 
 export const MobileMenu = ({ navigationItems, activeTab, onNavClick }: {
         navigationItems: NavigationItem[],
@@ -107,9 +106,7 @@ export const MobileMenu = ({ navigationItems, activeTab, onNavClick }: {
   );
 };
 
-export const Header = () => {
-  const [activeTab, setActiveTab] = useState('Home');
-  
+export const Header = () => {  
   const navigationItems = [
     { label: 'Home', href: '/dashboard' },
     { label: 'Play', href: '/play' },
@@ -117,6 +114,24 @@ export const Header = () => {
     { label: 'Settings', href: '/settings' },
     { label: 'Chat', href: '/chat' }
   ];
+  
+  const pathname = usePathname();
+  
+  const getActiveTabFromPath = (currentPath: string) => {
+    const matchedItem = navigationItems.find(item => 
+      currentPath === item.href || currentPath.startsWith(item.href + '/')
+    );
+    return matchedItem?.label || 'Home';
+  };
+
+  const [activeTab, setActiveTab] = useState(() => getActiveTabFromPath(pathname || ''));
+
+  useEffect(() => {
+    if (pathname) {
+      const newActiveTab = getActiveTabFromPath(pathname);
+      setActiveTab(newActiveTab);
+    }
+  }, [pathname]);
 
   const handleNavClick = (label: string): void => {
     setActiveTab(label);

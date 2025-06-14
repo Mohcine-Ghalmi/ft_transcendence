@@ -1,36 +1,8 @@
 "use client"
 import Image from 'next/image';
+import Link from 'next/link';
 import React, { useState } from 'react';
 
-// Tab Navigation Component
-const TabNavigation = ({ selectedTab , onTabChange } : {selectedTab : string , onTabChange : (tab: string)=>void}) => {
-  return (
-    <div className=" flex justify-center mb-12">
-      <div className="bg-[#1e2328] rounded-full p-1 flex">
-        <button
-          onClick={() => onTabChange('Local')}
-          className={`px-8 py-3 rounded-full transition-all duration-300 ${
-            selectedTab === 'Local'
-              ? 'bg-[#2d3748] text-white'
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Local
-        </button>
-        <button
-          onClick={() => onTabChange('Online')}
-          className={`px-8 py-3 rounded-full transition-all duration-300 ${
-            selectedTab === 'Online'
-              ? 'bg-[#2d3748] text-white'
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Online
-        </button>
-      </div>
-    </div>
-  );
-};
 
 // Ping Pong Table Illustration Component
 const PingPongTableIllustration = () => {
@@ -100,7 +72,7 @@ const GameModeCard = ({ title, description, subDescription, illustration, button
 };
 
 // Local Games Component
-const LocalGames = () => {
+export const LocalGames = () => {
   const handleGameClick = (gameType: string, difficulty: string | null = null) => {
     if (difficulty) {
       console.log(`Game Type: Local ${gameType} - Difficulty: ${difficulty}`);
@@ -118,12 +90,14 @@ const LocalGames = () => {
         subDescription="Challenge a friend to a head-to-head match."
         illustration={<PingPongTableIllustration />}
         buttons={
-          <button 
-            onClick={() => handleGameClick('1v1 Match')}
-            className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-          >
-            Local Game
-          </button>
+          <Link href={`/play/OneVsOne?mode=Local`}>
+            <button 
+              onClick={() => handleGameClick('1v1 Match')}
+              className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
+            >
+              Local Game
+            </button>
+          </Link>
         }
       />
 
@@ -136,7 +110,7 @@ const LocalGames = () => {
         buttons={
           <button 
             onClick={() => handleGameClick('Tournament')}
-            className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
+            className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
           >
             Create Tournament
           </button>
@@ -177,7 +151,7 @@ const LocalGames = () => {
 };
 
 // Online Games Component
-const OnlineGames = () => {
+export const OnlineGames = () => {
   const handleGameClick = (gameType, action = null, difficulty = null) => {
     if (difficulty) {
       console.log(`Game Type: Online ${gameType} - Difficulty: ${difficulty}`);
@@ -197,12 +171,14 @@ const OnlineGames = () => {
         subDescription="Challenge a friend to a head-to-head match."
         illustration={<PingPongTableIllustration />}
         buttons={
-          <button 
-            onClick={() => handleGameClick('1v1 Match', 'Invite')}
-            className="bg-[#6b7280] hover:bg-[#7b8390] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-          >
-            Invite
-          </button>
+          <Link href={`/play/OneVsOne?mode=Online`}>
+            <button 
+              onClick={() => handleGameClick('1v1 Match', 'Invite')}
+              className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
+            >
+              Invite
+            </button>
+          </Link>
         }
       />
 
@@ -216,9 +192,9 @@ const OnlineGames = () => {
           <>
             <button 
               onClick={() => handleGameClick('Tournament', 'Join')}
-              className="bg-[#6b7280] hover:bg-[#7b8390] text-white px-6 py-3 rounded-lg transition-colors duration-300"
+              className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
-              Join Tournament
+              Join an Online Tournament
             </button>
             <button 
               onClick={() => handleGameClick('Tournament', 'Create')}
@@ -262,27 +238,3 @@ const OnlineGames = () => {
     </div>
   );
 };
-
-// Main Component
-export default function ChooseYourGame() {
-  const [selectedTab, setSelectedTab] = useState('Local');
-
-  return (
-    <div className="h-full text-white">
-      <main className="pt-20 p-3 sm:p-4 lg:p-6 w-full min-h-screen">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl sm:text-4xl font-bold text-center mb-8">
-            Choose Your Game
-          </h1>
-
-          <TabNavigation 
-            selectedTab={selectedTab} 
-            onTabChange={setSelectedTab} 
-          />
-
-          {selectedTab === 'Local' ? <LocalGames /> : <OnlineGames />}
-        </div>
-      </main>
-    </div>
-  );
-}
