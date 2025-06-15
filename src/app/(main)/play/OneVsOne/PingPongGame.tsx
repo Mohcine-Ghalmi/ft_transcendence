@@ -1,5 +1,6 @@
 "use client";
 import React, { useRef, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const GAME_RATIO = 16 / 9;
 
@@ -29,11 +30,14 @@ const isMobile = () => typeof window !== 'undefined' && window.innerWidth < 640;
 
 export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, onExit }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const router = useRouter();
   const [scores, setScores] = useState({ p1: 0, p2: 0 });
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [mobile, setMobile] = useState(isMobile());
+  const [gameTime, setGameTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
+  const gameStartTime = useRef<number | null>(null);
   const [canvasDims, setCanvasDims] = useState<{ width: number; height: number }>({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
@@ -54,13 +58,32 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
   const [paddle1Move, setPaddle1Move] = useState<'' | 'up' | 'down'>('');
   const [paddle2Move, setPaddle2Move] = useState<'' | 'up' | 'down'>('');
 
+  // Game timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (gameStarted && !paused && gameStartTime.current) {
+      interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - gameStartTime.current!) / 1000);
+        const hours = Math.floor(elapsed / 3600);
+        const minutes = Math.floor((elapsed % 3600) / 60);
+        const seconds = elapsed % 60;
+        setGameTime({ hours, minutes, seconds });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [gameStarted, paused]);
+
   // Responsive canvas
   useEffect(() => {
     const handleResize = () => {
       setMobile(isMobile());
       // Calculate responsive dimensions while maintaining aspect ratio
-      const maxW = Math.min(window.innerWidth * 0.95, 1000);
-      const maxH = Math.min(window.innerHeight * 0.55, 600);
+      const maxW = Math.min(window.innerWidth * 0.9, 1200);
+      const maxH = Math.min(window.innerHeight * 0.6, 700);
       let width = maxW;
       let height = width / GAME_RATIO;
       if (height > maxH) {
@@ -243,8 +266,20 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
   useEffect(() => {
     if (scores.p1 >= 7 || scores.p2 >= 7) {
       setPaused(true);
+      // Navigate to result page after a short delay
+      setTimeout(() => {
+        const winner = scores.p1 >= 7 ? 'player1' : 'player2';
+        const winnerName = winner === 'player1' ? player1.name : player2.name;
+        const loserName = winner === 'player1' ? player2.name : player1.name;
+        
+        if (winner === 'player1') {
+          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+        } else {
+          router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+        }
+      }, 2000);
     }
-  }, [scores]);
+  }, [scores, router, player1.name, player2.name]);
 
   // Touch button event helpers
   const handleMobilePress = (which: 'p1up' | 'p1down' | 'p2up' | 'p2down', isDown: boolean) => {
@@ -265,6 +300,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
     ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
     setGameStarted(true);
     setPaused(false);
+    gameStartTime.current = Date.now();
   };
 
   const handlePause = () => {
@@ -275,217 +311,181 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
     setPaused(false);
   };
 
-  const handlePlayAgain = () => {
-    setGameStarted(false);
-    setPaused(false);
-    setScores({ p1: 0, p2: 0 });
-  };
-
   // UI helpers
   const gameOver = scores.p1 >= 7 || scores.p2 >= 7;
   const isGameActive = gameStarted && !paused && !gameOver;
 
   return (
-    <div className="w-full min-h-screen flex flex-col items-center justify-center bg-[#15181e] p-4 overflow-auto">
-      <div className="w-full max-w-6xl flex flex-col items-center">
-        {/* Game Container */}
-        <div className="w-full flex flex-col items-center bg-[#1a1d23] rounded-3xl p-6 shadow-2xl">
-          
-          {/* Game Canvas Container */}
-          <div className="relative w-full flex justify-center mb-6">
-            <div
-              className="relative rounded-2xl border border-[#656872] bg-[#222429] shadow-2xl overflow-hidden"
+    <div className="fixed inset-0 bg-[#15181e] flex flex-col overflow-hidden">
+      {/* Game Container - Full Screen */}
+      <div className="flex-1 flex flex-col">
+        
+        {/* Game Canvas Container */}
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div
+            className="relative rounded-2xl border border-[#656872] bg-[#222429] shadow-2xl overflow-hidden"
+            style={{
+              width: canvasDims.width,
+              height: canvasDims.height,
+            }}
+          >
+            <canvas
+              ref={canvasRef}
+              className="block w-full h-full"
               style={{
-                width: canvasDims.width,
-                height: canvasDims.height,
-                minWidth: 280,
-                minHeight: 160
+                width: '100%',
+                height: '100%'
               }}
-            >
-              <canvas
-                ref={canvasRef}
-                className="block w-full h-full"
-                style={{
-                  width: '100%',
-                  height: '100%'
-                }}
-              />
-              
-              {/* Start Button Overlay */}
-              {!gameStarted && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center">
+            />
+            
+            {/* Start Button Overlay */}
+            {!gameStarted && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center">
+                <button
+                  onClick={handleStart}
+                  className="flex items-center justify-center w-20 h-20 rounded-full bg-black/60 border-4 border-white/80 hover:bg-black/80 hover:scale-110 transition-all duration-150"
+                >
+                  <svg width={40} height={40} viewBox="0 0 24 24" fill="#fff">
+                    <polygon points="8,6 19,12 8,18" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* Pause Overlay */}
+            {gameStarted && paused && !gameOver && (
+              <div className="absolute inset-0 z-30 bg-black/60 flex flex-col items-center justify-center">
+                <div className="text-3xl md:text-4xl font-bold text-white mb-6 drop-shadow-xl">
+                  Game Paused
+                </div>
+                <div className="flex gap-4">
                   <button
-                    onClick={handleStart}
-                    className="flex items-center justify-center w-20 h-20 rounded-full bg-black/60 border-4 border-white/80 hover:bg-black/80 hover:scale-110 transition-all duration-150"
+                    onClick={handleResume}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-700 transition-colors text-white font-semibold rounded-xl"
                   >
-                    <svg width={40} height={40} viewBox="0 0 24 24" fill="#fff">
-                      <polygon points="8,6 19,12 8,18" />
-                    </svg>
+                    Resume
+                  </button>
+                  <button
+                    onClick={onExit}
+                    className="px-6 py-3 bg-gray-600 hover:bg-gray-700 transition-colors text-white font-semibold rounded-xl"
+                  >
+                    Exit Game
                   </button>
                 </div>
-              )}
+              </div>
+            )}
+            
+            {/* Mobile Controls */}
+            {mobile && isGameActive && (
+              <>
+                <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
+                  <button
+                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                    onTouchStart={() => handleMobilePress('p1up', true)}
+                    onTouchEnd={() => handleMobilePress('p1up', false)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                    onTouchStart={() => handleMobilePress('p1down', true)}
+                    onTouchEnd={() => handleMobilePress('p1down', false)}
+                  >
+                    ↓
+                  </button>
+                </div>
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
+                  <button
+                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                    onTouchStart={() => handleMobilePress('p2up', true)}
+                    onTouchEnd={() => handleMobilePress('p2up', false)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                    onTouchStart={() => handleMobilePress('p2down', true)}
+                    onTouchEnd={() => handleMobilePress('p2down', false)}
+                  >
+                    ↓
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
 
-              {/* Pause Overlay */}
-              {gameStarted && paused && !gameOver && (
-                <div className="absolute inset-0 z-30 bg-black/60 flex flex-col items-center justify-center">
-                  <div className="text-3xl md:text-4xl font-bold text-white mb-6 drop-shadow-xl">
-                    Game Paused
-                  </div>
-                  <div className="flex gap-4">
-                    <button
-                      onClick={handleResume}
-                      className="px-6 py-3 bg-green-600 hover:bg-green-700 transition-colors text-white font-semibold rounded-xl"
-                    >
-                      Resume
-                    </button>
-                    <button
-                      onClick={onExit}
-                      className="px-6 py-3 bg-gray-600 hover:bg-gray-700 transition-colors text-white font-semibold rounded-xl"
-                    >
-                      Exit Game
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {/* Win Overlay */}
-              {gameOver && (
-                <div className="absolute inset-0 z-30 bg-black/70 flex flex-col items-center justify-center">
-                  <div className="text-3xl md:text-5xl font-bold text-white mb-6 drop-shadow-xl text-center">
-                    {scores.p1 > scores.p2
-                      ? `${player1.name} Wins! 🏆`
-                      : `${player2.name} Wins! 🏆`}
-                  </div>
-                  <div className="flex gap-4">
-                    <button
-                      onClick={handlePlayAgain}
-                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 transition-colors text-white font-semibold rounded-xl"
-                    >
-                      Play Again
-                    </button>
-                    <button
-                      onClick={onExit}
-                      className="px-6 py-3 bg-gray-600 hover:bg-gray-700 transition-colors text-white font-semibold rounded-xl"
-                    >
-                      Exit Game
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {/* Mobile Controls */}
-              {mobile && isGameActive && (
-                <>
-                  <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
-                    <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                      onTouchStart={() => handleMobilePress('p1up', true)}
-                      onTouchEnd={() => handleMobilePress('p1up', false)}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                      onTouchStart={() => handleMobilePress('p1down', true)}
-                      onTouchEnd={() => handleMobilePress('p1down', false)}
-                    >
-                      ↓
-                    </button>
-                  </div>
-                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
-                    <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                      onTouchStart={() => handleMobilePress('p2up', true)}
-                      onTouchEnd={() => handleMobilePress('p2up', false)}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                      onTouchStart={() => handleMobilePress('p2down', true)}
-                      onTouchEnd={() => handleMobilePress('p2down', false)}
-                    >
-                      ↓
-                    </button>
-                  </div>
-                </>
-              )}
+        {/* Game Info Bar */}
+        <div className="bg-[#1a1d23] border-t border-gray-700 p-4">
+          {/* Timer */}
+          <div className="flex justify-center mb-4">
+            <div className="flex gap-4 text-center">
+              <div className="bg-[#2a2f3a] rounded-lg px-4 py-2 min-w-[80px]">
+                <div className="text-2xl font-bold text-white">{String(gameTime.hours).padStart(2, '0')}</div>
+                <div className="text-xs text-gray-400">Hours</div>
+              </div>
+              <div className="bg-[#2a2f3a] rounded-lg px-4 py-2 min-w-[80px]">
+                <div className="text-2xl font-bold text-white">{String(gameTime.minutes).padStart(2, '0')}</div>
+                <div className="text-xs text-gray-400">Minutes</div>
+              </div>
+              <div className="bg-[#2a2f3a] rounded-lg px-4 py-2 min-w-[80px]">
+                <div className="text-2xl font-bold text-white">{String(gameTime.seconds).padStart(2, '0')}</div>
+                <div className="text-xs text-gray-400">Seconds</div>
+              </div>
             </div>
           </div>
 
           {/* Players and Score */}
-          <div className="flex items-center justify-between w-full max-w-4xl px-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
             {/* Player 1 */}
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-3">
               <img
                 src={player1.avatar}
                 alt={player1.name}
-                className="w-12 h-12 rounded-full border-2 border-blue-400 object-cover"
+                className="w-10 h-10 rounded-full border-2 border-blue-400 object-cover"
               />
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-white truncate">{player1.name}</span>
-                <span className="text-sm text-gray-300">@{player1.username}</span>
+              <div>
+                <span className="font-semibold text-white">Player 1: {player1.name}</span>
               </div>
             </div>
             
             {/* Score */}
-            <div className="flex flex-col items-center px-6">
-              <div className="flex text-4xl md:text-6xl font-bold text-white gap-3">
-                <span>{scores.p1}</span>
-                <span className="text-gray-400">-</span>
-                <span>{scores.p2}</span>
+            <div className="text-center">
+              <div className="text-4xl font-bold text-white">
+                {scores.p1} - {scores.p2}
               </div>
-              <span className="text-xs font-semibold tracking-wide text-gray-400 uppercase">Score</span>
             </div>
             
             {/* Player 2 */}
-            <div className="flex items-center gap-3 min-w-0 flex-row-reverse">
+            <div className="flex items-center gap-3 flex-row-reverse">
               <img
                 src={player2.avatar}
                 alt={player2.name}
-                className="w-12 h-12 rounded-full border-2 border-blue-400 object-cover"
+                className="w-10 h-10 rounded-full border-2 border-blue-400 object-cover"
               />
-              <div className="flex flex-col min-w-0 text-right">
-                <span className="font-semibold text-white truncate">{player2.name}</span>
-                <span className="text-sm text-gray-300">@{player2.username}</span>
+              <div className="text-right">
+                <span className="font-semibold text-white">Player 2: {player2.name}</span>
               </div>
             </div>
           </div>
 
           {/* Game Controls */}
-          <div className="flex gap-4 mb-4">
+          <div className="flex justify-center gap-4">
             {isGameActive && (
               <button
                 onClick={handlePause}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
               >
                 Pause
               </button>
             )}
             <button
               onClick={onExit}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+              className="bg-gray-600 hover:bg-gray-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
             >
-              Exit Game
+              Exit
             </button>
           </div>
-
-          {/* Instructions */}
-          {!mobile && (
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center text-center">
-              <div className="text-sm text-gray-300">
-                <span className="font-semibold text-blue-300">Player 1:</span> W/S keys
-              </div>
-              <div className="text-sm text-gray-300">
-                <span className="font-semibold text-blue-300">Player 2:</span> ↑/↓ arrow keys
-              </div>
-            </div>
-          )}
-          {mobile && (
-            <div className="text-sm text-gray-300 text-center">
-              Use the on-screen controls to move your paddles
-            </div>
-          )}
         </div>
       </div>
     </div>
