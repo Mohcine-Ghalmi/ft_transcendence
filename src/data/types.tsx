@@ -21,3 +21,13 @@ type NavigationItem = {
   href: string;
 };
 
+interface PlayerInfo {
+  name: string;
+  avatar: string;
+}
+
+interface PingPongGameProps {
+  player1: PlayerInfo;
+  player2: PlayerInfo;
+  onExit: () => void;
+}

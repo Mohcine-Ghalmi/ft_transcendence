@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 import {onlineFriends, user } from '@/data/mockData';
-
+import PingPongGame from "./PingPongGame";
+import { PlayerCard } from './Locale';
 
 // Additional mock players to show more variety
 const onlinePlayers = onlineFriends;
@@ -55,7 +56,8 @@ export default function OnlineMatch() {
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [invitedPlayer, setInvitedPlayer] = useState(null);
   const [gameAccepted, setGameAccepted] = useState(false);
-  const [waitTime, setWaitTime] = useState(3);
+  const [waitTime, setWaitTime] = useState(30);
+  const [showGame, setShowGame] = useState(false);
   
   const filteredPlayers = onlinePlayers.filter(player =>
     player.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -66,7 +68,7 @@ export default function OnlineMatch() {
     setInvitedPlayer(player);
     setIsWaitingForResponse(true);
     setGameAccepted(false);
-    setWaitTime(3);
+    setWaitTime(30);
     
     // Simulate countdown and response waiting
     const interval = setInterval(() => {
@@ -74,7 +76,7 @@ export default function OnlineMatch() {
         if (prev <= 1) {
           clearInterval(interval);
           // Simulate random response (accept/decline/timeout) - higher chance of accept for demo
-          const responses = ['accept', 'accept', 'accept', 'decline', 'timeout'];
+          const responses = ['accept', 'decline', 'timeout'];
           const response = responses[Math.floor(Math.random() * responses.length)];
           
           setTimeout(() => {
@@ -91,7 +93,7 @@ export default function OnlineMatch() {
               setInvitedPlayer(null);
             }
           }, 1000);
-          return 3;
+          return 30;
         }
         return prev - 1;
       });
@@ -110,157 +112,139 @@ export default function OnlineMatch() {
   };
 
   const handleStartGame = () => {
-    // Here you would navigate to the actual game component
     console.log('Starting game with:', {
       player1: user,
       player2: invitedPlayer
     });
-    
-    // For demo purposes, we'll show an alert. In a real app, you'd use React Router or Next.js router
-    alert(`Game starting between ${user.name} and ${invitedPlayer.name}!`);
-    
-    // Reset state after game starts
+
+    setShowGame(true);
+  };
+
+  const handleExitGame = () => {
+    setShowGame(false);
     setIsWaitingForResponse(false);
     setInvitedPlayer(null);
     setGameAccepted(false);
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#121417] text-white">
+    <div className="h-full w-full text-white">
       {/* Main Content */}
-      <main className="pt-20 w-full min-h-screen">
-        <div className="max-w-4xl mx-auto px-4 h-full">
+     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+        <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <h1 className="text-4xl md:text-5xl font-bold mb-8">1v1 Online Match</h1>
           
-          {!isWaitingForResponse ? (
-            <>
-              {/* Search Bar */}
-              <div className="relative mb-8">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search for players"
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  className="w-full pl-12 pr-4 py-4 bg-[#2a2f3a] text-white rounded-lg border-none outline-none focus:bg-[#3a3f4a] transition-colors text-lg"
-                />
-              </div>
-              
-              {/* Online Players Section */}
-              <div className="mb-8">
-                <h2 className="text-2xl font-semibold text-white mb-6">Online Players</h2>
-                
-                <div className="space-y-2">
-                  {filteredPlayers.length > 0 ? (
-                    filteredPlayers.map((player, index) => (
-                      <PlayerListItem
-                        key={`${player.name}-${index}`}
-                        player={player}
-                        onInvite={handleInvite}
-                      />
-                    ))
-                  ) : (
-                    <div className="text-center py-12">
-                      <p className="text-gray-400 text-lg">No players found matching your search.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            /* Match Queue / Game Accepted Interface */
-            <div className="flex flex-col items-center justify-center min-h-[80vh]">
-              <div className="max-w-2xl mx-auto text-center">
-                <h2 className="text-3xl font-semibold text-white mb-12">Match Queue</h2>
-                
-                {/* Player 1 */}
-                <div className="mb-16">
-                  <h3 className="text-xl text-white mb-8">Player 1</h3>
-                  <div className="flex flex-col items-center">
-                    <div className="w-32 h-32 mb-6">
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
-                        onError={(e) => {
-                          e.target.src = '/default-avatar.png';
-                        }}
-                      />
-                    </div>
-                    <h4 className="text-white font-semibold text-2xl mb-2">{user.name}</h4>
-                    <p className="text-gray-400 text-lg">@{user.username}</p>
+          {!showGame ? (
+            !isWaitingForResponse ? (
+              <>
+                {/* Search Bar */}
+                <div className="relative mb-8">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
                   </div>
+                  <input
+                    type="text"
+                    placeholder="Search for players"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    className="w-full pl-12 pr-4 py-4 bg-[#2a2f3a] text-white rounded-lg border-none outline-none focus:bg-[#3a3f4a] transition-colors text-lg"
+                  />
                 </div>
                 
-                {/* Player 2 - Waiting for Response or Accepted */}
-                <div className="mb-16">
-                  <h3 className="text-xl text-white mb-8">Player 2</h3>
-                  <div className="flex flex-col items-center">
-                    {gameAccepted ? (
-                      <>
-                        {/* Show invited player when game is accepted */}
-                        <div className="w-32 h-32 mb-6">
-                          <img
-                            src={invitedPlayer.avatar}
-                            alt={invitedPlayer.name}
-                            className="w-full h-full rounded-full object-cover border-4 border-green-500"
-                            onError={(e) => {
-                              e.target.src = '/default-avatar.png';
-                            }}
-                          />
-                        </div>
-                        <h4 className="text-white font-semibold text-2xl mb-2">{invitedPlayer.name}</h4>
-                        <p className="text-green-400 text-lg font-semibold">Invitation Accepted!</p>
-                      </>
+                {/* Online Players Section */}
+                <div className="mb-8">
+                  <h2 className="text-2xl font-semibold text-white mb-6">Online Players</h2>
+                  
+                  <div className="space-y-2 bo">
+                    {filteredPlayers.length > 0 ? (
+                      filteredPlayers.map((player, index) => (
+                        <PlayerListItem
+                          key={`${player.name}-${index}`}
+                          player={player}
+                          onInvite={handleInvite}
+                        />
+                      ))
                     ) : (
-                      <>
-                        <p className="text-white text-lg mb-8">
-                          Waiting for {invitedPlayer?.name} to respond...
-                        </p>
-                        
-                        {/* Progress Bar */}
-                        <div className="w-full max-w-md mb-4">
-                          <div className="bg-gray-700 rounded-full h-2">
-                            <div 
-                              className="bg-white rounded-full h-2 transition-all duration-1000 ease-linear"
-                              style={{ width: `${((3 - waitTime) / 3) * 100}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                        
-                        <p className="text-gray-400 text-sm">
-                          Estimated wait time: {waitTime} seconds
-                        </p>
-                      </>
+                      <div className="text-center py-12">
+                        <p className="text-gray-400 text-lg">No players found matching your search.</p>
+                      </div>
                     )}
                   </div>
                 </div>
-                
-                {/* Action Buttons */}
-                <div className="flex justify-center space-x-4">
-                  {gameAccepted ? (
-                    <button
-                      onClick={handleStartGame}
-                      className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-xl text-xl font-semibold transition-colors"
-                    >
-                      Start Game
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleCancelInvite}
-                      className="bg-gray-600 hover:bg-gray-700 text-white px-8 py-3 rounded-lg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  )}
+              </>
+            ) : (
+              // Match Queue / Game Accepted Interface
+              <div className="flex flex-row items-center justify-center">
+                <div className="max-w-7xl mx-auto text-center">
+                  <h2 className="text-3xl font-semibold text-white mb-12">Match Queue</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12 md:mb-20">
+                  
+                  {/* Player 1 */}
+                  <PlayerCard player={user} playerNumber={1} />
+                 
+                  
+                  {/* Player 2 - Waiting for Response or Accepted */}
+                  <div className="flex items-center">
+                    <div className="flex flex-col items-center">
+                      {gameAccepted ? (
+                          <PlayerCard player={invitedPlayer} playerNumber={2} />
+                      ) : (
+                        <>
+                          <p className="text-white text-lg mb-8">
+                            Waiting for {invitedPlayer.name} to respond...
+                          </p>
+                          
+                          {/* Progress Bar */}
+                          <div className="w-full mb-4">
+                            <div className="bg-gray-700 rounded-full">
+                              <div 
+                                className="bg-white rounded-full h-2 transition-all duration-1000 ease-linear"
+                                style={{ width: `${((30 - waitTime) / 30) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                          
+                          <p className="text-gray-400 text-sm">
+                            Estimated wait time: {waitTime} seconds
+                          </p>
+                        </>
+                      )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex justify-center space-x-4">
+                    {gameAccepted ? (
+                      <button
+                        onClick={handleStartGame}
+                        className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-xl text-xl font-semibold transition-colors"
+                      >
+                        Start Game
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleCancelInvite}
+                        className="bg-gray-600 hover:bg-gray-700 text-white px-8 py-3 rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+            )
+          ) : (
+            <div className="py-10">
+              <PingPongGame
+                player1={user}
+                player2={invitedPlayer}
+                onExit={handleExitGame}
+              />
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

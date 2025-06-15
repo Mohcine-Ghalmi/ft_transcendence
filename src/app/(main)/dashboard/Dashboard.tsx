@@ -11,10 +11,9 @@ import { StatisticsChart } from "../../../components/dashboard/StatisticsChart";
 export default function PingPongDashboard() {
   return (
     <div className="h-full text-white">
-
       {/* Main Dashboard Content */}
-      <main className="pt-20 p-3 sm:p-4 lg:p-6 w-full min-h-screen">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4 py-4">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 w-full">
           {/* Left Section */}
           <div className="xl:col-span-2 space-y-4 sm:space-y-6">
             <ProfileSection />
@@ -40,7 +39,7 @@ export default function PingPongDashboard() {
             />
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

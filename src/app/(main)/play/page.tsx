@@ -38,8 +38,8 @@ export default function ChooseYourGame() {
 
   return (
     <div className="h-full text-white">
-      <main className="pt-20 p-3 sm:p-4 lg:p-6 w-full min-h-screen">
-        <div className="max-w-7xl mx-auto">
+      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4 py-4">
+        <div className="w-full max-w-7xl">
           <h1 className="text-3xl sm:text-4xl font-bold text-center mb-8">
             Choose Your Game
           </h1>
@@ -51,7 +51,7 @@ export default function ChooseYourGame() {
 
           {selectedTab === 'Local' ? <LocalGames /> : <OnlineGames />}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

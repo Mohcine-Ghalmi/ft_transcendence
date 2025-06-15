@@ -149,7 +149,7 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
 };
 
 // Player Card Component
-const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
+export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
   if (!player) {
     return (
       <div className="text-center">
@@ -177,15 +177,15 @@ const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
         <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
           <img
             src={player.avatar}
-            alt={player.name || player.nickname}
+            alt={player.name}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
             onError={(e) => {
-              e.target.src = '/default-avatar.png';
+              e.target.src = '/mghalmi.png';
             }}
           />
         </div>
         <h4 className="text-white font-semibold text-2xl md:text-3xl">
-          {player.name || player.nickname}
+          {player.name}
         </h4>
         <p className="text-gray-400 text-lg md:text-xl">@{player.username}</p>
       </div>
@@ -197,6 +197,8 @@ const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
 export default function Local1v1() {
   const [player2, setPlayer2] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+    const [showGame, setShowGame] = useState(false);
+
 
   const handleAddPlayer = (playerData) => {
     setPlayer2(playerData);
@@ -215,14 +217,13 @@ export default function Local1v1() {
     });
     
     // Here you would navigate to the actual game or perform game start logic
-    alert('Game starting...');
   };
 
   return (
-    <div className="h-full  text-white">
+    <div className="h-full text-white">
       {/* Main Content */}
-      <main className="pt-20  w-full h-full">
-        <div className="max-w-7xl mx-auto">
+     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+        <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <h1 className="text-4xl md:text-6xl font-bold text-center mb-12 md:mb-20">Local 1v1</h1>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 mb-12 md:mb-20">
@@ -252,7 +253,7 @@ export default function Local1v1() {
             </button>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Add Player Modal */}
       <AddPlayerModal
