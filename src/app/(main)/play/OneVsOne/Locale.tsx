@@ -1,6 +1,8 @@
 "use client"
 import React, { useState } from 'react';
-import {user} from "../../../../data/mockData";
+import { user } from "../../../../data/mockData";
+import { PingPongGame } from "./PingPongGame";
+
 // Add Player Modal Component
 const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
   const [username, setUsername] = useState('');
@@ -180,7 +182,7 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
             alt={player.name}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
             onError={(e) => {
-              e.target.src = '/mghalmi.png';
+              e.target.src = '/mghalmi.jpg';
             }}
           />
         </div>
@@ -197,11 +199,11 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
 export default function Local1v1() {
   const [player2, setPlayer2] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-    const [showGame, setShowGame] = useState(false);
-
+  const [showGame, setShowGame] = useState(false);
 
   const handleAddPlayer = (playerData) => {
     setPlayer2(playerData);
+    console.log("playe 2 => ",playerData);
     setIsModalOpen(false);
   };
 
@@ -210,34 +212,51 @@ export default function Local1v1() {
       alert('Please add Player 2 before starting the game');
       return;
     }
-    
-    console.log('Starting Local 1v1 Game:', {
-      player1: user,
-      player2: player2
-    });
-    
-    // Here you would navigate to the actual game or perform game start logic
+    setShowGame(true);
   };
+
+  const handleExitGame = () => {
+    setShowGame(false);
+    setPlayer2(null);
+  };
+
+  // If both players are present and showGame is true, show PingPongGame
+  if (showGame && player2) {
+    const player2Data = {
+      name: player2.username,
+      avatar: player2.avatar || '/mghalmi.jpg',
+      ...player2,
+    };
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-[#121417]">
+        <PingPongGame
+          player1={user}
+          player2={player2Data}
+          onExit={handleExitGame}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full text-white">
       {/* Main Content */}
-     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <h1 className="text-4xl md:text-6xl font-bold text-center mb-12 md:mb-20">Local 1v1</h1>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 mb-12 md:mb-20">
             {/* Player 1 - Current User */}
             <PlayerCard player={user} playerNumber={1} />
-            
+
             {/* Player 2 - To be added */}
-            <PlayerCard 
-              player={player2} 
-              playerNumber={2} 
+            <PlayerCard
+              player={player2}
+              playerNumber={2}
               onAddPlayer={() => setIsModalOpen(true)}
             />
           </div>
-          
+
           {/* Start Game Button */}
           <div className="text-center">
             <button
@@ -254,7 +273,6 @@ export default function Local1v1() {
           </div>
         </div>
       </div>
-
       {/* Add Player Modal */}
       <AddPlayerModal
         isOpen={isModalOpen}

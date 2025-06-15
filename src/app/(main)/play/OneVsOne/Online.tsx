@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 import {onlineFriends, user } from '@/data/mockData';
-import PingPongGame from "./PingPongGame";
+import {PingPongGame} from "./PingPongGame";
 import { PlayerCard } from './Locale';
 
 // Additional mock players to show more variety
