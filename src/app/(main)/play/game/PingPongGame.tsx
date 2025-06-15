@@ -316,7 +316,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
   const isGameActive = gameStarted && !paused && !gameOver;
 
   return (
-    <div className="fixed inset-0 bg-[#15181e] flex flex-col overflow-hidden">
+    <div className="flex flex-col overflow-hidden">
       {/* Game Container - Full Screen */}
       <div className="flex-1 flex flex-col">
         
@@ -405,7 +405,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
         </div>
 
         {/* Game Info Bar */}
-        <div className="bg-[#1a1d23] border-t border-gray-700 p-4">
+        <div className="p-4">
           {/* Timer */}
           <div className="flex justify-center mb-4">
             <div className="flex gap-4 text-center">

@@ -1,7 +1,7 @@
 "use client"
 import React, { useState } from 'react';
 import { user } from "../../../../data/mockData";
-import { PingPongGame } from "./PingPongGame";
+import { PingPongGame } from "../game/PingPongGame";
 
 // Add Player Modal Component
 const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
@@ -228,7 +228,7 @@ export default function Local1v1() {
       ...player2,
     };
     return (
-      <div className="flex justify-center items-center min-h-screen bg-[#121417]">
+      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <PingPongGame
           player1={user}
           player2={player2Data}
