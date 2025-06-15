@@ -352,25 +352,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
               </div>
             )}
 
-            {/* Pause Overlay */}
+            {/* Pause Icon Overlay - Only shows pause icon */}
             {gameStarted && paused && !gameOver && (
-              <div className="absolute inset-0 z-30 bg-black/60 flex flex-col items-center justify-center">
-                <div className="text-3xl md:text-4xl font-bold text-white mb-6 drop-shadow-xl">
-                  Game Paused
-                </div>
-                <div className="flex gap-4">
-                  <button
-                    onClick={handleResume}
-                    className="px-6 py-3 bg-green-600 hover:bg-green-700 transition-colors text-white font-semibold rounded-xl"
-                  >
-                    Resume
-                  </button>
-                  <button
-                    onClick={onExit}
-                    className="px-6 py-3 bg-gray-600 hover:bg-gray-700 transition-colors text-white font-semibold rounded-xl"
-                  >
-                    Exit Game
-                  </button>
+              <div className="absolute inset-0 z-30 bg-black/60 flex items-center justify-center">
+                <div className="flex items-center justify-center w-24 h-24 rounded-full bg-black/80 border-4 border-white/80">
+                  <svg width={48} height={48} viewBox="0 0 24 24" fill="#fff">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
                 </div>
               </div>
             )}
@@ -477,6 +466,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
               >
                 Pause
+              </button>
+            )}
+            {gameStarted && paused && !gameOver && (
+              <button
+                onClick={handleResume}
+                className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+              >
+                Resume
               </button>
             )}
             <button
