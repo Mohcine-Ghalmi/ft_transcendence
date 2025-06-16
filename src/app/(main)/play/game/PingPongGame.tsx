@@ -267,17 +267,15 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
     if (scores.p1 >= 7 || scores.p2 >= 7) {
       setPaused(true);
       // Navigate to result page after a short delay
-      setTimeout(() => {
-        const winner = scores.p1 >= 7 ? 'player1' : 'player2';
-        const winnerName = winner === 'player1' ? player1.name : player2.name;
-        const loserName = winner === 'player1' ? player2.name : player1.name;
-        
-        if (winner === 'player1') {
-          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
-        } else {
-          router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
-        }
-      }, 2000);
+      const winner = scores.p1 >= 7 ? 'player1' : 'player2';
+      const winnerName = winner === 'player1' ? player1.name : player2.name;
+      const loserName = winner === 'player1' ? player2.name : player1.name;
+      
+      if (winner === 'player1') {
+        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      } else {
+        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      }
     }
   }, [scores, router, player1.name, player2.name]);
 

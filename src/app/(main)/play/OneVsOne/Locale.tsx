@@ -32,7 +32,7 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
     onAddPlayer({
       username: username.trim(),
       nickname: nickname.trim(),
-      avatar: avatar || '/mghalmi.png'
+      avatar: avatar || '/mghalmi.jpg'
     });
     
     // Reset form

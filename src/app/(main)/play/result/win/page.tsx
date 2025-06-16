@@ -17,7 +17,7 @@ function WinPageContent() {
   };
 
   return (
-    <div className="fixed inset-0 bg-[#15181e] flex items-center justify-center">
+    <div className="fixed inset-0 flex items-center justify-center">
       <div className="text-center max-w-2xl mx-auto px-6">
         <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">
           Congratulations, you won!
