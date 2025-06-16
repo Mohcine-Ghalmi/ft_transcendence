@@ -108,8 +108,8 @@ export const LocalGames = () => {
         subDescription="Compete in a tournament with multiple players."
         illustration={<TournamentSceneIllustration />}
         buttons={
-          <Link href="/play/tournament">
-            <button 
+        <Link href="/play/tournament?mode=Local">
+          <button 
               onClick={() => handleGameClick('Tournament')}
               className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
@@ -191,14 +191,22 @@ export const OnlineGames = () => {
         subDescription="Compete in a tournament with multiple players."
         illustration={<TournamentSceneIllustration />}
         buttons={
-          <Link href="/play/tournament">
+          <>
             <button 
-              onClick={() => handleGameClick('Tournament', 'Create')}
+              onClick={() => handleGameClick('Tournament', 'Join')}
               className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
-              Create Tournament
+              Join an Online Tournament
             </button>
-          </Link>
+            <Link href="/play/tournament?mode=Online">
+              <button 
+                onClick={() => handleGameClick('Tournament', 'Create')}
+                className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
+              >
+                Create One
+              </button>
+            </Link>
+          </>
         }
       />
 

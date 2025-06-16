@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react";
 import Local1v1 from "./Locale";
-import { notFound, useSearchParams, useRouter } from 'next/navigation';
+import { notFound, useSearchParams } from 'next/navigation';
 import OnlineMatch from "./Online";
 
 export default function Page1v1() {

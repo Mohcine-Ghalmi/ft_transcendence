@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
-import MATCH_STATES from './match_states';
+import {MATCH_STATES} from '../../../../data/mockData';
 
 export function MobileBracket({ 
   rounds,
@@ -12,9 +11,15 @@ export function MobileBracket({
   participants,
   getPlayerStyle,
   getPlayerBgStyle,
-  simulateMatch,
+  onPlayMatch,
   tournamentSize 
 }) {
+  const getPlayerDisplayName = (player) => {
+    if (!player) return "TBD";
+    if (player.nickname) return `${player.name} "${player.nickname}"`;
+    return player.name;
+  };
+
   return (
     <div className="flex flex-col items-center mt-4 p-2 bg-gray-800/80 rounded-lg border border-gray-700 w-full">
       <h3 className="text-white text-xl mb-3 text-center">Tournament Bracket</h3>
@@ -88,7 +93,7 @@ export function MobileBracket({
                     <div 
                       key={`match-${roundIndex}-${matchIndex}`}
                       className={`flex flex-col ${matchStateClass} rounded overflow-hidden ${isCurrentRound ? 'hover:brightness-110 transition-all cursor-pointer' : ''}`}
-                      onClick={() => isCurrentRound && simulateMatch(roundIndex, matchIndex)}
+                      onClick={() => isCurrentRound && match.player1 && match.player2 && onPlayMatch && onPlayMatch(match)}
                     >
                       {/* Match header */}
                       <div className="bg-black text-gray-300 text-xs font-medium px-2 py-1 border-b border-gray-700">
@@ -101,7 +106,7 @@ export function MobileBracket({
                           className={`py-2 px-3 border-b ${player1BorderColor} ${player1BgStyle}`}
                         >
                           <div className={`text-sm font-medium truncate ${player1Style}`}>
-                            {player1 ? player1.login : "TBD"}
+                            {getPlayerDisplayName(player1)}
                           </div>
                         </div>
                         <div className="h-px bg-gray-600 w-full"></div>
@@ -109,7 +114,7 @@ export function MobileBracket({
                           className={`py-2 px-3 ${player2BorderColor} ${player2BgStyle}`}
                         >
                           <div className={`text-sm font-medium truncate ${player2Style}`}>
-                            {player2 ? player2.login : "TBD"}
+                            {getPlayerDisplayName(player2)}
                           </div>
                         </div>
                       </div>
@@ -158,9 +163,14 @@ export function DesktopBracket({
     getMatchStateStyle,
     getPlayerStyle,
     getPlayerBgStyle,
-    simulateMatch,
+    onPlayMatch,
     matchHeight
 }) {
+    const getPlayerDisplayName = (player) => {
+      if (!player) return "TBD";
+      if (player.nickname) return `${player.name} "${player.nickname}"`;
+      return player.name;
+    };
     
     // Increase match height for better visibility
     const adjustedMatchHeight = matchHeight * 1.5;
@@ -240,7 +250,7 @@ export function DesktopBracket({
                       <div 
                         key={matchIndex} 
                         className={`${matchStateClass} mb-6 rounded-lg shadow-lg overflow-hidden ${isCurrentRound ? 'hover:brightness-110 cursor-pointer transform hover:scale-105 transition-transform' : ''}`}
-                        onClick={() => isCurrentRound && simulateMatch(roundIndex, actualMatchIndex)}
+                        onClick={() => isCurrentRound && match.player1 && match.player2 && onPlayMatch && onPlayMatch(match)}
                       >
                         {/* Match header */}
                         <div className="bg-black text-gray-300 text-xs font-medium px-2 py-1 border-b border-gray-700">
@@ -252,7 +262,7 @@ export function DesktopBracket({
                           style={{ minHeight: `${adjustedMatchHeight/2}px` }}
                         >
                           <div className={`text-sm md:text-base truncate ${player1Style} font-medium`}>
-                            {player1 ? player1.login : "TBD"}
+                            {getPlayerDisplayName(player1)}
                           </div>
                         </div>
                         <div 
@@ -260,7 +270,7 @@ export function DesktopBracket({
                           style={{ minHeight: `${adjustedMatchHeight/2}px` }}
                         >
                           <div className={`text-sm md:text-base truncate ${player2Style} font-medium`}>
-                            {player2 ? player2.login : "TBD"}
+                            {getPlayerDisplayName(player2)}
                           </div>
                         </div>
                       </div>
@@ -280,7 +290,7 @@ export function DesktopBracket({
                 className={`shadow-lg ${
                   getMatch(rounds - 1, 0) ? getMatchStateStyle(getMatch(rounds - 1, 0).state) : "border-yellow-400"
                 } rounded-lg mx-1 overflow-hidden flex flex-col ${currentRound === rounds - 1 ? 'hover:brightness-110 cursor-pointer transform hover:scale-105 transition-transform' : ''}`}
-                onClick={() => currentRound === rounds - 1 && simulateMatch(rounds - 1, 0)}
+                onClick={() => currentRound === rounds - 1 && onPlayMatch(rounds - 1, 0)}
               >
                 <div className="text-yellow-400 text-sm md:text-lg text-center font-bold bg-black p-2 border-b border-yellow-500/50">
                   FINAL
@@ -302,12 +312,12 @@ export function DesktopBracket({
                     <>
                       <div className={`p-3 ${player1BgStyle} border-b border-gray-600`} style={{ minHeight: `${adjustedMatchHeight/2}px` }}>
                         <div className={`text-sm md:text-base text-center font-medium ${player1Style}`}>
-                          {player1 ? player1.login : "TBD"}
+                          {getPlayerDisplayName(player1)}
                         </div>
                       </div>
                       <div className={`p-3 ${player2BgStyle}`} style={{ minHeight: `${adjustedMatchHeight/2}px` }}>
                         <div className={`text-sm md:text-base text-center font-medium ${player2Style}`}>
-                          {player2 ? player2.login : "TBD"}
+                          {getPlayerDisplayName(player2)}
                         </div>
                       </div>
                     </>
@@ -319,8 +329,8 @@ export function DesktopBracket({
                                             getMatch(rounds - 1, 0).state === MATCH_STATES.PLAYER2_WIN) && (
                   <div className="text-green-300 text-xs md:text-base border-t border-green-500/50 font-bold text-center p-2 bg-green-900/30">
                     Champion: {getMatch(rounds - 1, 0).state === MATCH_STATES.PLAYER1_WIN 
-                      ? getMatch(rounds - 1, 0).player1?.login 
-                      : getMatch(rounds - 1, 0).player2?.login}
+                      ? getPlayerDisplayName(getMatch(rounds - 1, 0).player1)
+                      : getPlayerDisplayName(getMatch(rounds - 1, 0).player2)}
                   </div>
                 )}
               </div>
@@ -399,7 +409,7 @@ export function DesktopBracket({
                       <div 
                         key={matchIndex}
                         className={`${matchStateClass} mb-6 rounded-lg shadow-lg overflow-hidden ${isCurrentRound ? 'hover:brightness-110 cursor-pointer transform hover:scale-105 transition-transform' : ''}`}
-                        onClick={() => isCurrentRound && simulateMatch(roundIndex, actualMatchIndex)}
+                        onClick={() => isCurrentRound && match.player1 && match.player2 && onPlayMatch && onPlayMatch(match)}
                       >
                         {/* Match header */}
                         <div className="bg-black text-gray-300 text-xs font-medium px-2 py-1 border-b border-gray-700">
@@ -411,7 +421,7 @@ export function DesktopBracket({
                           style={{ minHeight: `${adjustedMatchHeight/2}px` }}
                         >
                           <div className={`text-sm md:text-base truncate ${player1Style} font-medium`}>
-                            {player1 ? player1.login : "TBD"}
+                            {getPlayerDisplayName(player1)}
                           </div>
                         </div>
                         <div 
@@ -419,7 +429,7 @@ export function DesktopBracket({
                           style={{ minHeight: `${adjustedMatchHeight/2}px` }}
                         >
                           <div className={`text-sm md:text-base truncate ${player2Style} font-medium`}>
-                            {player2 ? player2.login : "TBD"}
+                            {getPlayerDisplayName(player2)}
                           </div>
                         </div>
                       </div>
@@ -455,47 +465,13 @@ export function DesktopBracket({
       );
 }
 
-// Ping Pong game simulation function
-const playPingPongGame = (player1, player2) => {
-  
-  if (!player1 || !player2) {
-    return { winner: null, loser: null, score: { player1: 0, player2: 0 } };
-  }
-  const maxPoints = 7;
-  let player1Score = 0;
-  let player2Score = 0;
-  
-  while ((player1Score < maxPoints && player2Score < maxPoints) || 
-         Math.abs(player1Score - player2Score) < 2) {
-    
-    const rallyWinner = Math.random() > 0.5 ? 1 : 2;
-    
-    if (rallyWinner === 1) {
-      player1Score++;
-    } else {
-      player2Score++;
-    }
-  }
-  
-  const winner = player1Score > player2Score ? player1 : player2;
-  const loser = player1Score > player2Score ? player2 : player1;
-  
-  return {
-    winner,
-    loser,
-    score: {
-      player1: player1Score,
-      player2: player2Score
-    }
-  };
-};
-
 const TournamentBracket = ({ 
   participants, 
   tournamentSize, 
   matches,  
   currentRound, 
-  onMatchUpdate 
+  onMatchUpdate,
+  onPlayMatch // <-- this prop is passed from LocalTournament
 }) => {
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
 const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
@@ -583,34 +559,9 @@ const getSpacing = () => {
     );
   };
   
-  // simulation to the match - we will wait for match result instead of setTimeout
-  const simulateMatch = (roundIndex, matchIndex) => {
-    const match = getMatch(roundIndex, matchIndex);
-    if (!match) return;
-    
-    console.log("P1: ", match.player1?.login, " VS P2:", match.player2?.login);
-    
-    if (match.state === MATCH_STATES.PLAYER1_WIN || match.state === MATCH_STATES.PLAYER2_WIN) return;
-    
-    if (!match.player1 || !match.player2) return;
-    
-    if (match.state === MATCH_STATES.WAITING) {
-      onMatchUpdate(roundIndex, matchIndex, MATCH_STATES.IN_PROGRESS);
-      
-      setTimeout(() => {
-        const gameResult = playPingPongGame(match.player1, match.player2);
-        
-        if (gameResult.winner === match.player1) 
-          onMatchUpdate(roundIndex, matchIndex, MATCH_STATES.PLAYER1_WIN);
-        else
-          onMatchUpdate(roundIndex, matchIndex, MATCH_STATES.PLAYER2_WIN);
-        
-        console.log(`Match result: ${gameResult.score.player1}-${gameResult.score.player2}`);
-        console.log("winner => ", gameResult.winner.login);
-      }, 3000);
-    }
-  };
-  
+  // Remove simulateMatch and related logic.
+  // Instead, use onPlayMatch(match) for current round matches.
+
   if (isMobile) {
     return (
       <MobileBracket 
@@ -621,7 +572,7 @@ const getSpacing = () => {
         participants={participants}
         getPlayerStyle={getPlayerStyle}
         getPlayerBgStyle={getPlayerBgStyle}
-        simulateMatch={simulateMatch}
+        onPlayMatch={onPlayMatch}
         tournamentSize={validTournamentSize} 
       />
     );
@@ -639,7 +590,7 @@ const getSpacing = () => {
       getMatchStateStyle={getMatchStateStyle}
       getPlayerStyle={getPlayerStyle}
       getPlayerBgStyle={getPlayerBgStyle}
-      simulateMatch={simulateMatch}
+      onPlayMatch={onPlayMatch}
       matchHeight={matchHeight} 
     />
   );

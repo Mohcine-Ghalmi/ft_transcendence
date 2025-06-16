@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import MATCH_STATES from "./match_states";
+import {MATCH_STATES} from '../../../../data/mockData';
 import TournamentBracket from './TournamentBracket';
 import { user, onlineFriends } from '@/data/mockData';
 

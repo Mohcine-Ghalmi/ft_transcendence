@@ -279,7 +279,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
         router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
       }
     }
-  }, [scores, router, player1.name, player2.name]);
+  }, [scores, router, player1.name , player2.name]);
 
   // Touch button event helpers
   const handleMobilePress = (which: 'p1up' | 'p1down' | 'p2up' | 'p2down', isDown: boolean) => {
