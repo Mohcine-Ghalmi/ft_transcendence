@@ -32,11 +32,11 @@ export const friends = [
   ];
 
 export const onlineFriends = [
-    { name: 'Sophia Clark',   username: 'SLEEPS00', GameStatus: 'Available', avatar: '/mghalmi.jpg' },
-    { name: 'Ethan Bennett',   username: 'SLEEPS00', GameStatus: 'In a match', avatar: '/mghalmi.jpg' },
-    { name: 'Olivia Carter',   username: 'SLEEPS00', GameStatus: 'Available', avatar: '/mghalmi.jpg' },
-    { name: 'Liam Davis',   username: 'SLEEPS00', GameStatus: 'Available', avatar: '/mghalmi.jpg' },
-    { name: 'Ava Evans',   username: 'SLEEPS00', GameStatus: 'In a match', avatar: '/mghalmi.jpg' },
+    { name: 'Sophia Clark',   nickname: 'SLEEPS00', GameStatus: 'Available', avatar: '/mghalmi.jpg' },
+    { name: 'Ethan Bennett',   nickname: 'SLEEPS00', GameStatus: 'In a match', avatar: '/mghalmi.jpg' },
+    { name: 'Olivia Carter',   nickname: 'SLEEPS00', GameStatus: 'Available', avatar: '/mghalmi.jpg' },
+    { name: 'Liam Davis',   nickname: 'SLEEPS00', GameStatus: 'Available', avatar: '/mghalmi.jpg' },
+    { name: 'Ava Evans',   nickname: 'SLEEPS00', GameStatus: 'In a match', avatar: '/mghalmi.jpg' },
 ];
 
 export const notifications = [

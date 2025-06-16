@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Search } from 'lucide-react';
 import {onlineFriends, user } from '@/data/mockData';
 import {PingPongGame} from "../game/PingPongGame";
@@ -59,6 +59,10 @@ export default function OnlineMatch() {
   const [waitTime, setWaitTime] = useState(30);
   const [showGame, setShowGame] = useState(false);
   
+  // Use useRef to store the interval ID so we can clear it when canceling
+  const countdownIntervalRef = useRef(null);
+  const responseTimeoutRef = useRef(null);
+  
   const filteredPlayers = onlinePlayers.filter(player =>
     player.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -70,29 +74,44 @@ export default function OnlineMatch() {
     setGameAccepted(false);
     setWaitTime(30);
     
+    // Clear any existing intervals/timeouts
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+    }
+    
     // Simulate countdown and response waiting
-    const interval = setInterval(() => {
+    countdownIntervalRef.current = setInterval(() => {
       setWaitTime(prev => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          
           // Simulate random response (accept/decline/timeout) - higher chance of accept for demo
           const responses = ['accept', 'decline', 'timeout'];
-          const response = responses[Math.floor(Math.random() * responses.length)];
+          // const response = responses[Math.floor(Math.random() * responses.length)];
+          const response = 'accept';
           
-          setTimeout(() => {
-            if (response === 'accept') {
-              setGameAccepted(true);
-              // Don't reset the waiting state, show the accepted game state instead
-            } else if (response === 'decline') {
-              alert(`${player.name} declined your invitation.`);
-              setIsWaitingForResponse(false);
-              setInvitedPlayer(null);
-            } else {
-              alert(`${player.name} didn't respond to your invitation.`);
-              setIsWaitingForResponse(false);
-              setInvitedPlayer(null);
+          responseTimeoutRef.current = setTimeout(() => {
+            // Check if invitation is still active (not canceled)
+            if (isWaitingForResponse) {
+              if (response === 'accept') {
+                setGameAccepted(true);
+                // Don't reset the waiting state, show the accepted game state instead
+              } else if (response === 'decline') {
+                alert(`${player.name} declined your invitation.`);
+                setIsWaitingForResponse(false);
+                setInvitedPlayer(null);
+              } else {
+                alert(`${player.name} didn't respond to your invitation.`);
+                setIsWaitingForResponse(false);
+                setInvitedPlayer(null);
+              }
             }
-          }, 1000);
+            responseTimeoutRef.current = null;
+          }, 0);
           return 30;
         }
         return prev - 1;
@@ -105,10 +124,21 @@ export default function OnlineMatch() {
   };
 
   const handleCancelInvite = () => {
+    // Clear all intervals and timeouts to prevent any delayed responses
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+    }
+    
+    // Reset all states
     setIsWaitingForResponse(false);
     setInvitedPlayer(null);
     setGameAccepted(false);
-    setWaitTime(3);
+    setWaitTime(30);
   };
 
   const handleStartGame = () => {
@@ -132,7 +162,9 @@ export default function OnlineMatch() {
       {/* Main Content */}
      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
-          <h1 className="text-4xl md:text-5xl font-bold mb-8">1v1 Online Match</h1>
+            {!gameAccepted && (
+            <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">1v1 Online Match</h1>
+            )}
           
           {!showGame ? (
             !isWaitingForResponse ? (
@@ -176,7 +208,7 @@ export default function OnlineMatch() {
               // Match Queue / Game Accepted Interface
               <div className="flex flex-row items-center justify-center">
                 <div className="max-w-7xl mx-auto text-center">
-                  <h2 className="text-3xl font-semibold text-white mb-12">Match Queue</h2>
+                  <h2 className="text-3xl font-semibold text-white mb-12"></h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12 md:mb-20">
                   
                   {/* Player 1 */}
@@ -235,13 +267,11 @@ export default function OnlineMatch() {
               </div>
             )
           ) : (
-            <div className="py-10">
               <PingPongGame
                 player1={user}
                 player2={invitedPlayer}
                 onExit={handleExitGame}
               />
-            </div>
           )}
         </div>
       </div>
