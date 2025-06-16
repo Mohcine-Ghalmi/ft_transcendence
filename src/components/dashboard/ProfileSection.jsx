@@ -17,7 +17,7 @@ export const ProfileSection = () => {
       <div className="flex-1">
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1">{user.name}</h2>
         <p className="text-green-400 font-medium mb-1">{user.status}</p>
-        <p className="text-gray-400 text-sm">@{user.username}</p>
+        <p className="text-gray-400 text-sm">@{user.nickname}</p>
       </div>
       <div className="bg-[#121417] border border-gray-700 px-4 sm:px-6 py-2 sm:py-3 w-[30%] h-24 rounded-xl flex flex-row items-center justify-between">
         <span className="text-gray-300 text-xs sm:text-2xl mr-2">Current Ranking</span>

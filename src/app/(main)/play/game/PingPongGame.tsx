@@ -16,12 +16,12 @@ type PingPongGameProps = {
   player1: {
     name: string;
     avatar: string;
-    username: string;
+    nickname: string;
   };
   player2: {
     name: string;
     avatar: string;
-    username: string;
+    nickname: string;
   };
   onExit: () => void;
 };
@@ -262,11 +262,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
     };
   }, [gameStarted, paused, mobile, canvasDims, paddle1Move, paddle2Move]);
 
-  // Win condition: First to 7
+  // Win condition: First to 7 - Navigate immediately without delay
   useEffect(() => {
     if (scores.p1 >= 7 || scores.p2 >= 7) {
+      setGameStarted(false);
       setPaused(true);
-      // Navigate to result page after a short delay
+      
+      // Navigate immediately without delay
       const winner = scores.p1 >= 7 ? 'player1' : 'player2';
       const winnerName = winner === 'player1' ? player1.name : player2.name;
       const loserName = winner === 'player1' ? player2.name : player1.name;
@@ -406,62 +408,68 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
         <div className="p-4">
           {/* Timer */}
           <div className="flex justify-center mb-4">
-            <div className="flex gap-4 text-center">
-              <div className="bg-[#2a2f3a] rounded-lg px-4 py-2 min-w-[80px]">
-                <div className="text-2xl font-bold text-white">{String(gameTime.hours).padStart(2, '0')}</div>
+            <div className="flex gap-2 sm:gap-4 text-center">
+              <div className="bg-[#2a2f3a] rounded-lg px-2 sm:px-4 py-2 min-w-[60px] sm:min-w-[80px]">
+                <div className="text-lg sm:text-2xl font-bold text-white">{String(gameTime.hours).padStart(2, '0')}</div>
                 <div className="text-xs text-gray-400">Hours</div>
               </div>
-              <div className="bg-[#2a2f3a] rounded-lg px-4 py-2 min-w-[80px]">
-                <div className="text-2xl font-bold text-white">{String(gameTime.minutes).padStart(2, '0')}</div>
+              <div className="bg-[#2a2f3a] rounded-lg px-2 sm:px-4 py-2 min-w-[60px] sm:min-w-[80px]">
+                <div className="text-lg sm:text-2xl font-bold text-white">{String(gameTime.minutes).padStart(2, '0')}</div>
                 <div className="text-xs text-gray-400">Minutes</div>
               </div>
-              <div className="bg-[#2a2f3a] rounded-lg px-4 py-2 min-w-[80px]">
-                <div className="text-2xl font-bold text-white">{String(gameTime.seconds).padStart(2, '0')}</div>
+              <div className="bg-[#2a2f3a] rounded-lg px-2 sm:px-4 py-2 min-w-[60px] sm:min-w-[80px]">
+                <div className="text-lg sm:text-2xl font-bold text-white">{String(gameTime.seconds).padStart(2, '0')}</div>
                 <div className="text-xs text-gray-400">Seconds</div>
               </div>
             </div>
           </div>
 
-          {/* Players and Score */}
-          <div className="flex items-center justify-between mb-4">
-            {/* Player 1 */}
-            <div className="flex items-center gap-3">
+          {/* Players and Score - Responsive Grid Layout */}
+          <div className="grid grid-cols-3 items-center gap-2 sm:gap-4 mb-4">
+            {/* Player 1 - Left Column */}
+            <div className="flex items-center gap-2 sm:gap-3 justify-start">
               <img
                 src={player1.avatar}
                 alt={player1.name}
-                className="w-10 h-10 rounded-full border-2 border-blue-400 object-cover"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
-              <div>
-                <span className="font-semibold text-white">Player 1: {player1.name}</span>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-white font-semibold text-sm sm:text-xl md:text-2xl truncate">
+                  {player1.name}
+                </h4>
+                <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{player1.nickname}</p>
               </div>
             </div>
             
-            {/* Score */}
-            <div className="text-center">
-              <div className="text-4xl font-bold text-white">
+            {/* Score - Center Column */}
+            <div className="text-center flex-shrink-0">
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-white whitespace-nowrap">
                 {scores.p1} - {scores.p2}
               </div>
             </div>
             
-            {/* Player 2 */}
-            <div className="flex items-center gap-3 flex-row-reverse">
+            {/* Player 2 - Right Column */}
+            <div className="flex items-center gap-2 sm:gap-3 justify-end">
+              <div className="min-w-0 flex-1 text-right">
+                <h4 className="text-white font-semibold text-sm sm:text-xl md:text-2xl truncate">
+                  {player2.name}
+                </h4>
+                <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{player2.nickname}</p>
+              </div>
               <img
                 src={player2.avatar}
                 alt={player2.name}
-                className="w-10 h-10 rounded-full border-2 border-blue-400 object-cover"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
-              <div className="text-right">
-                <span className="font-semibold text-white">Player 2: {player2.name}</span>
-              </div>
             </div>
           </div>
 
           {/* Game Controls */}
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-2 sm:gap-4">
             {isGameActive && (
               <button
                 onClick={handlePause}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base"
               >
                 Pause
               </button>
@@ -469,14 +477,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
             {gameStarted && paused && !gameOver && (
               <button
                 onClick={handleResume}
-                className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+                className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base"
               >
                 Resume
               </button>
             )}
             <button
               onClick={onExit}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibeel transition-colors text-sm sm:text-base"
             >
               Exit
             </button>

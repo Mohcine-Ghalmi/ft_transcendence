@@ -5,22 +5,26 @@ import { PingPongGame } from "../game/PingPongGame";
 
 // Add Player Modal Component
 const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
-  const [username, setUsername] = useState('');
   const [nickname, setNickname] = useState('');
+  const [name, setName] = useState('');
   const [errors, setErrors] = useState({});
   const [avatar, setAvatar] = useState(null);
 
-   const handleSubmit = () => {
+  const handleSubmit = () => {
     const newErrors = {};
     
-    if (!username.trim()) {
-      newErrors.username = 'Username is required';
-    }
-    
     if (!nickname.trim()) {
-      newErrors.nickname = 'Nickname is required';
+      newErrors.nickname = 'Username is required';
     }
     
+    if (!name.trim()) {
+      newErrors.name = 'Name is required';
+    }
+
+    if (!avatar) {
+      newErrors.avatar = 'Avatar is required';
+    }
+  
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -30,21 +34,15 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
     setErrors({});
     
     onAddPlayer({
-      username: username.trim(),
       nickname: nickname.trim(),
-      avatar: avatar || '/mghalmi.jpg'
+      name: name.trim(),
+      avatar: avatar
     });
     
     // Reset form
-    setUsername('');
     setNickname('');
+    setName('');
     setAvatar(null);
-  };
-   const handleUsernameChange = (e) => {
-    setUsername(e.target.value);
-    if (errors.username) {
-      setErrors(prev => ({ ...prev, username: '' }));
-    }
   };
 
   const handleNicknameChange = (e) => {
@@ -54,12 +52,22 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
     }
   };
 
+  const handleNameChange = (e) => {
+    setName(e.target.value);
+    if (errors.name) {
+      setErrors(prev => ({ ...prev, name: '' }));
+    }
+  };
+
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => setAvatar(e.target.result);
       reader.readAsDataURL(file);
+    }
+    if (errors.avatar) {
+      setErrors(prev => ({ ...prev, avatar: '' }));
     }
   };
 
@@ -75,21 +83,6 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
             <input
               type="text"
               placeholder="Username"
-              value={username}
-              onChange={handleUsernameChange}
-              className={`w-full px-4 py-3 bg-[#4a5568] text-white rounded-lg border-none outline-none focus:bg-[#5a6578] transition-colors ${
-                errors.username ? 'ring-2 ring-red-500' : ''
-              }`}
-            />
-            {errors.username && (
-              <p className="text-red-400 text-sm mt-1">{errors.username}</p>
-            )}
-          </div>
-          
-          <div>
-            <input
-              type="text"
-              placeholder="Nickname"
               value={nickname}
               onChange={handleNicknameChange}
               className={`w-full px-4 py-3 bg-[#4a5568] text-white rounded-lg border-none outline-none focus:bg-[#5a6578] transition-colors ${
@@ -101,7 +94,24 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
             )}
           </div>
           
-          <div className="border-2 border-dashed border-gray-500 rounded-lg p-8 text-center">
+          <div>
+            <input
+              type="text"
+              placeholder="Name"
+              value={name}
+              onChange={handleNameChange}
+              className={`w-full px-4 py-3 bg-[#4a5568] text-white rounded-lg border-none outline-none focus:bg-[#5a6578] transition-colors ${
+                errors.name ? 'ring-2 ring-red-500' : ''
+              }`}
+            />
+            {errors.name && (
+              <p className="text-red-400 text-sm mt-1">{errors.name}</p>
+            )}
+          </div>
+          
+          <div className={`border-2 border-dashed rounded-lg p-8 text-center ${
+            errors.avatar ? 'border-red-500 bg-red-500/10' : 'border-gray-500'
+            }`}>
             <div className="mb-4">
               <h3 className="text-white font-semibold mb-2">Upload Avatar</h3>
               <p className="text-gray-400 text-sm mb-4">Select an avatar for Player 2.</p>
@@ -116,7 +126,7 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
                 </div>
               )}
               
-              <label className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-4 py-2 rounded-lg cursor-pointer transition-colors inline-block">
+              <label className="bg-gray-700 hover:bg-[#5a6578] text-white px-4 py-2 rounded-lg cursor-pointer transition-colors inline-block">
                 Choose Avatar
                 <input
                   type="file"
@@ -126,6 +136,9 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
                 />
               </label>
             </div>
+             {errors.avatar && (
+                <p className="text-red-400 text-sm mt-2">{errors.avatar}</p>
+              )}
           </div>
           
           <div className="flex justify-end space-x-4 mt-6">
@@ -163,7 +176,7 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
             <button
               onClick={onAddPlayer}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-8 py-4 md:px-12 md:py-5 rounded-xl text-lg md:text-2xl transition-colors"
-            >
+              >
               Add Player
             </button>
           </div>
@@ -189,7 +202,7 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
         <h4 className="text-white font-semibold text-2xl md:text-3xl">
           {player.name}
         </h4>
-        <p className="text-gray-400 text-lg md:text-xl">@{player.username}</p>
+        <p className="text-gray-400 text-lg md:text-xl">@{player.nickname}</p>
       </div>
     </div>
   );
@@ -203,7 +216,6 @@ export default function Local1v1() {
 
   const handleAddPlayer = (playerData) => {
     setPlayer2(playerData);
-    console.log("playe 2 => ",playerData);
     setIsModalOpen(false);
   };
 
@@ -222,16 +234,11 @@ export default function Local1v1() {
 
   // If both players are present and showGame is true, show PingPongGame
   if (showGame && player2) {
-    const player2Data = {
-      name: player2.username,
-      avatar: player2.avatar || '/mghalmi.jpg',
-      ...player2,
-    };
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <PingPongGame
           player1={user}
-          player2={player2Data}
+          player2={player2}
           onExit={handleExitGame}
         />
       </div>

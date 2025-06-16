@@ -49,12 +49,6 @@ function WinPageContent() {
 
 export default function WinPage() {
   return (
-    <Suspense fallback={
-      <div className="fixed inset-0 bg-[#15181e] flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    }>
-      <WinPageContent />
-    </Suspense>
+    <WinPageContent />
   );
 }

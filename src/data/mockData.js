@@ -1,6 +1,6 @@
 export const user = {
   name: 'Mohcine Ghalmi',
-  username: 'SLEEPS',
+  nickname: 'SLEEPS',
   avatar: '/mghalmi.jpg',
   status: 'Online',
   email: 'SLEEPS@example.com',
@@ -26,9 +26,9 @@ export let friendSuggestions = [
   ];
 
 export const friends = [
-    { name: 'Noah', status: 'Offline', avatar: '/mghalmi.jpg' },
-    { name: 'Isabella', status: 'Online', avatar: '/mghalmi.jpg' },
-    { name: 'Ava', status: 'Online', avatar: '/mghalmi.jpg' },
+    { name: 'Noah', status: 'Offline', avatar: '/mghalmi.jpg', nickname: 'noah123' },
+    { name: 'Isabella', status: 'Online', avatar: '/mghalmi.jpg', nickname: 'isabella456' },
+    { name: 'Ava', status: 'Online', avatar: '/mghalmi.jpg', nickname: 'ava789' },
   ];
 
 export const onlineFriends = [
@@ -54,17 +54,17 @@ export const chartData = [
   ];
 
 export const mockUsers = [
-  { id: 1, name: "Ethan Carter", avatar: "/mghalmi.jpg", active: true },
-  { id: 2, name: "Sophia Clark", avatar: "/mghalmi.jpg" },
-  { id: 3, name: "Liam Walker", avatar: "/mghalmi.jpg" },
-  { id: 4, name: "Olivia Martin", avatar: "/mghalmi.jpg" },
-  { id: 5, name: "Kevin Lewis", avatar: "/mghalmi.jpg" },
-  { id: 6, name: "Ava Scott", avatar: "/mghalmi.jpg" },
-  { id: 7, name: "Jackson Evans", avatar: "/mghalmi.jpg" },
-  { id: 8, name: "Sophia Green", avatar: "/mghalmi.jpg" },
-  { id: 9, name: "Isabella King", avatar: "/mghalmi.jpg" },
-  { id: 10, name: "Mia Wright", avatar: "/mghalmi.jpg" },
-  { id: 11, name: "Aiden Wright", avatar: "/mghalmi.jpg" },
+  { id: 1, name: "Ethan Carter", avatar: "/mghalmi.jpg", active: true, nickname: "ethan" },
+  { id: 2, name: "Sophia Clark", avatar: "/mghalmi.jpg", nickname: "sophia" },
+  { id: 3, name: "Liam Walker", avatar: "/mghalmi.jpg", nickname: "liam" },
+  { id: 4, name: "Olivia Martin", avatar: "/mghalmi.jpg", nickname: "olivia" },
+  { id: 5, name: "Kevin Lewis", avatar: "/mghalmi.jpg", nickname: "kevin" },
+  { id: 6, name: "Ava Scott", avatar: "/mghalmi.jpg", nickname: "ava" },
+  { id: 7, name: "Jackson Evans", avatar: "/mghalmi.jpg", nickname: "jackson" },
+  { id: 8, name: "Sophia Green", avatar: "/mghalmi.jpg", nickname: "sophiag" },
+  { id: 9, name: "Isabella King", avatar: "/mghalmi.jpg", nickname: "isabellak" },
+  { id: 10, name: "Mia Wright", avatar: "/mghalmi.jpg", nickname: "mia" },
+  { id: 11, name: "Aiden Wright", avatar: "/mghalmi.jpg", nickname: "aiden" },
 ];
 
 export const mockMessages = [
