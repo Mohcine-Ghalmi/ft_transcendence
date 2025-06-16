@@ -1,6 +1,6 @@
+
 "use client";
 import React, { useRef, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 const GAME_RATIO = 16 / 9;
 
@@ -14,23 +14,30 @@ const BALL_SPEED = 6;
 
 type PingPongGameProps = {
   player1: {
+    id?: string;
     name: string;
     avatar: string;
     nickname: string;
   };
   player2: {
+    id?: string;
     name: string;
     avatar: string;
     nickname: string;
   };
-  onExit: () => void;
+  onExit: (winner?: any) => void;
+  isTournamentMode?: boolean;
 };
 
 const isMobile = () => typeof window !== 'undefined' && window.innerWidth < 640;
 
-export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, onExit }) => {
+export const PingPongGame: React.FC<PingPongGameProps> = ({ 
+  player1, 
+  player2, 
+  onExit, 
+  isTournamentMode = false 
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const router = useRouter();
   const [scores, setScores] = useState({ p1: 0, p2: 0 });
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -42,6 +49,21 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
   });
+
+  // Validate players have required properties
+  const safePlayer1 = {
+    id: player1?.id || crypto.randomUUID(),
+    name: player1?.name || 'Player 1',
+    avatar: player1?.avatar || '/mghalmi.jpg',
+    nickname: player1?.nickname || player1?.name || 'Player 1'
+  };
+
+  const safePlayer2 = {
+    id: player2?.id || crypto.randomUUID(),
+    name: player2?.name || 'Player 2',
+    avatar: player2?.avatar || '/mghalmi.jpg',
+    nickname: player2?.nickname || player2?.name || 'Player 2'
+  };
 
   // Paddle positions: player1 left, player2 right
   const paddle1Y = useRef<number>(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
@@ -262,24 +284,31 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
     };
   }, [gameStarted, paused, mobile, canvasDims, paddle1Move, paddle2Move]);
 
-  // Win condition: First to 7 - Navigate immediately without delay
+  // Win condition - Updated for tournament mode with better winner object
   useEffect(() => {
     if (scores.p1 >= 7 || scores.p2 >= 7) {
       setGameStarted(false);
       setPaused(true);
       
-      // Navigate immediately without delay
-      const winner = scores.p1 >= 7 ? 'player1' : 'player2';
-      const winnerName = winner === 'player1' ? player1.name : player2.name;
-      const loserName = winner === 'player1' ? player2.name : player1.name;
+      const winner = scores.p1 >= 7 ? safePlayer1 : safePlayer2;
       
-      if (winner === 'player1') {
-        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      if (isTournamentMode) {
+        // For tournament mode, pass the complete winner object back
+        onExit(winner);
       } else {
-        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+        // For regular games, navigate to result pages
+        const winnerName = winner.name;
+        const loserName = scores.p1 >= 7 ? safePlayer2.name : safePlayer1.name;
+        
+        // Check if current user won (assuming player1 is always the user in 1v1 mode)
+        if (scores.p1 >= 7) {
+          window.location.href = `/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+        } else {
+          window.location.href = `/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+        }
       }
     }
-  }, [scores, router, player1.name , player2.name]);
+  }, [scores, safePlayer1, safePlayer2, onExit, isTournamentMode]);
 
   // Touch button event helpers
   const handleMobilePress = (which: 'p1up' | 'p1down' | 'p2up' | 'p2down', isDown: boolean) => {
@@ -309,6 +338,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
 
   const handleResume = () => {
     setPaused(false);
+  };
+
+  const handleExit = () => {
+    if (isTournamentMode) {
+      onExit(); // Exit without winner for tournament mode
+    } else {
+      onExit();
+    }
   };
 
   // UI helpers
@@ -429,15 +466,15 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
             {/* Player 1 - Left Column */}
             <div className="flex items-center gap-2 sm:gap-3 justify-start">
               <img
-                src={player1.avatar}
-                alt={player1.name}
+                src={safePlayer1.avatar}
+                alt={safePlayer1.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
               <div className="min-w-0 flex-1">
                 <h4 className="text-white font-semibold text-sm sm:text-xl md:text-2xl truncate">
-                  {player1.name}
+                  {safePlayer1.name}
                 </h4>
-                <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{player1.nickname}</p>
+                <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{safePlayer1.nickname}</p>
               </div>
             </div>
             
@@ -452,13 +489,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
             <div className="flex items-center gap-2 sm:gap-3 justify-end">
               <div className="min-w-0 flex-1 text-right">
                 <h4 className="text-white font-semibold text-sm sm:text-xl md:text-2xl truncate">
-                  {player2.name}
+                  {safePlayer2.name}
                 </h4>
-                <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{player2.nickname}</p>
+                <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{safePlayer2.nickname}</p>
               </div>
               <img
-                src={player2.avatar}
-                alt={player2.name}
+                src={safePlayer2.avatar}
+                alt={safePlayer2.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
             </div>
@@ -483,8 +520,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({ player1, player2, on
               </button>
             )}
             <button
-              onClick={onExit}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibeel transition-colors text-sm sm:text-base"
+              onClick={handleExit}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base"
             >
               Exit
             </button>

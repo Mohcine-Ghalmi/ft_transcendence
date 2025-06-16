@@ -112,7 +112,7 @@ export default function OnlineMatch() {
             }
             responseTimeoutRef.current = null;
           }, 0);
-          return 30;
+          return 5;
         }
         return prev - 1;
       });

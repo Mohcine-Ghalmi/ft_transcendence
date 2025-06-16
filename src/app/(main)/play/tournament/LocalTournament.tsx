@@ -9,7 +9,12 @@ import {PingPongGame} from '../game/PingPongGame';
 
 // Tournament Bracket Component for Local Tournament
 
-const ParticipantItem = ({ player, removeParticipant, changeParticipantName, changeParticipantNickname }) => {
+const ParticipantItem = ({ player, removeParticipant, changeParticipantName, changeParticipantNickname }: {
+  player: any;
+  removeParticipant: (id: string) => void;
+  changeParticipantName: (id: string, name: string) => void;
+  changeParticipantNickname: (id: string, nickname: string) => void;
+}) => {
   return (
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-gray-700/50">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-gray-600">
@@ -53,7 +58,12 @@ const ParticipantItem = ({ player, removeParticipant, changeParticipantName, cha
   );
 };
 
-const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }) => {
+const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }: {
+  currentRound: number;
+  totalRounds: number;
+  onAdvanceRound: () => void;
+  canAdvance: boolean;
+}) => {
   return (
     <div className="flex items-center justify-center mb-6 bg-[#1a1d23] rounded-lg p-4 border border-gray-700/50">
       <div className="flex items-center space-x-3">
@@ -91,16 +101,18 @@ const LocalTournamentMode = () => {
   const [tournamentSize, setTournamentSize] = useState(4);
   const [tournamentStarted, setTournamentStarted] = useState(false);
   const [currentRound, setCurrentRound] = useState(0);
-  const [matches, setMatches] = useState([]);
+  const [matches, setMatches] = useState<any[]>([]);
   const [tournamentComplete, setTournamentComplete] = useState(false);
-  const [champion, setChampion] = useState(null);
-  const [playingMatch, setPlayingMatch] = useState(null);
+  const [champion, setChampion] = useState<any>(null);
+  const [playingMatch, setPlayingMatch] = useState<any>(null);
+  const [showMatchResult, setShowMatchResult] = useState(false);
+  const [matchWinner, setMatchWinner] = useState<any>(null);
   
   const totalRounds = Math.log2(tournamentSize);
   
   // Helper function to get display name (nickname if available, otherwise name)
-  const getDisplayName = (player) => {
-    return player.nickname?.trim() || player.name;
+  const getDisplayName = (player: any) => {
+    return player?.nickname?.trim() || player?.name || 'Unknown Player';
   };
   
   // Initialize tournament matches
@@ -143,7 +155,7 @@ const LocalTournamentMode = () => {
   };
   
   // Update match state and propagate winners to next round
-  const handleMatchUpdate = (roundIndex, matchIndex, newState) => {
+  const handleMatchUpdate = (roundIndex: number, matchIndex: number, newState: string) => {
     setMatches(prevMatches => {
       const updatedMatches = [...prevMatches];
       const matchToUpdateIndex = updatedMatches.findIndex(
@@ -251,19 +263,19 @@ const LocalTournamentMode = () => {
     }
   };
   
-  const removeParticipant = (id) => {
+  const removeParticipant = (id: string) => {
     if (participants.length > 1) {
       setParticipants(participants.filter(player => player.id !== id));
     }
   };
   
-  const changeParticipantName = (id, newName) => {
+  const changeParticipantName = (id: string, newName: string) => {
     setParticipants(participants.map(player => 
       player.id === id ? { ...player, name: newName } : player
     ));
   };
   
-  const changeParticipantNickname = (id, newNickname) => {
+  const changeParticipantNickname = (id: string, newNickname: string) => {
     setParticipants(participants.map(player => 
       player.id === id ? { ...player, nickname: newNickname } : player
     ));
@@ -279,21 +291,51 @@ const LocalTournamentMode = () => {
     setMatches([]);
     setTournamentComplete(false);
     setChampion(null);
+    setPlayingMatch(null);
+    setShowMatchResult(false);
+    setMatchWinner(null);
   };
 
   // Start a match in PingPongGame
-  const handlePlayMatch = (match) => {
+  const handlePlayMatch = (match: any) => {
     setPlayingMatch(match);
   };
 
-  // Handle winner from PingPongGame
-  const handleGameEnd = (winner) => {
-    if (!playingMatch) return;
-    const matchState =
-      winner.id === playingMatch.player1.id
-        ? MATCH_STATES.PLAYER1_WIN
-        : MATCH_STATES.PLAYER2_WIN;
+  // Handle winner from PingPongGame - Fixed with proper null checks
+  const handleGameEnd = (winner?: any) => {
+    if (!playingMatch || !playingMatch.player1 || !playingMatch.player2) {
+      console.error('Invalid match or missing players');
+      return;
+    }
+    
+    // If no winner is provided (game was exited), just go back to tournament
+    if (!winner) {
+      setPlayingMatch(null);
+      return;
+    }
+    
+    // Ensure winner has required properties
+    if (!winner.id) {
+      console.error('Winner missing id property');
+      return;
+    }
+    
+    // Set match winner and show result
+    setMatchWinner(winner);
+    setShowMatchResult(true);
+    
+    // Update match state - Fixed null checks
+    const matchState = winner.id === playingMatch.player1?.id 
+      ? MATCH_STATES.PLAYER1_WIN 
+      : MATCH_STATES.PLAYER2_WIN;
+    
     handleMatchUpdate(playingMatch.round, playingMatch.matchIndex, matchState);
+  };
+
+  // Continue tournament after showing match result
+  const handleContinueTournament = () => {
+    setShowMatchResult(false);
+    setMatchWinner(null);
     setPlayingMatch(null);
   };
 
@@ -399,12 +441,50 @@ const LocalTournamentMode = () => {
           {/* Tournament Started View */}
           {tournamentStarted && !tournamentComplete && (
             <div className="space-y-6">
+              {/* Match Result Modal */}
+              {showMatchResult && matchWinner && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                  <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4 text-center">
+                    <div className="mb-6">
+                      <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-green-500 mx-auto mb-4">
+                        <Image 
+                          src={matchWinner.avatar || '/mghalmi.jpg'} 
+                          alt={matchWinner.name || 'Winner'} 
+                          width={96} 
+                          height={96}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <h2 className="text-3xl font-bold text-white mb-2">Match Winner!</h2>
+                      <div className="text-green-400 text-2xl font-bold mb-2">
+                        {getDisplayName(matchWinner)}
+                      </div>
+                      {matchWinner.nickname && matchWinner.nickname !== matchWinner.name && (
+                        <div className="text-green-300 text-lg">
+                          ({matchWinner.name})
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-gray-300 mb-6">
+                      {getDisplayName(matchWinner)} advances to the next round!
+                    </p>
+                    <button
+                      onClick={handleContinueTournament}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors"
+                    >
+                      Continue Tournament
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* If a match is being played, show PingPongGame */}
-              {playingMatch ? (
+              {playingMatch && !showMatchResult ? (
                 <PingPongGame
                   player1={playingMatch.player1}
                   player2={playingMatch.player2}
                   onExit={handleGameEnd}
+                  isTournamentMode={true}
                 />
               ) : (
                 <>
