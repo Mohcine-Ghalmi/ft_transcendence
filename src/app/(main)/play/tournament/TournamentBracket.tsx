@@ -168,7 +168,7 @@ export function DesktopBracket({
 }) {
     const getPlayerDisplayName = (player) => {
       if (!player) return "TBD";
-      if (player.nickname) return `${player.name}`;
+      if (player.nickname) return `${player.name} "${player.nickname}"`;
       return player.name;
     };
     
@@ -176,9 +176,8 @@ export function DesktopBracket({
     const adjustedMatchHeight = matchHeight * 1.5;
     
     return (
-        <div className="flex flex-col items-center mt-4 p-4 bg-gray-800/80 rounded-lg border border-gray-700 overflow-x-auto w-full">
+        <div className="flex flex-col items-center mt-4 p-4 overflow-x-auto w-full">
           <h3 className="text-white text-xl md:text-2xl mb-3 text-center">Tournament Bracket</h3>
-          <div className="text-white text-sm mb-2">Current Round: {currentRound + 1}</div>
           
           <div className="relative min-w-full" style={{ height: `${bracketHeight * 1.5}px`, minWidth: `${(rounds * 2 + 1) * roundWidth}px` }}>
             {/* Left side of the bracket */}
@@ -286,54 +285,60 @@ export function DesktopBracket({
               style={{ left: `${rounds * roundWidth}px`, width: `${roundWidth}px` }}
             >
               {/* Final match */}
-              <div 
-                className={`shadow-lg ${
-                  getMatch(rounds - 1, 0) ? getMatchStateStyle(getMatch(rounds - 1, 0).state) : "border-yellow-400"
-                } rounded-lg mx-1 overflow-hidden flex flex-col ${currentRound === rounds - 1 ? 'hover:brightness-110 cursor-pointer transform hover:scale-105 transition-transform' : ''}`}
-                onClick={() => currentRound === rounds - 1 && onPlayMatch(rounds - 1, 0)}
-              >
-                <div className="text-yellow-400 text-sm md:text-lg text-center font-bold bg-black p-2 border-b border-yellow-500/50">
-                  FINAL
-                </div>
+              {(() => {
+                const finalMatch = getMatch(rounds - 1, 0);
+                const isFinalCurrentRound = currentRound === rounds - 1;
                 
-                {/* Final Players */}
-                {(() => {
-                  const finalMatch = getMatch(rounds - 1, 0);
-                  const player1 = finalMatch?.player1;
-                  const player2 = finalMatch?.player2;
-                  
-                  const player1Style = finalMatch ? getPlayerStyle(finalMatch, true) : "text-gray-300";
-                  const player2Style = finalMatch ? getPlayerStyle(finalMatch, false) : "text-gray-300";
-                  
-                  const player1BgStyle = finalMatch ? getPlayerBgStyle(finalMatch, true) : "";
-                  const player2BgStyle = finalMatch ? getPlayerBgStyle(finalMatch, false) : "";
+                return (
+                  <div 
+                    className={`shadow-lg ${
+                      finalMatch ? getMatchStateStyle(finalMatch.state) : "border-yellow-400"
+                    } rounded-lg mx-1 overflow-hidden flex flex-col ${isFinalCurrentRound ? 'hover:brightness-110 cursor-pointer transform hover:scale-105 transition-transform' : ''}`}
+                    onClick={() => isFinalCurrentRound && finalMatch && finalMatch.player1 && finalMatch.player2 && onPlayMatch && onPlayMatch(finalMatch)}
+                  >
+                    <div className="text-yellow-400 text-sm md:text-lg text-center font-bold bg-black p-2 border-b border-yellow-500/50">
+                      FINAL
+                    </div>
+                    
+                    {/* Final Players */}
+                    {(() => {
+                      const player1 = finalMatch?.player1;
+                      const player2 = finalMatch?.player2;
+                      
+                      const player1Style = finalMatch ? getPlayerStyle(finalMatch, true) : "text-gray-300";
+                      const player2Style = finalMatch ? getPlayerStyle(finalMatch, false) : "text-gray-300";
+                      
+                      const player1BgStyle = finalMatch ? getPlayerBgStyle(finalMatch, true) : "";
+                      const player2BgStyle = finalMatch ? getPlayerBgStyle(finalMatch, false) : "";
 
-                  return (
-                    <>
-                      <div className={`p-3 ${player1BgStyle} border-b border-gray-600`} style={{ minHeight: `${adjustedMatchHeight/2}px` }}>
-                        <div className={`text-sm md:text-base text-center font-medium ${player1Style}`}>
-                          {getPlayerDisplayName(player1)}
-                        </div>
+                      return (
+                        <>
+                          <div className={`p-3 ${player1BgStyle} border-b border-gray-600`} style={{ minHeight: `${adjustedMatchHeight/2}px` }}>
+                            <div className={`text-sm md:text-base text-center font-medium ${player1Style}`}>
+                              {getPlayerDisplayName(player1)}
+                            </div>
+                          </div>
+                          <div className={`p-3 ${player2BgStyle}`} style={{ minHeight: `${adjustedMatchHeight/2}px` }}>
+                            <div className={`text-sm md:text-base text-center font-medium ${player2Style}`}>
+                              {getPlayerDisplayName(player2)}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                    
+                    {/* Champion */}
+                    {finalMatch && (finalMatch.state === MATCH_STATES.PLAYER1_WIN || 
+                                                finalMatch.state === MATCH_STATES.PLAYER2_WIN) && (
+                      <div className="text-green-300 text-xs md:text-base border-t border-green-500/50 font-bold text-center p-2 bg-green-900/30">
+                        Champion: {finalMatch.state === MATCH_STATES.PLAYER1_WIN 
+                          ? getPlayerDisplayName(finalMatch.player1)
+                          : getPlayerDisplayName(finalMatch.player2)}
                       </div>
-                      <div className={`p-3 ${player2BgStyle}`} style={{ minHeight: `${adjustedMatchHeight/2}px` }}>
-                        <div className={`text-sm md:text-base text-center font-medium ${player2Style}`}>
-                          {getPlayerDisplayName(player2)}
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-                
-                {/* Champion */}
-                {getMatch(rounds - 1, 0) && (getMatch(rounds - 1, 0).state === MATCH_STATES.PLAYER1_WIN || 
-                                            getMatch(rounds - 1, 0).state === MATCH_STATES.PLAYER2_WIN) && (
-                  <div className="text-green-300 text-xs md:text-base border-t border-green-500/50 font-bold text-center p-2 bg-green-900/30">
-                    Champion: {getMatch(rounds - 1, 0).state === MATCH_STATES.PLAYER1_WIN 
-                      ? getPlayerDisplayName(getMatch(rounds - 1, 0).player1)
-                      : getPlayerDisplayName(getMatch(rounds - 1, 0).player2)}
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
 
             {/* Right side of the bracket */}
