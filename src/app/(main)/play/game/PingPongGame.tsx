@@ -12,23 +12,6 @@ const BALL_SIZE = 16;
 const PADDLE_SPEED = 7;
 const BALL_SPEED = 6;
 
-type PingPongGameProps = {
-  player1: {
-    id?: string;
-    name: string;
-    avatar: string;
-    nickname: string;
-  };
-  player2: {
-    id?: string;
-    name: string;
-    avatar: string;
-    nickname: string;
-  };
-  onExit: (winner?: any) => void;
-  isTournamentMode?: boolean;
-};
-
 const isMobile = () => typeof window !== 'undefined' && window.innerWidth < 640;
 
 export const PingPongGame: React.FC<PingPongGameProps> = ({ 

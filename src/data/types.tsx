@@ -22,12 +22,15 @@ type NavigationItem = {
 };
 
 interface PlayerInfo {
+  id?: string;
   name: string;
   avatar: string;
+  nickname: string;
 }
 
 interface PingPongGameProps {
   player1: PlayerInfo;
   player2: PlayerInfo;
   onExit: () => void;
+  isTournamentMode?: boolean;
 }

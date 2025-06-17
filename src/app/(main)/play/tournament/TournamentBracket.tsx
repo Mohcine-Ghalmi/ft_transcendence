@@ -168,7 +168,7 @@ export function DesktopBracket({
 }) {
     const getPlayerDisplayName = (player) => {
       if (!player) return "TBD";
-      if (player.nickname) return `${player.name} "${player.nickname}"`;
+      if (player.nickname) return `${player.name}`;
       return player.name;
     };
     

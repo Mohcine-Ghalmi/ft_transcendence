@@ -303,11 +303,19 @@ const LocalTournamentMode = () => {
 
   // Handle winner from PingPongGame - Fixed with proper null checks
   const handleGameEnd = (winner?: any) => {
-    if (!playingMatch || !playingMatch.player1 || !playingMatch.player2) {
-      console.error('Invalid match or missing players');
+    // if (!playingMatch || !playingMatch.player1 || !playingMatch.player2) {
+    //   console.error('Invalid match or missing players');
+    //   return;
+    // }
+    
+    console.log('Game ended. Winner:', winner, 'Playing match:', playingMatch);
+    
+    // Enhanced validation with better error handling
+    if (!playingMatch) {
+      console.error('No playing match found');
       return;
     }
-    
+
     // If no winner is provided (game was exited), just go back to tournament
     if (!winner) {
       setPlayingMatch(null);
@@ -343,9 +351,11 @@ const LocalTournamentMode = () => {
     <div className="h-full w-full text-white">
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl">
-          <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
-            {tournamentStarted ? tournamentName : "Local Tournament"}
-          </h1>
+            {(!playingMatch || showMatchResult) && (
+            <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
+              {tournamentStarted ? tournamentName : "Local Tournament"}
+            </h1>
+            )}
           
           {!tournamentStarted && (
             <div className="space-y-6">
