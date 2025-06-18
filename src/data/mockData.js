@@ -10,11 +10,12 @@ export const user = {
 };
 
 export const matchHistory = [
-    { date: '2023-11-15', opponent: 'Liam Parker', result: 'Win', score: '2-1' },
-    { date: '2023-11-12', opponent: 'Sophia Evans', result: 'Loss', score: '1-2' },
-    { date: '2023-11-09', opponent: 'Noah Walker', result: 'Win', score: '2-0' },
-    { date: '2023-11-06', opponent: 'Olivia Bennett', result: 'Win', score: '2-1' },
-    { date: '2023-11-03', opponent: 'Ethan Carter', result: 'Loss', score: '0-2' },
+    { date: '2023-11-15', opponent: 'Liam Parker', result: 'Win', score: '7-1' },
+    { date: '2023-11-12', opponent: 'Sophia Evans', result: 'Loss', score: '1-7' },
+    { date: '2023-11-09', opponent: 'Noah Walker', result: 'Win', score: '7-0' },
+    { date: '2023-11-06', opponent: 'Olivia Bennett', result: 'Win', score: '7-1' },
+    { date: '2023-11-03', opponent: 'Ethan Carter', result: 'Loss', score: '4-7' },
+    
   ];
 
 export let friendSuggestions = [

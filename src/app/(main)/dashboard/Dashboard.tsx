@@ -12,7 +12,7 @@ export default function PingPongDashboard() {
   return (
     <div className="h-full text-white">
       {/* Main Dashboard Content */}
-        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4 py-4">
+        <div className="flex items-center justify-center px-4 py-4">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 w-full">
           {/* Left Section */}
           <div className="xl:col-span-2 space-y-4 sm:space-y-6">
