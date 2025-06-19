@@ -1,7 +1,10 @@
-"use client"
-import { useState, useRef } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
+'use client'
+import { useState, useRef } from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
+import SignInWithOthers from '../SignInWithOthers'
+import { axiosInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import { toast } from 'react-toastify'
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -10,282 +13,322 @@ export default function Signup() {
     password: '',
     confirmPassword: '',
     avatar: null as File | null,
-    twoFactorCode: ''
-  });
-  const [currentStep, setCurrentStep] = useState(1);
+    twoFactorCode: '',
+  })
+  const [currentStep, setCurrentStep] = useState(1)
+  const imageName = useRef('')
   const [errors, setErrors] = useState({
     username: '',
     email: '',
     password: '',
     confirmPassword: '',
     avatar: '',
-    twoFactorCode: ''
-  });
+    twoFactorCode: '',
+  })
   const [touched, setTouched] = useState({
     username: false,
     email: false,
     password: false,
     confirmPassword: false,
     avatar: false,
-    twoFactorCode: false
-  });
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+    twoFactorCode: false,
+  })
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const validateField = (name: string, value: string | File | null) => {
-    let error = '';
-    
+    let error = ''
+
     switch (name) {
       case 'username':
         if (!value || (typeof value === 'string' && !value.trim())) {
-          error = 'Username is required';
+          error = 'Username is required'
         } else if (typeof value === 'string' && value.length < 3) {
-          error = 'Username must be at least 3 characters';
-        } else if (typeof value === 'string' && !/^[a-zA-Z0-9_]+$/.test(value)) {
-          error = 'Username can only contain letters, numbers, and underscores';
+          error = 'Username must be at least 3 characters'
+        } else if (
+          typeof value === 'string' &&
+          !/^[a-zA-Z0-9_]+$/.test(value)
+        ) {
+          error = 'Username can only contain letters, numbers, and underscores'
         }
-        break;
-        
+        break
+
       case 'email':
         if (!value || (typeof value === 'string' && !value.trim())) {
-          error = 'Email is required';
-        } else if (typeof value === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-          error = 'Please enter a valid email address';
+          error = 'Email is required'
+        } else if (
+          typeof value === 'string' &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+        ) {
+          error = 'Please enter a valid email address'
         }
-        break;
-        
+        break
+
       case 'password':
         if (!value) {
-          error = 'Password is required';
+          error = 'Password is required'
         } else if (typeof value === 'string' && value.length < 8) {
-          error = 'Password must be at least 8 characters';
-        } else if (typeof value === 'string' && !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)) {
-          error = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
+          error = 'Password must be at least 8 characters'
+        } else if (
+          typeof value === 'string' &&
+          !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)
+        ) {
+          error =
+            'Password must contain at least one uppercase letter, one lowercase letter, and one number'
         }
-        break;
-        
+        break
+
       case 'confirmPassword':
         if (!value) {
-          error = 'Please confirm your password';
+          error = 'Please confirm your password'
         } else if (typeof value === 'string' && value !== formData.password) {
-          error = 'Passwords do not match';
+          error = 'Passwords do not match'
         }
-        break;
+        break
 
       case 'avatar':
         // Make avatar required - remove this condition if avatar should be optional
         if (!value) {
-          error = 'Please upload an avatar image';
+          error = 'Please upload an avatar image'
         } else if (value && value instanceof File) {
-          const maxSize = 5 * 1024 * 1024; // 5MB
-          const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-          
+          const maxSize = 5 * 1024 * 1024 // 5MB
+          const allowedTypes = [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+          ]
+
           if (!allowedTypes.includes(value.type)) {
-            error = 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)';
+            error = 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)'
           } else if (value.size > maxSize) {
-            error = 'File size must be less than 5MB';
+            error = 'File size must be less than 5MB'
           }
         }
-        break;
+        break
 
-        case 'twoFactorCode':
+      case 'twoFactorCode':
         if (!value || (typeof value === 'string' && !value.trim())) {
-          error = 'Two-factor code is required';
+          error = 'Two-factor code is required'
         } else if (typeof value === 'string' && !/^\d{6}$/.test(value)) {
-          error = 'Please enter a valid 6-digit code';
+          error = 'Please enter a valid 6-digit code'
         }
-        break;
-        
+        break
+
       default:
-        break;
+        break
     }
-    
-    return error;
-  };
+
+    return error
+  }
 
   const handleInputChange = (e: any) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
+    const { name, value } = e.target
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
-    }));
-    
+      [name]: value,
+    }))
+
     // Mark field as touched
-    setTouched(prev => ({
+    setTouched((prev) => ({
       ...prev,
-      [name]: true
-    }));
-    
+      [name]: true,
+    }))
+
     // Validate field
-    const error = validateField(name, value);
-    setErrors(prev => ({
+    const error = validateField(name, value)
+    setErrors((prev) => ({
       ...prev,
-      [name]: error
-    }));
-    
+      [name]: error,
+    }))
+
     // Special case: revalidate confirmPassword when password changes
     if (name === 'password' && touched.confirmPassword) {
-      const confirmPasswordError = validateField('confirmPassword', formData.confirmPassword);
-      setErrors(prev => ({
+      const confirmPasswordError = validateField(
+        'confirmPassword',
+        formData.confirmPassword
+      )
+      setErrors((prev) => ({
         ...prev,
-        confirmPassword: confirmPasswordError
-      }));
+        confirmPassword: confirmPasswordError,
+      }))
     }
-  };
+  }
+
+  const hostImage = async (image: File | null) => {
+    if (!image) return
+    const formData = new FormData()
+    formData.append('file', image)
+    try {
+      const res = await axiosInstance.post('/api/chat/postImage', formData)
+      console.log(res.data)
+      imageName.current = res.data.success ? res.data.filename : null
+    } catch (err: any) {
+      console.log(err)
+      toast.warning(err.response.data.message)
+    }
+  }
 
   const handleAvatarUpload = (file: File) => {
-    const error = validateField('avatar', file);
-    setErrors(prev => ({
+    const error = validateField('avatar', file)
+    setErrors((prev) => ({
       ...prev,
-      avatar: error
-    }));
+      avatar: error,
+    }))
 
     if (!error) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        avatar: file
-      }));
+        avatar: file,
+      }))
 
       // Create preview
-      const reader = new FileReader();
+      const reader = new FileReader()
       reader.onload = (e) => {
-        setAvatarPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+        setAvatarPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
     }
 
     // Mark avatar as touched
-    setTouched(prev => ({
+    setTouched((prev) => ({
       ...prev,
-      avatar: true
-    }));
-  };
+      avatar: true,
+    }))
+  }
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]
     if (file) {
-      handleAvatarUpload(file);
+      handleAvatarUpload(file)
     }
-  };
+  }
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
+    e.preventDefault()
+    setIsDragOver(true)
+  }
 
   const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
+    e.preventDefault()
+    setIsDragOver(false)
+  }
 
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    
-    const file = e.dataTransfer.files?.[0];
+    e.preventDefault()
+    setIsDragOver(false)
+
+    const file = e.dataTransfer.files?.[0]
     if (file) {
-      handleAvatarUpload(file);
+      handleAvatarUpload(file)
     }
-  };
+  }
 
   const handleBrowseClick = () => {
-    fileInputRef.current?.click();
-  };
+    fileInputRef.current?.click()
+  }
 
   const handleSubmit = (e: any) => {
-    e.preventDefault();
-    
+    e.preventDefault()
+
     if (currentStep === 1) {
       // Mark step 1 fields as touched
-      setTouched(prev => ({
+      setTouched((prev) => ({
         ...prev,
         username: true,
         email: true,
         password: true,
-        confirmPassword: true
-      }));
-      
+        confirmPassword: true,
+      }))
+
       // Validate step 1 fields
       const newErrors = {
         ...errors,
         username: validateField('username', formData.username),
         email: validateField('email', formData.email),
         password: validateField('password', formData.password),
-        confirmPassword: validateField('confirmPassword', formData.confirmPassword)
-      };
-      
-      setErrors(newErrors);
-      
+        confirmPassword: validateField(
+          'confirmPassword',
+          formData.confirmPassword
+        ),
+      }
+
+      setErrors(newErrors)
+
       // Check if step 1 is valid
-      const isStep1Valid = !newErrors.username && !newErrors.email && !newErrors.password && !newErrors.confirmPassword;
-      
+      const isStep1Valid =
+        !newErrors.username &&
+        !newErrors.email &&
+        !newErrors.password &&
+        !newErrors.confirmPassword
+
       if (isStep1Valid) {
-        setCurrentStep(2);
+        setCurrentStep(2)
       }
     } else if (currentStep === 2) {
       // Mark avatar as touched
-      setTouched(prev => ({
+      setTouched((prev) => ({
         ...prev,
-        avatar: true
-      }));
+        avatar: true,
+      }))
 
       // Validate avatar
-      const avatarError = validateField('avatar', formData.avatar);
-      setErrors(prev => ({
+      const avatarError = validateField('avatar', formData.avatar)
+      setErrors((prev) => ({
         ...prev,
-        avatar: avatarError
-      }));
+        avatar: avatarError,
+      }))
 
       // Check if avatar is valid (or if you want to make it optional, remove this validation)
       if (!avatarError) {
-        setCurrentStep(3);
+        setCurrentStep(3)
       }
     } else if (currentStep === 3) {
       // Final step - complete registration
-      console.log('Form submitted:', formData);
+      // zb
+      console.log('Form submitted:', { ...formData, avatar: imageName.current })
       // Here you would typically handle the final form submission
     }
-  };
+  }
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      setCurrentStep(currentStep - 1)
     }
-  };
+  }
 
-  const handleSkipFor2FA = () => {
-    console.log('Skipping 2FA for now');
+  const { register } = useAuthStore()
+
+  const handleSkipFor2FA = async () => {
+    console.log('Skipping 2FA for now')
     // Complete registration without 2FA
-    console.log('Form submitted:', formData);
-    alert('Account created successfully!');
-  };
-
-  const handleGoogleSignIn = () => {
-    console.log('Google sign in clicked');
-  };
-
-  const handleContinueWithIntra = () => {
-    console.log('Continue with intra clicked');
-  };
+    await hostImage(formData.avatar)
+    await register({ ...formData, avatar: imageName.current })
+    console.log('Form submitted:', {
+      ...formData,
+      avatar: imageName.current,
+    })
+    alert('Account created successfully!')
+  }
 
   const handle2FaVerify = (e: any) => {
-    e.preventDefault();
-    setTouched(prev => ({
+    e.preventDefault()
+    setTouched((prev) => ({
       ...prev,
-      twoFactorCode: true
-    }));
-    const error = validateField('twoFactorCode', formData.twoFactorCode);
-    setErrors(prev => ({
+      twoFactorCode: true,
+    }))
+    const error = validateField('twoFactorCode', formData.twoFactorCode)
+    setErrors((prev) => ({
       ...prev,
-      twoFactorCode: error
-    }));
+      twoFactorCode: error,
+    }))
     if (!error) {
       // 2FA code is valid
-      alert('Account created successfully!');
+      alert('Account created successfully!')
       // You can add further logic here (e.g., redirect, API call)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen text-white">
@@ -293,9 +336,20 @@ export default function Signup() {
       <header className="flex items-center bg-[#121417] justify-between px-6 py-4 border-b border-gray-700">
         {/* Logo */}
         <div className="hover:text-white">
-          <Link href="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
-            <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-7 h-7 sm:w-8 sm:h-8" />
-            <h1 className="text-white font-semibold text-base sm:text-lg">PingPong</h1>
+          <Link
+            href="/"
+            className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity"
+          >
+            <Image
+              src="/vector---0.svg"
+              alt="Logo"
+              width={32}
+              height={32}
+              className="w-7 h-7 sm:w-8 sm:h-8"
+            />
+            <h1 className="text-white font-semibold text-base sm:text-lg">
+              PingPong
+            </h1>
           </Link>
         </div>
         <Link href="/" passHref>
@@ -309,9 +363,13 @@ export default function Signup() {
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <h1 className="text-2xl md:text-3xl xl:text-5xl font-bold text-center mb-8">
-            {currentStep === 1 ? 'Create your account' : currentStep === 2 ? 'Upload avatar' : 'Welcome!'}
+            {currentStep === 1
+              ? 'Create your account'
+              : currentStep === 2
+              ? 'Upload avatar'
+              : 'Welcome!'}
           </h1>
-          
+
           <form onSubmit={handleSubmit}>
             {currentStep === 1 && (
               <div className="space-y-6">
@@ -330,7 +388,9 @@ export default function Signup() {
                     }`}
                   />
                   {errors.username && touched.username && (
-                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">{errors.username}</p>
+                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
+                      {errors.username}
+                    </p>
                   )}
                 </div>
                 {/* Email Input */}
@@ -348,7 +408,9 @@ export default function Signup() {
                     }`}
                   />
                   {errors.email && touched.email && (
-                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">{errors.email}</p>
+                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
+                      {errors.email}
+                    </p>
                   )}
                 </div>
                 {/* Password Input */}
@@ -366,7 +428,9 @@ export default function Signup() {
                     }`}
                   />
                   {errors.password && touched.password && (
-                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">{errors.password}</p>
+                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
+                      {errors.password}
+                    </p>
                   )}
                 </div>
                 {/* Confirm Password Input */}
@@ -384,7 +448,9 @@ export default function Signup() {
                     }`}
                   />
                   {errors.confirmPassword && touched.confirmPassword && (
-                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">{errors.confirmPassword}</p>
+                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
+                      {errors.confirmPassword}
+                    </p>
                   )}
                 </div>
               </div>
@@ -392,7 +458,9 @@ export default function Signup() {
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <p className="text-gray-400 text-sm md:text-base xl:text-lg mb-6">Upload your avatar</p>
+                  <p className="text-gray-400 text-sm md:text-base xl:text-lg mb-6">
+                    Upload your avatar
+                  </p>
                 </div>
                 {/* Avatar Upload Area */}
                 <div
@@ -420,16 +488,30 @@ export default function Signup() {
                     ) : (
                       <div className="mb-4">
                         <div className="w-16 h-16 md:w-24 md:h-24 xl:w-32 xl:h-32 bg-gray-700 rounded-full mx-auto flex items-center justify-center">
-                          <svg className="w-8 h-8 md:w-12 md:h-12 xl:w-16 xl:h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          <svg
+                            className="w-8 h-8 md:w-12 md:h-12 xl:w-16 xl:h-16 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                            />
                           </svg>
                         </div>
                       </div>
                     )}
                     <p className="text-white font-medium mb-2 text-base md:text-lg xl:text-2xl">
-                      {avatarPreview ? 'Change your avatar' : 'Drag and drop your avatar here'}
+                      {avatarPreview
+                        ? 'Change your avatar'
+                        : 'Drag and drop your avatar here'}
                     </p>
-                    <p className="text-gray-400 text-sm md:text-base xl:text-lg mb-4">Or browse to choose a file</p>
+                    <p className="text-gray-400 text-sm md:text-base xl:text-lg mb-4">
+                      Or browse to choose a file
+                    </p>
                     <button
                       type="button"
                       onClick={handleBrowseClick}
@@ -441,7 +523,9 @@ export default function Signup() {
                 </div>
 
                 {errors.avatar && touched.avatar && (
-                  <p className="text-red-500 text-sm md:text-base xl:text-lg text-center">{errors.avatar}</p>
+                  <p className="text-red-500 text-sm md:text-base xl:text-lg text-center">
+                    {errors.avatar}
+                  </p>
                 )}
 
                 <input
@@ -456,15 +540,24 @@ export default function Signup() {
             {currentStep === 3 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h2 className="text-xl md:text-2xl xl:text-4xl font-semibold mb-2">Two-Factor Authentication</h2>
+                  <h2 className="text-xl md:text-2xl xl:text-4xl font-semibold mb-2">
+                    Two-Factor Authentication
+                  </h2>
                   <p className="text-gray-400 text-sm md:text-base xl:text-lg mb-6">
-                    Scan the QR code with your authenticator app or manually enter the code below.
+                    Scan the QR code with your authenticator app or manually
+                    enter the code below.
                   </p>
                 </div>
                 {/* QR Code */}
                 <div className="flex justify-center">
                   <div className="bg-white p-4 md:p-6 xl:p-10 rounded-lg md:rounded-xl xl:rounded-2xl">
-                    <Image src="/qrcode_demo.png" alt="qr code demo" width={400} height={400} className="w-40 h-40 md:w-64 md:h-64 xl:w-96 xl:h-96" />
+                    <Image
+                      src="/qrcode_demo.png"
+                      alt="qr code demo"
+                      width={400}
+                      height={400}
+                      className="w-40 h-40 md:w-64 md:h-64 xl:w-96 xl:h-96"
+                    />
                   </div>
                 </div>
                 {/* 2FA Code Input */}
@@ -483,19 +576,21 @@ export default function Signup() {
                     }`}
                   />
                   {errors.twoFactorCode && touched.twoFactorCode && (
-                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1 text-center">{errors.twoFactorCode}</p>
+                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1 text-center">
+                      {errors.twoFactorCode}
+                    </p>
                   )}
                 </div>
 
                 {/* Action Buttons */}
                 <div className="space-y-3">
-                    <button
+                  <button
                     type="submit"
                     onClick={handle2FaVerify}
                     className="w-full py-3 md:py-4 xl:py-6 bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-base md:text-lg xl:text-2xl"
-                    >
+                  >
                     Verify
-                    </button>
+                  </button>
                   <Link href="/">
                     <button
                       type="button"
@@ -510,34 +605,23 @@ export default function Signup() {
             )}
             {/* Progress Section */}
             <div className="py-6">
-              <div className="text-sm md:text-base xl:text-lg text-gray-400 mb-2">Account Creation Progress</div>
+              <div className="text-sm md:text-base xl:text-lg text-gray-400 mb-2">
+                Account Creation Progress
+              </div>
               <div className="w-full bg-gray-700 rounded-full h-2 md:h-3 xl:h-4">
-                <div 
+                <div
                   className="bg-blue-500 h-2 md:h-3 xl:h-4 rounded-full transition-all duration-300"
                   style={{ width: `${(currentStep / 3) * 100}%` }}
                 ></div>
               </div>
-              <div className="text-xs md:text-sm xl:text-base text-gray-500 mt-1">Step {currentStep} of 3</div>
+              <div className="text-xs md:text-sm xl:text-base text-gray-500 mt-1">
+                Step {currentStep} of 3
+              </div>
             </div>
             {/* Social Login Buttons - Only show on step 1 */}
             {currentStep === 1 && (
-              <div className="flex flex-col md:flex-row gap-3 mb-6">
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  className="flex-1 h-12 md:h-16 xl:h-20 bg-gray-700 hover:bg-gray-600 text-white rounded-lg md:rounded-xl xl:rounded-2xl flex items-center justify-center gap-3 transition-colors text-base md:text-lg xl:text-2xl"
-                >
-                  <Image src="/google-.svg" alt="Google" width={32} height={32} className="w-8 h-8 xl:w-12 xl:h-12" />
-                  Sign in with Google
-                </button>
-                <button
-                  type="button" 
-                  onClick={handleContinueWithIntra}
-                  className="flex-1 h-12 md:h-16 xl:h-20 bg-gray-700 hover:bg-gray-600 text-white rounded-lg md:rounded-xl xl:rounded-2xl flex items-center justify-center gap-3 transition-colors text-base md:text-lg xl:text-2xl"
-                >
-                  <Image src="/group-37.svg" alt="Intra" width={32} height={32} className="w-8 h-8 xl:w-12 xl:h-12" />
-                  Continue with Intra
-                </button>
+              <div className="mb-6">
+                <SignInWithOthers />
               </div>
             )}
             {/* Navigation Buttons */}
@@ -556,7 +640,11 @@ export default function Signup() {
                   type="submit"
                   className="flex-1 py-3 md:py-4 xl:py-6 bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-base md:text-lg xl:text-2xl"
                 >
-                  {currentStep === 1 ? 'Next' : currentStep === 2 ? 'Next' : 'Finish'}
+                  {currentStep === 1
+                    ? 'Next'
+                    : currentStep === 2
+                    ? 'Next'
+                    : 'Finish'}
                 </button>
               </div>
             )}
@@ -578,5 +666,5 @@ export default function Signup() {
         </div>
       </div>
     </div>
-  );
+  )
 }

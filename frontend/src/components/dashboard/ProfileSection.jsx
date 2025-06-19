@@ -1,7 +1,6 @@
-
 // Profile Section Component
-import Image from "next/image";
-import {user} from "../../data/mockData"
+import Image from 'next/image'
+import { user } from '../../data/mockData'
 
 export const ProfileSection = () => {
   return (
@@ -16,14 +15,24 @@ export const ProfileSection = () => {
         />
       </div>
       <div className="flex-1">
-        <h2 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-white mb-1 lg:mb-2 xl:mb-3">{user.name}</h2>
-        <p className="text-green-400 font-medium mb-1 text-sm sm:text-base lg:text-lg xl:text-xl 2xl:text-2xl">{user.status}</p>
-        <p className="text-gray-400 text-sm sm:text-base lg:text-lg xl:text-xl 2xl:text-2xl">@{user.nickname}</p>
+        <h2 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-white mb-1 lg:mb-2 xl:mb-3">
+          {user.name}
+        </h2>
+        <p className="text-green-400 font-medium mb-1 text-sm sm:text-base lg:text-lg xl:text-xl 2xl:text-2xl">
+          {user.status}
+        </p>
+        <p className="text-gray-400 text-sm sm:text-base lg:text-lg xl:text-xl 2xl:text-2xl">
+          @{user.nickname}
+        </p>
       </div>
       <div className="bg-[#121417] border border-gray-700 px-3 sm:px-4 lg:px-5 xl:px-6 py-2 sm:py-3 lg:py-4 xl:py-5 w-full sm:w-[35%] lg:w-[30%] h-20 sm:h-24 lg:h-28 xl:h-32 2xl:h-36 rounded-xl flex flex-row items-center justify-between">
-        <span className="text-gray-300 text-sm sm:text-base lg:text-lg xl:text-xl 2xl:text-2xl mr-2">Current Ranking</span>
-        <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-bold text-white">#{user.rank}</div>
+        <span className="text-gray-300 text-sm sm:text-base lg:text-lg xl:text-xl 2xl:text-2xl mr-2">
+          Current Ranking
+        </span>
+        <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-bold text-white">
+          #{user.rank}
+        </div>
       </div>
     </div>
-  );
-};
+  )
+}

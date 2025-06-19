@@ -1,0 +1,266 @@
+import axios, { type AxiosError } from 'axios'
+import { create } from 'zustand'
+import { toast } from 'react-toastify'
+import { io, Socket } from 'socket.io-client'
+import { jwtDecode } from 'jwt-decode'
+import { signOut } from 'next-auth/react'
+import CryptoJs from 'crypto-js'
+
+const BACK_END = process.env.NEXT_PUBLIC_BACKEND
+const FRON_END = process.env.NEXT_PUBLIC_FRONEND
+
+export const axiosInstance = axios.create({
+  baseURL: BACK_END,
+  withCredentials: true,
+})
+
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (
+      (error.response?.status === 401 ||
+        error.status === 401 ||
+        error.status === 403) &&
+      window.location.href !== `${FRON_END}/`
+    ) {
+      const disconnectSocket = useAuthStore.getState().disconnectSocket
+      disconnectSocket()
+      localStorage.removeItem('accessToken')
+      window.location.href = `${FRON_END}/`
+    }
+    return Promise.reject(error)
+  }
+)
+
+export let socketInstance: Socket | null = null
+
+interface UserState {
+  isAuthenticated: boolean
+  isLoading: boolean
+  user: any | null
+  socketConnected: boolean
+  onlineUsers: string[]
+  checkAuth: (accessToken: string) => Promise<boolean>
+  register: (data: any) => Promise<boolean>
+  login: (data: any) => Promise<boolean>
+  logout: () => Promise<void>
+  connectSocket: () => void
+  disconnectSocket: () => void
+  googleLogin: (data: any) => Promise<void>
+  notifications: any | null
+  setNotifations: () => void
+}
+
+export const useAuthStore = create<UserState>()((set, get) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  socketConnected: false,
+  onlineUsers: [],
+  notifications: null,
+
+  setNotifations: () => {
+    set({ notifications: null })
+  },
+  checkAuth: async (accessToken) => {
+    set({ isLoading: true })
+    try {
+      if (accessToken) {
+        const user: any = jwtDecode(accessToken)
+
+        if (user?.exp < (new Date().getTime() + 1) / 1000) {
+          localStorage.removeItem('accessToken')
+          return false
+        }
+        set({ user, isAuthenticated: true })
+        get().connectSocket()
+        return true
+      } else {
+        return false
+      }
+    } catch (err) {
+      return false
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  googleLogin: async (data: any): Promise<void> => {
+    if (get().user) return Promise.resolve()
+    set({ isLoading: true })
+
+    try {
+      const byte = CryptoJs.AES.encrypt(
+        JSON.stringify(data),
+        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+      )
+      const res = await axios.post(`/api/login`, data)
+
+      if (res?.status === 200) {
+        const { accessToken, ...user } = res.data
+        localStorage.setItem('accessToken', accessToken)
+        set({ user, isAuthenticated: true })
+        toast.success('Login successful!')
+      } else {
+        toast.warning(res.data?.message || 'Login failed')
+      }
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || err.message || 'Login failed'
+      toast.error(errorMessage)
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  register: async (data: any) => {
+    set({ isLoading: true })
+    try {
+      const byte = CryptoJs.AES.encrypt(
+        JSON.stringify(data),
+        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+      )
+      const res = await axiosInstance.post(`/api/users/register`, data)
+      console.log(res)
+
+      if (!res.data) {
+        toast.warning('Registration failed')
+        return false
+      }
+      const { accessToken, ...user } = res.data
+      localStorage.setItem('accessToken', accessToken)
+      set({ user, isAuthenticated: true })
+      get().connectSocket()
+      return true
+    } catch (err: any) {
+      console.log(err)
+
+      toast.warning(err.response?.data?.message || err.message)
+      return false
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  login: async (data: any) => {
+    set({ isLoading: true })
+    try {
+      const byte = CryptoJs.AES.encrypt(
+        JSON.stringify(data),
+        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+      )
+      const res = await axiosInstance.post(`/api/users/login`, data)
+      if (!res.data) {
+        toast.warning('Login failed')
+        return false
+      }
+      const { accessToken, ...user } = res.data
+      localStorage.setItem('accessToken', accessToken)
+      set({ user, isAuthenticated: true })
+      get().connectSocket()
+      return true
+    } catch (err: any) {
+      toast.warning(err.response?.data?.message || err.message)
+      return false
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  logout: async () => {
+    localStorage.removeItem('accessToken')
+    get().disconnectSocket()
+    set({ user: null, isAuthenticated: false, isLoading: false })
+    signOut({ callbackUrl: `${FRON_END}/` })
+  },
+
+  connectSocket: () => {
+    if (socketInstance?.connected) return
+    const { user } = get()
+
+    if (!user) return
+
+    if (socketInstance) {
+      socketInstance.off('connect')
+      socketInstance.off('disconnect')
+      socketInstance.off('connect_error')
+      socketInstance.off('getOnlineUsers')
+      socketInstance.disconnect()
+    }
+    const cryptedMail = CryptoJs.AES.encrypt(
+      user.email,
+      process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+    )
+    socketInstance = io(BACK_END, {
+      withCredentials: true,
+      reconnection: false,
+      query: { cryptedMail },
+    })
+
+    const onConnect = () => {
+      set({ socketConnected: true })
+    }
+
+    const onOnlineUsers = (onlineUsers: string[]) => {
+      set({ onlineUsers })
+    }
+
+    const onDisconnect = () => {
+      set({ socketConnected: false })
+    }
+
+    const onConnectError = (err: Error) => {
+      console.log('Socket connection error:', err.message)
+      set({ socketConnected: false })
+    }
+
+    const onNewMessageNotification = (notifications: any) => {
+      set({ notifications })
+      setTimeout(() => set({ notifications: null }), 10000)
+    }
+
+    socketInstance.on('connect', onConnect)
+    socketInstance.on('getOnlineUsers', onOnlineUsers)
+    socketInstance.on('disconnect', onDisconnect)
+    socketInstance.on('connect_error', onConnectError)
+    socketInstance.on('newMessageNotification', onNewMessageNotification)
+    socketInstance.on('error-in-connection', (data) => {
+      console.log('Socket connection error:', data)
+
+      toast.error(data.message || 'Socket connection error')
+      get().disconnectSocket()
+      get().logout()
+    })
+  },
+
+  disconnectSocket: () => {
+    if (socketInstance) {
+      socketInstance.off('connect')
+      socketInstance.off('disconnect')
+      socketInstance.off('connect_error')
+      socketInstance.off('getOnlineUsers')
+      socketInstance.off('newMessageNotification')
+      socketInstance.off('error-in-connection')
+      socketInstance.off('InviteToGameResponse')
+      socketInstance.disconnect()
+      socketInstance = null
+      set({ socketConnected: false })
+    }
+  },
+}))
+
+// Export socket instance for direct access if needed
+export const getSocketInstance = () => socketInstance
