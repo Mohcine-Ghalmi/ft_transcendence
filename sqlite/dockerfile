@@ -1,0 +1,9 @@
+FROM debian:bullseye
+
+RUN apt update -y && apt install  -y sqlite3
+
+WORKDIR /db
+
+COPY ./conf/db.sql /db/mydb.sql
+
+RUN sqlite3 database.db < mydb.sql
