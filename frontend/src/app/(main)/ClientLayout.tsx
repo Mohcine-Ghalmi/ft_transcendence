@@ -1,6 +1,7 @@
 'use client'
 
-import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import { Header } from '@/components/layout/Header'
 import { SessionProvider } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
@@ -12,6 +13,8 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode
 }) {
+  console.log('(main)')
+
   const router = useRouter()
   const { checkAuth } = useAuthStore()
   const pathname = usePathname()
@@ -28,6 +31,8 @@ export default function ClientLayout({
     }
   }
   useEffect(() => {
+    console.log('check auth ?')
+
     checkIsAuth()
   }, [pathname, router])
 
@@ -40,7 +45,12 @@ export default function ClientLayout({
   return (
     <SessionProvider>
       <ToastContainer theme="dark" stacked />
-      {children}
+      {socketInstance && (
+        <>
+          <Header />
+          {children}
+        </>
+      )}
     </SessionProvider>
   )
 }

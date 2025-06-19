@@ -1,17 +1,11 @@
-import { useAuthStore } from '../(zustand)/useAuthStore'
-
 export const user = {
-  name: useAuthStore.getState().user.username,
-  nickname: useAuthStore.getState().user.login,
-  avatar: useAuthStore.getState().user.avatar,
-  status: useAuthStore
-    .getState()
-    .onlineUsers.includes(useAuthStore.getState().user.email)
-    ? 'online'
-    : 'offline',
-  email: useAuthStore.getState().user.email,
-  level: useAuthStore.getState().user.level,
-  xp: useAuthStore.getState().user.xp,
+  name: 'Mohcine Ghalmi',
+  nickname: 'SLEEPS',
+  avatar: '/mghalmi.jpg',
+  status: 'Online',
+  email: 'SLEEPS@example.com',
+  level: 12,
+  xp: 70,
   rank: 4,
 }
 
