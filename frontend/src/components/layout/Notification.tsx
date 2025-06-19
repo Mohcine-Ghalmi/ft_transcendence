@@ -1,39 +1,43 @@
-import { Bell, Check, MessageCircle, X } from "lucide-react";
-import Image from "next/image";
-import { useState, useRef, useEffect } from "react";
+import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { Bell, Check, MessageCircle, X } from 'lucide-react'
+import Image from 'next/image'
+import { useState, useRef, useEffect } from 'react'
 
-export const NotificationItem = ({ notification, onAction }: {
-            notification: AppNotification;
-            onAction: (id: string | number, action: string) => void;
-            }) => {
-  const getNotificationIcon = (type :string) => {
+export const NotificationItem = ({
+  notification,
+  onAction,
+}: {
+  notification: AppNotification
+  onAction: (id: string | number, action: string) => void
+}) => {
+  const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'friend_request':
       case 'game_invitation':
-        return null; // Will show user avatar
+        return null // Will show user avatar
       case 'tournament':
         return (
           <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
             <div className="w-4 h-4 bg-gray-400 rounded-sm"></div>
           </div>
-        );
+        )
       case 'message':
-        return <MessageCircle className="w-5 h-5 text-blue-400" />;
+        return <MessageCircle className="w-5 h-5 text-blue-400" />
       default:
-        return null;
+        return null
     }
-  };
+  }
 
   const getNotificationStatus = () => {
     if (notification.status === 'accepted') {
-      return <Check className="w-5 h-5 text-green-400" />;
+      return <Check className="w-5 h-5 text-green-400" />
     }
-    return null;
-  };
+    return null
+  }
 
-const handleAction = (action: 'accept' | 'decline') => {
-    onAction(notification.id, action);
-};
+  const handleAction = (action: 'accept' | 'decline') => {
+    onAction(notification.id, action)
+  }
 
   return (
     <div
@@ -46,11 +50,11 @@ const handleAction = (action: 'accept' | 'decline') => {
         <div className="flex-shrink-0">
           {notification.avatar ? (
             <div className="w-8 h-8 rounded-full overflow-hidden">
-              <Image 
-                src={notification.avatar} 
-                alt="User avatar" 
-                width={32} 
-                height={32} 
+              <Image
+                src={notification.avatar}
+                alt="User avatar"
+                width={32}
+                height={32}
                 className="w-full h-full object-cover"
               />
             </div>
@@ -58,7 +62,7 @@ const handleAction = (action: 'accept' | 'decline') => {
             getNotificationIcon(notification.type)
           )}
         </div>
-        
+
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
@@ -70,32 +74,32 @@ const handleAction = (action: 'accept' | 'decline') => {
                 {notification.message}
               </p>
             </div>
-            
+
             {/* Status Icon */}
-            <div className="ml-2 flex-shrink-0">
-              {getNotificationStatus()}
-            </div>
+            <div className="ml-2 flex-shrink-0">{getNotificationStatus()}</div>
           </div>
-          
+
           {/* Action Buttons */}
-          {(notification.type === 'friend_request' || notification.type === 'game_invitation') && 
-           notification.status !== 'accepted' && notification.status !== 'declined' && (
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => handleAction('accept')}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors"
-              >
-                Accept
-              </button>
-              <button
-                onClick={() => handleAction('decline')}
-                className="px-4 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded-md transition-colors"
-              >
-                Decline
-              </button>
-            </div>
-          )}
-          
+          {(notification.type === 'friend_request' ||
+            notification.type === 'game_invitation') &&
+            notification.status !== 'accepted' &&
+            notification.status !== 'declined' && (
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => handleAction('accept')}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => handleAction('decline')}
+                  className="px-4 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded-md transition-colors"
+                >
+                  Decline
+                </button>
+              </div>
+            )}
+
           {/* Status Text for accepted notifications */}
           {notification.status === 'accepted' && (
             <div className="mt-2">
@@ -107,37 +111,47 @@ const handleAction = (action: 'accept' | 'decline') => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export const NotificationDropdown = ({ notifications, className = "" } : {notifications: AppNotification[], className : string}) => {
-  const [showNotifications, setShowNotifications] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const unreadCount = notifications.filter(n => n.unread).length;
+export const NotificationDropdown = ({
+  notifications,
+  className = '',
+}: {
+  notifications: AppNotification[]
+  className: string
+}) => {
+  const [showNotifications, setShowNotifications] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const unreadCount = notifications.filter((n) => n.unread).length
+  const { logout } = useAuthStore()
 
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowNotifications(false)
       }
-    };
+    }
 
     if (showNotifications) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showNotifications]);
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showNotifications])
 
   const handleNotificationAction = (id: string | number, action: string) => {
     // Handle notification actions here
-    console.log(`${action} notification ${id}`);
+    console.log(`${action} notification ${id}`)
     // You can add logic to update the notification status
     // or make API calls here
-  };
+  }
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -152,18 +166,29 @@ export const NotificationDropdown = ({ notifications, className = "" } : {notifi
           </span>
         )}
       </button>
-
+      {/* logout */}
+      <button className="mx-4 cursor-pointer" onClick={() => logout()}>
+        <Image
+          src="/logout.svg"
+          alt="logout"
+          width={100}
+          height={100}
+          className="w-4 h-4"
+        />
+      </button>
       {/* Notifications Dropdown */}
       {showNotifications && (
         <>
           {/* Backdrop for mobile */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/20 md:hidden z-40"
             onClick={() => setShowNotifications(false)}
           />
           <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-[#1a1d21] border border-gray-700 rounded-xl shadow-2xl z-50">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-              <h3 className="font-semibold text-white text-lg">Notifications</h3>
+              <h3 className="font-semibold text-white text-lg">
+                Notifications
+              </h3>
               <button
                 onClick={() => setShowNotifications(false)}
                 className="md:hidden text-gray-400 hover:text-white"
@@ -189,5 +214,5 @@ export const NotificationDropdown = ({ notifications, className = "" } : {notifi
         </>
       )}
     </div>
-  );
-};
+  )
+}

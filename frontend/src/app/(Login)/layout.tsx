@@ -4,10 +4,13 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { jwtDecode } from 'jwt-decode'
 import { toast } from 'react-toastify'
+import { SessionProvider } from 'next-auth/react'
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  console.log('(auth)')
+
   const router = useRouter()
   const pathname = usePathname()
   const [loading, setLoading] = useState(true)
@@ -55,5 +58,5 @@ export default function RootLayout({
     )
   }
 
-  return <>{children}</>
+  return <SessionProvider>{children}</SessionProvider>
 }

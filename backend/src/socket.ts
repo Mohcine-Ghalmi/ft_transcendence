@@ -6,6 +6,7 @@ import { handleGameSocket } from './modules/game/game.socket'
 import { getUserByEmail } from './modules/user/user.service'
 import { createUserResponseSchema } from './modules/user/user.schema'
 import CryptoJS from 'crypto-js'
+import { setupUserSocket } from './modules/user/user.socket'
 
 let io: Server
 
@@ -91,6 +92,7 @@ export async function setupSocketIO(server: FastifyInstance) {
         io.emit('getOnlineUsers', onlineUsers)
       }
 
+      setupUserSocket(socket, io)
       handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {

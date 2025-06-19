@@ -1,83 +1,85 @@
-"use client"
-import React, { useState } from 'react';
-import { user } from "../../../../data/mockData";
-import { PingPongGame } from "../game/PingPongGame";
+'use client'
+import React, { useState } from 'react'
+import { user } from '../../../../data/mockData'
+import { PingPongGame } from '../game/PingPongGame'
 
 // Add Player Modal Component
 const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
-  const [nickname, setNickname] = useState('');
-  const [name, setName] = useState('');
-  const [errors, setErrors] = useState({});
-  const [avatar, setAvatar] = useState(null);
+  const [nickname, setNickname] = useState('')
+  const [name, setName] = useState('')
+  const [errors, setErrors] = useState({})
+  const [avatar, setAvatar] = useState(null)
 
   const handleSubmit = () => {
-    const newErrors = {};
-    
+    const newErrors = {}
+
     if (!nickname.trim()) {
-      newErrors.nickname = 'Username is required';
+      newErrors.nickname = 'Username is required'
     }
-    
+
     if (!name.trim()) {
-      newErrors.name = 'Name is required';
+      newErrors.name = 'Name is required'
     }
 
     if (!avatar) {
-      newErrors.avatar = 'Avatar is required';
+      newErrors.avatar = 'Avatar is required'
     }
-  
+
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
+      setErrors(newErrors)
+      return
     }
-    
+
     // Clear errors if validation passes
-    setErrors({});
-    
+    setErrors({})
+
     onAddPlayer({
       nickname: nickname.trim(),
       name: name.trim(),
-      avatar: avatar
-    });
-    
+      avatar: avatar,
+    })
+
     // Reset form
-    setNickname('');
-    setName('');
-    setAvatar(null);
-  };
+    setNickname('')
+    setName('')
+    setAvatar(null)
+  }
 
   const handleNicknameChange = (e) => {
-    setNickname(e.target.value);
+    setNickname(e.target.value)
     if (errors.nickname) {
-      setErrors(prev => ({ ...prev, nickname: '' }));
+      setErrors((prev) => ({ ...prev, nickname: '' }))
     }
-  };
+  }
 
   const handleNameChange = (e) => {
-    setName(e.target.value);
+    setName(e.target.value)
     if (errors.name) {
-      setErrors(prev => ({ ...prev, name: '' }));
+      setErrors((prev) => ({ ...prev, name: '' }))
     }
-  };
+  }
 
   const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files[0]
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => setAvatar(e.target.result);
-      reader.readAsDataURL(file);
+      const reader = new FileReader()
+      reader.onload = (e) => setAvatar(e.target.result)
+      reader.readAsDataURL(file)
     }
     if (errors.avatar) {
-      setErrors(prev => ({ ...prev, avatar: '' }));
+      setErrors((prev) => ({ ...prev, avatar: '' }))
     }
-  };
+  }
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0  backdrop-blur-xs flex items-center justify-center z-50">
       <div className="bg-[#121417] rounded-lg p-8 w-full max-w-md mx-4 border border-gray-700">
-        <h2 className="text-xl font-bold text-white mb-6 text-center">Player 2</h2>
-        
+        <h2 className="text-xl font-bold text-white mb-6 text-center">
+          Player 2
+        </h2>
+
         <div className="space-y-4">
           <div>
             <input
@@ -93,7 +95,7 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
               <p className="text-red-400 text-sm mt-1">{errors.nickname}</p>
             )}
           </div>
-          
+
           <div>
             <input
               type="text"
@@ -108,14 +110,18 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
               <p className="text-red-400 text-sm mt-1">{errors.name}</p>
             )}
           </div>
-          
-          <div className={`border-2 border-dashed rounded-lg p-8 text-center ${
-            errors.avatar ? 'border-red-500 bg-red-500/10' : 'border-gray-500'
-            }`}>
+
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center ${
+              errors.avatar ? 'border-red-500 bg-red-500/10' : 'border-gray-500'
+            }`}
+          >
             <div className="mb-4">
               <h3 className="text-white font-semibold mb-2">Upload Avatar</h3>
-              <p className="text-gray-400 text-sm mb-4">Select an avatar for Player 2.</p>
-              
+              <p className="text-gray-400 text-sm mb-4">
+                Select an avatar for Player 2.
+              </p>
+
               {avatar && (
                 <div className="mb-4">
                   <img
@@ -125,7 +131,7 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
                   />
                 </div>
               )}
-              
+
               <label className="bg-gray-700 hover:bg-[#5a6578] text-white px-4 py-2 rounded-lg cursor-pointer transition-colors inline-block">
                 Choose Avatar
                 <input
@@ -136,11 +142,11 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
                 />
               </label>
             </div>
-             {errors.avatar && (
-                <p className="text-red-400 text-sm mt-2">{errors.avatar}</p>
-              )}
+            {errors.avatar && (
+              <p className="text-red-400 text-sm mt-2">{errors.avatar}</p>
+            )}
           </div>
-          
+
           <div className="flex justify-end space-x-4 mt-6">
             <button
               type="button"
@@ -160,34 +166,42 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
 // Player Card Component
 export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
   if (!player) {
     return (
       <div className="text-center">
-        <h3 className="text-2xl md:text-3xl font-semibold text-white mb-8">Player {playerNumber}</h3>
+        <h3 className="text-2xl md:text-3xl font-semibold text-white mb-8">
+          Player {playerNumber}
+        </h3>
         <div className="border-2 border-dashed border-gray-500 rounded-2xl p-10 md:p-20 mb-8">
           <div className="text-center">
-            <h4 className="text-white font-semibold mb-4 text-xl md:text-2xl">Add Player {playerNumber}</h4>
-            <p className="text-gray-400 text-lg md:text-xl mb-6">Add a local player to start a 1v1 game.</p>
+            <h4 className="text-white font-semibold mb-4 text-xl md:text-2xl">
+              Add Player {playerNumber}
+            </h4>
+            <p className="text-gray-400 text-lg md:text-xl mb-6">
+              Add a local player to start a 1v1 game.
+            </p>
             <button
               onClick={onAddPlayer}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-8 py-4 md:px-12 md:py-5 rounded-xl text-lg md:text-2xl transition-colors"
-              >
+            >
               Add Player
             </button>
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
     <div className="text-center">
-      <h3 className="text-2xl md:text-3xl font-semibold text-white mb-8">Player {playerNumber}</h3>
+      <h3 className="text-2xl md:text-3xl font-semibold text-white mb-8">
+        Player {playerNumber}
+      </h3>
       <div className="mb-8">
         <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
           <img
@@ -195,7 +209,7 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
             alt={player.name}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
             onError={(e) => {
-              e.target.src = '/mghalmi.jpg';
+              e.target.src = '/mghalmi.jpg'
             }}
           />
         </div>
@@ -205,32 +219,32 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
         <p className="text-gray-400 text-lg md:text-xl">@{player.nickname}</p>
       </div>
     </div>
-  );
-};
+  )
+}
 
 // Main Local 1v1 Component
 export default function Local1v1() {
-  const [player2, setPlayer2] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showGame, setShowGame] = useState(false);
+  const [player2, setPlayer2] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [showGame, setShowGame] = useState(false)
 
   const handleAddPlayer = (playerData) => {
-    setPlayer2(playerData);
-    setIsModalOpen(false);
-  };
+    setPlayer2(playerData)
+    setIsModalOpen(false)
+  }
 
   const handleStartGame = () => {
     if (!player2) {
-      alert('Please add Player 2 before starting the game');
-      return;
+      alert('Please add Player 2 before starting the game')
+      return
     }
-    setShowGame(true);
-  };
+    setShowGame(true)
+  }
 
   const handleExitGame = () => {
-    setShowGame(false);
-    setPlayer2(null);
-  };
+    setShowGame(false)
+    setPlayer2(null)
+  }
 
   // If both players are present and showGame is true, show PingPongGame
   if (showGame && player2) {
@@ -242,7 +256,7 @@ export default function Local1v1() {
           onExit={handleExitGame}
         />
       </div>
-    );
+    )
   }
 
   return (
@@ -250,7 +264,9 @@ export default function Local1v1() {
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
-          <h1 className="text-4xl md:text-6xl font-bold text-center mb-12 md:mb-20">Local 1v1</h1>
+          <h1 className="text-4xl md:text-6xl font-bold text-center mb-12 md:mb-20">
+            Local 1v1
+          </h1>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 mb-12 md:mb-20">
             {/* Player 1 - Current User */}
@@ -287,5 +303,5 @@ export default function Local1v1() {
         onAddPlayer={handleAddPlayer}
       />
     </div>
-  );
+  )
 }

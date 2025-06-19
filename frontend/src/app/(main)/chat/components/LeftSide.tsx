@@ -156,7 +156,7 @@ const FriendsConversations = () => {
   }, [])
 
   return (
-    <div className="bg-[#121417] rounded-xl border-[#768192]  h-full  border overflow-y-scroll">
+    <div className="bg-[#121417] rounded-xl border-[#768192]  h-full  border overflow-y-auto">
       <h3 className="p-2 xl:p-5 text-xs  xl:text-xl">Friends</h3>
       {(conversations && conversations.length > 0) || isLoading ? (
         conversations.map((friend, index) => (
