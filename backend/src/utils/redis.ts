@@ -3,7 +3,7 @@ import server from '../app'
 
 const redis = new Redis({
   host: process.env.REDIS_HOST,
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+  port: parseInt(process.env.REDIS_PORT || '7000'),
 })
 
 redis.on('connecting', () => {

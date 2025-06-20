@@ -10,7 +10,11 @@ import mailRoutes from './modules/Mail/mail.route'
 
 import { userSchemas } from './modules/user/user.schema'
 
-import { addFriendById, getUserByEmail } from './modules/user/user.service'
+import {
+  addFriendById,
+  getFriend_r,
+  getUserByEmail,
+} from './modules/user/user.service'
 
 import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
