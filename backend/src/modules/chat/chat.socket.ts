@@ -268,11 +268,22 @@ export function setupChatNamespace(chatNamespace: Namespace) {
     })
 
     socket.on('disconnect', () => {
-      const userEmail = socket.handshake.query.userEmail
-      if (userEmail) {
-        const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
-        removeSocketId(email, socket.id, 'chat')
+      const cryptedMail = socket.handshake.query.cryptedMail
+      if (!cryptedMail) {
+        console.error('No cryptedMail provided in handshake query')
+        return
       }
+      const key = process.env.ENCRYPTION_KEY as string
+      const userEmail = CryptoJs.AES.decrypt(
+        cryptedMail as string,
+        key
+      ).toString(CryptoJs.enc.Utf8)
+      if (!userEmail) {
+        console.error('Failed to decrypt user email from cryptedMail')
+        return
+      }
+
+      removeSocketId(userEmail, socket.id, 'chat')
     })
   })
 }

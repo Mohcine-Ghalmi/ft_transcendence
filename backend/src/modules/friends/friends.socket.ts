@@ -3,6 +3,7 @@ import CryptoJS from 'crypto-js'
 import { getUserByEmail } from '../user/user.service'
 import { db } from '../../app'
 import { getSocketIds } from '../../socket'
+import { emit } from 'process'
 
 // changeFriendStatus
 const changeFriendStatus = (
@@ -76,7 +77,7 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
     }
   })
   //
-  socket.on('acceptFriend', (inviter: string) => {
+  socket.on('acceptFriend', async (inviter: string) => {
     try {
       const myEmail = CryptoJS.AES.decrypt(
         socket.handshake.query.cryptedMail as string,
@@ -89,15 +90,23 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
           status: 'error',
           message: 'User Not Found',
         })
-      changeFriendStatus(myEmail, inviter, 'ACCEPTED')
-        ? socket.emit('friendResponse', {
+      if (changeFriendStatus(myEmail, inviter, 'ACCEPTED')) {
+        socket.emit('friendResponse', {
+          status: 'success',
+          message: 'Friend Request Accepted',
+        })
+        const userSockets = await getSocketIds(inviter, 'sockets')
+        if (userSockets)
+          io.to(userSockets).emit('friendResponse', {
             status: 'success',
-            message: 'Friend Request Accepted',
+            message: `${myEmail} Accept Your Friend Request`,
           })
-        : socket.emit('friendResponse', {
-            status: 'error',
-            message: 'Failed to accept Friend Request',
-          })
+      } else {
+        socket.emit('friendResponse', {
+          status: 'error',
+          message: 'Failed to accept Friend Request',
+        })
+      }
     } catch (err) {
       console.log('acceptFriend : ', err)
       socket.emit('friendResponse', {
@@ -107,7 +116,7 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
     }
   })
   //
-  socket.on('rejectFriend', (inviter) => {
+  socket.on('rejectFriend', async (inviter) => {
     try {
       const myEmail = CryptoJS.AES.decrypt(
         socket.handshake.query.cryptedMail as string,
@@ -120,15 +129,23 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
           status: 'error',
           message: 'User Not Found',
         })
-      changeFriendStatus(myEmail, inviter, 'REJECTED')
-        ? socket.emit('friendResponse', {
-            status: 'success',
-            message: 'Friend Request declined',
-          })
-        : socket.emit('friendResponse', {
+      if (changeFriendStatus(myEmail, inviter, 'REJECTED')) {
+        socket.emit('friendResponse', {
+          status: 'success',
+          message: 'Friend Request declined',
+        })
+        const userSockets = await getSocketIds(inviter, 'sockets')
+        if (userSockets)
+          io.to(userSockets).emit('friendResponse', {
             status: 'error',
-            message: 'Failed to decline Friend Request',
+            message: `${myEmail} rejected Your Friend Request`,
           })
+      } else {
+        socket.emit('friendResponse', {
+          status: 'error',
+          message: 'Failed to decline Friend Request',
+        })
+      }
     } catch (err) {
       console.log('rejectFriend : ', err)
       socket.emit('friendResponse', {
