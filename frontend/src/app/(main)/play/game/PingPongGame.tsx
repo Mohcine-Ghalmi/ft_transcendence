@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useRef, useEffect, useState } from "react";
 
@@ -74,7 +73,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         const minutes = Math.floor((elapsed % 3600) / 60);
         const seconds = elapsed % 60;
         setGameTime({ hours, minutes, seconds });
-      }, 1000);
+      }, 0);
     }
 
     return () => {
@@ -227,6 +226,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         ball.current.y <= paddle1Y.current + PADDLE_HEIGHT
       ) {
         ball.current.dx = Math.abs(ball.current.dx);
+        // Increase speed after each paddle hit
+        ball.current.dx *= 1.05;
+        ball.current.dy *= 1.05;
       }
       // Right paddle collision
       if (
@@ -235,6 +237,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         ball.current.y <= paddle2Y.current + PADDLE_HEIGHT
       ) {
         ball.current.dx = -Math.abs(ball.current.dx);
+        // Increase speed after each paddle hit
+        ball.current.dx *= 1.05;
+        ball.current.dy *= 1.05;
       }
       // Scoring
       if (ball.current.x < -BALL_SIZE) {
@@ -279,7 +284,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         // For tournament mode, pass the complete winner object back
         onExit(winner);
       } else {
-        // For regular games, navigate to result pages
         const winnerName = winner.name;
         const loserName = scores.p1 >= 7 ? safePlayer2.name : safePlayer1.name;
         
