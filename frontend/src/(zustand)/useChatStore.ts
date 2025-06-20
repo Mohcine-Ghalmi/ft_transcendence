@@ -16,7 +16,7 @@ interface ChatStoreType {
   updateChat: () => Promise<void>
   offUpdateChat: () => Promise<void>
   handleNewMessage: (newMessage: any) => Promise<void>
-  handleChangeConversations: (newConversation: any) => Promise<void>
+  handleChangeConversations: (newConversation: any) => void
   setSelectedConversationId: (id: number | undefined) => void
   setSearchedUsers: (conversations: any[]) => void
   connectChatSocket: () => void
@@ -44,6 +44,8 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     set({ isLoading: true })
     try {
       const res = await axiosInstance.get('/api/chat/getFriends')
+      console.log(res)
+
       set({ conversations: res.data })
 
       set({ isLoading: false })
@@ -94,13 +96,14 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     }
   },
 
-  handleNewMessage: async (data: any) => {
-    const bytes = CryptoJs.AES.decrypt(
-      data,
-      process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-    )
-    const newMessage = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+  handleNewMessage: async (newMessage: any) => {
+    // const bytes = CryptoJs.AES.decrypt(
+    //   data,
+    //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+    // )
+    // const newMessage = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
     if (!newMessage) return
+
     const { selectedConversationId, selectedConversation } = get()
     const user = useAuthStore.getState().user
     const myId = user.id
@@ -133,9 +136,8 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       })
     }
   },
-  handleChangeConversations: async (newConversation: any) => {
-    const conversations = await newConversation
-    set({ conversations })
+  handleChangeConversations: (newConversation: any) => {
+    set({ conversations: newConversation })
   },
 
   updateChat: async () => {

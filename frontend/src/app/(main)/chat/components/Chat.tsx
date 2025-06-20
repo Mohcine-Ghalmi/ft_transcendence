@@ -5,6 +5,7 @@ import Skeleton from 'react-loading-skeleton'
 import { toast } from 'react-toastify'
 import { ConversationContainer, EmptyChat, More } from './server/ChatSide'
 import CryptoJs from 'crypto-js'
+import '@fortawesome/fontawesome-free/css/all.min.css'
 import { axiosInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 
@@ -54,7 +55,7 @@ const ChatHeader = () => {
 
   if (!user)
     return (
-      <div className="flex justify-between items-center border border-gray-500 p-2  xl:p-6 bg-[#121417] rounded-2xl">
+      <div className="flex justify-between items-center border border-[#293038] p-2  xl:p-6 bg-[#121417] rounded-2xl">
         <div className="flex items-center">
           <Skeleton
             count={1}
@@ -77,7 +78,7 @@ const ChatHeader = () => {
       </div>
     )
   return (
-    <div className="flex justify-between items-center border border-gray-500 p-2  xl:p-6 bg-[#121417] rounded-2xl">
+    <div className="flex justify-between items-center border border-[#293038] p-2  xl:p-6 bg-[#121417] rounded-2xl">
       <div className="flex items-center">
         <div className="relative">
           <Image
@@ -94,9 +95,7 @@ const ChatHeader = () => {
           ></div>
         </div>
         <div className="ml-2 xl:ml-6">
-          <h3 className="text-xs xl:text-3xl">
-            {user.first_name} {user.last_name}
-          </h3>
+          <h3 className="text-xs xl:text-3xl">{user.username}</h3>
           <p
             className={`text-[8px] mt-3 xl:text-xs ${
               onlineUsers.includes(user.email)
@@ -104,7 +103,7 @@ const ChatHeader = () => {
                 : 'text-red-400'
             }`}
           >
-            <span className="text-gray-400 text-md mr-2">{user.login}</span>
+            <span className="text-gray-400 text-md mr-2">@{user.login}</span>
             {onlineUsers.includes(user.email) ? ' online' : ' offline'}
           </p>
         </div>
@@ -211,10 +210,11 @@ const SendMessageInput = ({
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between w-full rounded-2xl bg-[#212121] border-[#768192] border p-3">
+      <div className="flex items-center justify-between w-full rounded-2xl bg-[#121417] border-[#293038] border p-3">
         <input
           type="text"
           value={message}
+          autoFocus={true}
           onChange={(e) => changeMessageValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message ..."
@@ -339,29 +339,35 @@ const Chat = () => {
       },
     }
 
-    const cryptedMessage = CryptoJs.AES.encrypt(
-      JSON.stringify(sendingText),
-      process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-    )
-    handleNewMessage(cryptedMessage)
+    // const cryptedMessage = CryptoJs.AES.encrypt(
+    //   JSON.stringify(sendingText),
+    //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+    // )
+    handleNewMessage(sendingText)
 
     if (chatSocket && chatSocket.connected) {
       let imagePath = null
       if (image) {
         imagePath = await hostImage(image)
       }
-      const data = CryptoJs.AES.encrypt(
-        JSON.stringify({
-          recieverId: selectedConversationId,
-          senderEmail: user.email,
-          senderId: user.id,
-          message: message.trim(),
-          image: imagePath,
-        }),
-        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-      ).toString()
+      // const data = CryptoJs.AES.encrypt(
+      //   JSON.stringify({
+      //     recieverId: selectedConversationId,
+      //     senderEmail: user.email,
+      //     senderId: user.id,
+      //     message: message.trim(),
+      //     image: imagePath,
+      //   }),
+      //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+      // ).toString()
 
-      chatSocket.emit('sendMessage', data)
+      chatSocket.emit('sendMessage', {
+        recieverId: selectedConversationId,
+        senderEmail: user.email,
+        senderId: user.id,
+        message: message.trim(),
+        image: imagePath,
+      })
       setMessage('')
     } else {
       toast.error('Socket connection issue. Please try again.')
@@ -373,22 +379,36 @@ const Chat = () => {
 
     const onFailedToSendMessage = (err) => {
       toast.error(err)
-    }
-    if (!chatSocket?.connected) return
-    chatSocket.on('failedToSendMessage', onFailedToSendMessage)
-    chatSocket.on('messageSent', () => {
       setIsLoading(false)
-    })
-    updateChat()
+    }
+
+    const onMessageSent = () => {
+      console.log('Message sent successfully')
+      setIsLoading(false)
+    }
+
+    const setupListeners = () => {
+      setTimeout(() => {
+        if (chatSocket?.connected) {
+          chatSocket.on('failedToSendMessage', onFailedToSendMessage)
+          chatSocket.on('messageSent', onMessageSent)
+          updateChat()
+        }
+      }, 100)
+    }
+
+    setupListeners()
 
     return () => {
-      if (!chatSocket?.connected) return
-      chatSocket.off('failedToSendMessage', onFailedToSendMessage)
-      chatSocket.off('messageSent')
+      if (chatSocket) {
+        chatSocket.off('failedToSendMessage', onFailedToSendMessage)
+        chatSocket.off('messageSent', onMessageSent)
+      }
       offUpdateChat()
       disconnectChatSocket()
     }
-  }, [])
+  }, [selectedConversationId])
+
   return (
     <div className="w-full rounded-2xl  relative">
       {selectedConversationId === undefined ? (

@@ -7,7 +7,7 @@ import { useChatStore } from '@/(zustand)/useChatStore'
 
 export const EmptyChat = ({ text }: { text: string }) => {
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-[#121417] rounded-2xl border-[#768192] border">
+    <div className="w-full h-full flex flex-col items-center justify-center bg-[#121417] rounded-2xl border-[#293038] border">
       <Image
         src="/emptyChat.svg"
         alt="empty Chat"
@@ -114,7 +114,7 @@ export const ConversationContainer = () => {
 
   if (!selectedConversation)
     return (
-      <div className="flex-1 overflow-y-auto flex flex-col-reverse p-5 bg-[#121417] my-2 xl:my-10 border-[#768192] w-full border rounded-2xl">
+      <div className="flex-1 overflow-y-auto flex flex-col-reverse p-5 bg-[#121417] my-2 xl:my-10 border-[#293038] w-full border rounded-2xl">
         <Skeleton
           count={10}
           height={50}
@@ -130,7 +130,7 @@ export const ConversationContainer = () => {
       id="conversation-container"
       ref={containerRef}
       onScroll={handleGettingMsgOnScroll}
-      className="overflow-y-auto flex flex-col p-5 bg-[#121417] my-2 xl:my-10 border-[#768192] w-full h-full border rounded-2xl"
+      className="overflow-y-auto flex flex-col p-5 bg-[#121417] my-2 xl:my-10 border-[#293038] w-full h-full border rounded-2xl"
     >
       {isLoadingMore && (
         <div className="w-full py-2 text-center">
@@ -192,7 +192,7 @@ export const ConversationContainer = () => {
               key={index}
               className="self-start text-left xl:max-w-[80%] my-2"
             >
-              <div className="bg-black p-4 rounded-2xl text-xs xl:text-2xl break-all whitespace-pre-wrap flex flex-col gap-5">
+              <div className="bg-[#2B3640] p-4 rounded-2xl text-xs xl:text-2xl break-all whitespace-pre-wrap flex flex-col gap-5">
                 {chat.message}
                 {chat.image && (
                   <Image

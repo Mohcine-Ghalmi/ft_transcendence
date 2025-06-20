@@ -167,18 +167,18 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
     socket.on('sendMessage', async (data) => {
       try {
-        const bytes = CryptoJs.AES.decrypt(
-          data,
-          process.env.ENCRYPTION_KEY || ''
-        )
-        const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+        // const bytes = CryptoJs.AES.decrypt(
+        //   data,
+        //   process.env.ENCRYPTION_KEY || ''
+        // )
+        // const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
         const {
           recieverId,
           senderEmail,
           senderId: myId,
           message,
           image,
-        } = dencrypt as SentMessageData
+        } = data as SentMessageData
 
         const [me, receiver, friend]: any = await Promise.all([
           getUserByEmail(senderEmail),
@@ -232,13 +232,13 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           sender: me,
         }
 
-        const cryptedMessage = CryptoJs.AES.encrypt(
-          JSON.stringify(messagePayload),
-          key
-        ).toString()
+        // const cryptedMessage = CryptoJs.AES.encrypt(
+        //   JSON.stringify(messagePayload),
+        //   key
+        // ).toString()
 
         if (mySockets?.length) {
-          chatNamespace.to(mySockets).emit('newMessage', cryptedMessage)
+          chatNamespace.to(mySockets).emit('newMessage', messagePayload)
 
           const myConversations = await conversationsPromise
           chatNamespace.to(mySockets).emit('changeConvOrder', myConversations)
@@ -246,7 +246,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         }
 
         if (recieverSockets?.length) {
-          chatNamespace.to(recieverSockets).emit('newMessage', cryptedMessage)
+          chatNamespace.to(recieverSockets).emit('newMessage', messagePayload)
 
           const receiverConversations = await receiverConversationsPromise
           chatNamespace

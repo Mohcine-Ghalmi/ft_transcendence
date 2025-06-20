@@ -7,6 +7,7 @@ import { getUserByEmail } from './modules/user/user.service'
 import { createUserResponseSchema } from './modules/user/user.schema'
 import CryptoJS from 'crypto-js'
 import { setupUserSocket } from './modules/user/user.socket'
+import { setupFriendsSocket } from './modules/friends/friends.socket'
 
 let io: Server
 
@@ -87,12 +88,13 @@ export async function setupSocketIO(server: FastifyInstance) {
 
         addSocketId(email, socket.id, 'sockets')
         const redisKeys = await redis.keys('sockets:*')
-        const onlineUsers = redisKeys.map((key) => key.split(':')[1])
 
+        const onlineUsers = redisKeys.map((key) => key.split(':')[1])
         io.emit('getOnlineUsers', onlineUsers)
       }
 
       setupUserSocket(socket, io)
+      setupFriendsSocket(socket, io)
       handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {
