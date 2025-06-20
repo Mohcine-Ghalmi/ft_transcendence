@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import { createUser, getUserByEmail } from './user.service'
+import { createUser, getUserByEmail, listMyFriends } from './user.service'
 import {
   CreateUserInput,
   type LoginInput,
@@ -331,5 +331,20 @@ export async function getAllUsersData(req: FastifyRequest, rep: FastifyReply) {
     return rep
       .code(500)
       .send({ status: false, message: 'Internal Server Error' })
+  }
+}
+
+export async function listMyFriendsHandler(
+  req: FastifyRequest<{ Querystring: { email: string } }>,
+  rep: FastifyReply
+) {
+  try {
+    const { email } = req.query
+    if (!email)
+      return rep.code(400).send({ status: false, message: 'Email is required' })
+    const friends = await listMyFriends(email)
+    return rep.code(200).send({ status: true, friends })
+  } catch (err) {
+    return rep.code(500).send({ status: false, message: 'Internal Server Error' })
   }
 }

@@ -1,4 +1,5 @@
 "use client";
+import { useAuthStore } from "@/(zustand)/useAuthStore";
 import React, { useRef, useEffect, useState } from "react";
 
 const GAME_RATIO = 16 / 9;
@@ -31,20 +32,21 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
   });
+  const {user} = useAuthStore();
 
   // Validate players have required properties
   const safePlayer1 = {
-    id: player1?.id || crypto.randomUUID(),
-    name: player1?.name || 'Player 1',
-    avatar: player1?.avatar || '/mghalmi.jpg',
-    nickname: player1?.nickname || player1?.name || 'Player 1'
+    id: user?.id || crypto.randomUUID(),
+    name: user?.username,
+    avatar: user?.avatar || '/mghalmi.jpg',
+    nickname: user?.login || 'Player 1'
   };
 
   const safePlayer2 = {
     id: player2?.id || crypto.randomUUID(),
-    name: player2?.name || 'Player 2',
+    name: player2?.username || 'Player 2',
     avatar: player2?.avatar || '/mghalmi.jpg',
-    nickname: player2?.nickname || player2?.name || 'Player 2'
+    nickname: player2?.login || 'Player 2'
   };
 
   // Paddle positions: player1 left, player2 right

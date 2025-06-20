@@ -1,24 +1,24 @@
 'use client'
 import React, { useState } from 'react'
-import { user } from '../../../../data/mockData'
+import { useAuthStore } from '@/(zustand)/useAuthStore'
 import { PingPongGame } from '../game/PingPongGame'
 
 // Add Player Modal Component
 const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
-  const [nickname, setNickname] = useState('')
-  const [name, setName] = useState('')
+  const [login, setLogin] = useState('')
+  const [username, setusername] = useState('')
   const [errors, setErrors] = useState({})
   const [avatar, setAvatar] = useState(null)
 
   const handleSubmit = () => {
     const newErrors = {}
 
-    if (!nickname.trim()) {
-      newErrors.nickname = 'Username is required'
+    if (!login.trim()) {
+      newErrors.login = 'Userusername is required'
     }
 
-    if (!name.trim()) {
-      newErrors.name = 'Name is required'
+    if (!username.trim()) {
+      newErrors.username = 'username is required'
     }
 
     if (!avatar) {
@@ -34,28 +34,28 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
     setErrors({})
 
     onAddPlayer({
-      nickname: nickname.trim(),
-      name: name.trim(),
+      login: login.trim(),
+      username: username.trim(),
       avatar: avatar,
     })
 
     // Reset form
-    setNickname('')
-    setName('')
+    setLogin('')
+    setusername('')
     setAvatar(null)
   }
 
-  const handleNicknameChange = (e) => {
-    setNickname(e.target.value)
-    if (errors.nickname) {
-      setErrors((prev) => ({ ...prev, nickname: '' }))
+  const handleloginChange = (e) => {
+    setLogin(e.target.value)
+    if (errors.login) {
+      setErrors((prev) => ({ ...prev, login: '' }))
     }
   }
 
-  const handleNameChange = (e) => {
-    setName(e.target.value)
-    if (errors.name) {
-      setErrors((prev) => ({ ...prev, name: '' }))
+  const handleusernameChange = (e) => {
+    setusername(e.target.value)
+    if (errors.username) {
+      setErrors((prev) => ({ ...prev, username: '' }))
     }
   }
 
@@ -85,8 +85,8 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
             <input
               type="text"
               placeholder="Username"
-              value={nickname}
-              onChange={handleNicknameChange}
+              value={login}
+              onChange={handleloginChange}
               className={`w-full px-4 py-3 bg-[#4a5568] text-white rounded-lg border-none outline-none focus:bg-[#5a6578] transition-colors ${
                 errors.nickname ? 'ring-2 ring-red-500' : ''
               }`}
@@ -100,14 +100,14 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
             <input
               type="text"
               placeholder="Name"
-              value={name}
-              onChange={handleNameChange}
+              value={username}
+              onChange={handleusernameChange}
               className={`w-full px-4 py-3 bg-[#4a5568] text-white rounded-lg border-none outline-none focus:bg-[#5a6578] transition-colors ${
-                errors.name ? 'ring-2 ring-red-500' : ''
+                errors.username ? 'ring-2 ring-red-500' : ''
               }`}
             />
-            {errors.name && (
-              <p className="text-red-400 text-sm mt-1">{errors.name}</p>
+            {errors.username && (
+              <p className="text-red-400 text-sm mt-1">{errors.username}</p>
             )}
           </div>
 
@@ -206,7 +206,7 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
         <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
           <img
             src={player.avatar}
-            alt={player.name}
+            alt={player.login}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
             onError={(e) => {
               e.target.src = '/mghalmi.jpg'
@@ -214,9 +214,9 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }) => {
           />
         </div>
         <h4 className="text-white font-semibold text-2xl md:text-3xl">
-          {player.name}
+          {player.username}
         </h4>
-        <p className="text-gray-400 text-lg md:text-xl">@{player.nickname}</p>
+        <p className="text-gray-400 text-lg md:text-xl">@{player.login}</p>
       </div>
     </div>
   )
@@ -227,6 +227,7 @@ export default function Local1v1() {
   const [player2, setPlayer2] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showGame, setShowGame] = useState(false)
+  const {user} = useAuthStore();
 
   const handleAddPlayer = (playerData) => {
     setPlayer2(playerData)

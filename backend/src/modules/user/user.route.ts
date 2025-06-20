@@ -10,6 +10,7 @@ import {
   googleRegister,
   getAllUsersData,
   getUser,
+  listMyFriendsHandler,
 } from './user.controller'
 import { $ref } from './user.schema'
 
@@ -86,6 +87,9 @@ async function userRoutes(server: FastifyInstance) {
     getLoggedInUser
   )
   server.get('/users', getAllUsersData)
+
+  // List all friends with accepted status
+  server.get('/friends', listMyFriendsHandler)
 }
 
 export default userRoutes

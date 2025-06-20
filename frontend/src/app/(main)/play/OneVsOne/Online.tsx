@@ -1,12 +1,12 @@
 "use client"
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Search } from 'lucide-react';
-import {onlineFriends, user } from '@/data/mockData';
+// import { user } from '@/data/mockData';
+import { useAuthStore } from '@/(zustand)/useAuthStore'
 import {PingPongGame} from "../game/PingPongGame";
 import { PlayerCard } from './Locale';
 
-// Additional mock players to show more variety
-const onlinePlayers = onlineFriends;
+// Removed mock players as we are using friends from backend now
 
 const PlayerListItem = ({ player, onInvite }) => {
   const isAvailable = player.GameStatus === 'Available';
@@ -58,12 +58,36 @@ export default function OnlineMatch() {
   const [gameAccepted, setGameAccepted] = useState(false);
   const [waitTime, setWaitTime] = useState(30);
   const [showGame, setShowGame] = useState(false);
+  const [friends, setFriends] = useState([]);
+  const {user} = useAuthStore();
   
   // Use useRef to store the interval ID so we can clear it when canceling
   const countdownIntervalRef = useRef(null);
   const responseTimeoutRef = useRef(null);
   
-  const filteredPlayers = onlinePlayers.filter(player =>
+  useEffect(() => {
+  async function fetchFriends() {
+    try {
+      // Use the correct endpoint for your backend
+      const res = await fetch(`http://localhost:5005/api/users/friends?email=mohcin.ghalmi@gmail.com`);
+      const data = await res.json();
+      // Transform backend data to match frontend structure
+      const formatted = data.friends.map(f => ({
+        name: f.username,
+        avatar: f.avatar,
+        nickname: f.login,
+        GameStatus: 'Available', // Or use real status if you have it
+        ...f,
+      }));
+      setFriends(formatted);
+    } catch (err) {
+      setFriends([]);
+    }
+  }
+  fetchFriends();
+  }, []);
+
+  const filteredPlayers = friends.filter(player =>
     player.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

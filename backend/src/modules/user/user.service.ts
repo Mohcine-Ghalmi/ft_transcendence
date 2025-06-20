@@ -181,3 +181,42 @@ export async function getFriend(hisEmail: string, yourEmail: string) {
   }))
   return user
 }
+
+export async function listMyFriends(email: string) {
+  // Find all FriendRequests where status is ACCEPTED and the user is either fromEmail or toEmail
+  const sql = db.prepare(`
+    SELECT
+      fr.*, 
+      UA.email AS userA_email,
+      UA.username AS userA_username,
+      UA.login AS userA_login,
+      UA.avatar AS userA_avatar,
+      UB.email AS userB_email,
+      UB.username AS userB_username,
+      UB.login AS userB_login,
+      UB.avatar AS userB_avatar
+    FROM FriendRequest fr
+    JOIN User AS UA ON UA.email = fr.fromEmail
+    JOIN User AS UB ON UB.email = fr.toEmail
+    WHERE (fr.fromEmail = ? OR fr.toEmail = ?) AND fr.status = 'ACCEPTED'
+  `)
+  const data = await sql.all(email, email)
+  // Return the other user in each friendship
+  return data.map((row: any) => {
+    const isMeA = row.fromEmail === email
+    const friend = isMeA
+      ? {
+          email: row.userB_email,
+          username: row.userB_username,
+          login: row.userB_login,
+          avatar: row.userB_avatar,
+        }
+      : {
+          email: row.userA_email,
+          username: row.userA_username,
+          login: row.userA_login,
+          avatar: row.userA_avatar,
+        }
+    return friend
+  })
+}
