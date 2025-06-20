@@ -40,8 +40,7 @@ export function formatMessages(rawMessages: any) {
     sender: {
       id: row.sender_id,
       email: row.sender_email,
-      first_name: row.sender_first_name,
-      last_name: row.sender_last_name,
+      username: row.sender_username,
       login: row.sender_login,
       level: row.sender_level,
       avatar: row.sender_avatar,
@@ -52,8 +51,7 @@ export function formatMessages(rawMessages: any) {
     receiver: {
       id: row.receiver_id,
       email: row.receiver_email,
-      first_name: row.receiver_first_name,
-      last_name: row.receiver_last_name,
+      username: row.receiver_username,
       login: row.receiver_login,
       level: row.receiver_level,
       avatar: row.receiver_avatar,
@@ -93,8 +91,7 @@ export async function getConversations(id: number) {
 
       sender.id AS sender_id,
       sender.email AS sender_email,
-      sender.first_name AS sender_first_name,
-      sender.last_name AS sender_last_name,
+      sender.username AS sender_username,
       sender.login AS sender_login,
       sender.level AS sender_level,
       sender.avatar AS sender_avatar,
@@ -104,8 +101,7 @@ export async function getConversations(id: number) {
 
       receiver.id AS receiver_id,
       receiver.email AS receiver_email,
-      receiver.first_name AS receiver_first_name,
-      receiver.last_name AS receiver_last_name,
+      receiver.username AS receiver_username,
       receiver.login AS receiver_login,
       receiver.level AS receiver_level,
       receiver.avatar AS receiver_avatar,
@@ -170,8 +166,7 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
 
         sender.id AS sender_id,
         sender.email AS sender_email,
-        sender.first_name AS sender_first_name,
-        sender.last_name AS sender_last_name,
+        sender.username AS sender_username,
         sender.login AS sender_login,
         sender.level AS sender_level,
         sender.avatar AS sender_avatar,
@@ -181,8 +176,7 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
 
         receiver.id AS receiver_id,
         receiver.email AS receiver_email,
-        receiver.first_name AS receiver_first_name,
-        receiver.last_name AS receiver_last_name,
+        receiver.username AS receiver_username,
         receiver.login AS receiver_login,
         receiver.level AS receiver_level,
         receiver.avatar AS receiver_avatar,

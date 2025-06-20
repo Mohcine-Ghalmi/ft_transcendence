@@ -62,6 +62,8 @@ interface UserState {
   googleLogin: (data: any) => Promise<void>
   notifications: any | null
   setNotifations: () => void
+  seachedUsers: any
+  searchingForUsers: (query: string) => void
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -71,6 +73,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   socketConnected: false,
   onlineUsers: [],
   notifications: null,
+  seachedUsers: [],
 
   setNotifations: () => {
     set({ notifications: null })
@@ -187,6 +190,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     signOut({ callbackUrl: `${FRON_END}/` })
   },
 
+  searchingForUsers: (query) => {
+    if (!socketInstance) return
+    socketInstance.emit('searchingForUsers', query)
+  },
+
   connectSocket: () => {
     if (socketInstance?.connected) return
     const { user } = get()
@@ -232,10 +240,24 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       setTimeout(() => set({ notifications: null }), 10000)
     }
 
+    const onsearchResults = (seachedUsers: any) => {
+      set({ seachedUsers })
+    }
+
+    const onaddFriendResponse = (data: any) => {
+      data.status === 'error'
+        ? toast.warning(data.message)
+        : toast.success(data.message)
+    }
+
     socketInstance.on('connect', onConnect)
     socketInstance.on('getOnlineUsers', onOnlineUsers)
     socketInstance.on('disconnect', onDisconnect)
     socketInstance.on('connect_error', onConnectError)
+    //
+    socketInstance.on('searchResults', onsearchResults)
+    socketInstance.on('friendResponse', onaddFriendResponse)
+    //
     socketInstance.on('newMessageNotification', onNewMessageNotification)
     socketInstance.on('error-in-connection', (data) => {
       console.log('Socket connection error:', data)
@@ -255,6 +277,10 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.off('newMessageNotification')
       socketInstance.off('error-in-connection')
       socketInstance.off('InviteToGameResponse')
+
+      socketInstance.off('searchResults')
+      socketInstance.off('friendResponse')
+
       socketInstance.disconnect()
       socketInstance = null
       set({ socketConnected: false })

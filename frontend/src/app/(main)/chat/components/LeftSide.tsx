@@ -52,10 +52,10 @@ export const Conversation: React.FC<FriendConversationType> = ({
       onClick={() => {
         setSelectedConversationId(id)
       }}
-      className={`flex relative items-center justify-center p-2 xl:py-4 xl:px-5 cursor-pointer transition duration-300 ease-in-out
-        ${isUnread ? 'bg-[#272727]' : ''}
-        hover:bg-[#2727273a]
-        ${isSelected ? 'bg-[#27272780]' : ''}`}
+      className={`flex relative items-center justify-center border-[#293038] border-1 rounded-2xl mx-4 my-2 xl:py-0 xl:px-5 cursor-pointer transition duration-300 ease-in-out
+        ${isUnread ? 'bg-[#293038]' : ''}
+        hover:bg-[#2930386b]
+        ${isSelected ? 'bg-[#293038]' : ''}`}
     >
       <div className="w-full relative items-center flex xl:py-6">
         <div className="relative">
@@ -69,7 +69,7 @@ export const Conversation: React.FC<FriendConversationType> = ({
           <div
             className={`${
               isOnline ? 'bg-green-400' : 'bg-red-400'
-            } w-[20px] h-[20px] rounded-full border-4 border-[#1A1A1A] absolute top-0 right-0`}
+            } w-[20px] h-[20px] rounded-full border-4 border-[#293038] absolute top-0 right-0`}
           ></div>
         </div>
         <div className="ml-4 flex-grow">
@@ -123,7 +123,7 @@ export const Conversation: React.FC<FriendConversationType> = ({
           </div>
         </div>
       </div>
-      <div className="w-full border-t border-gray-800 absolute bottom-0"></div>
+      {/* <div className="w-full border-t border-gray-800 absolute bottom-0"></div> */}
     </div>
   )
 }
@@ -156,7 +156,7 @@ const FriendsConversations = () => {
   }, [])
 
   return (
-    <div className="bg-[#121417] rounded-xl border-[#768192]  h-full  border overflow-y-auto">
+    <div className="bg-[#121417] rounded-xl border-[#293038]  h-full  border overflow-y-auto">
       <h3 className="p-2 xl:p-5 text-xs  xl:text-xl">Friends</h3>
       {(conversations && conversations.length > 0) || isLoading ? (
         conversations.map((friend, index) => (
@@ -175,8 +175,8 @@ const FriendsConversations = () => {
             }
             sender={
               user.email === friend.sender.email
-                ? `${friend.receiver.first_name} ${friend.receiver.last_name}`
-                : `${friend.sender.first_name} ${friend.sender.last_name}`
+                ? `${friend.receiver.username}`
+                : `${friend.sender.username}`
             }
             text={friend.message}
             imageText={friend.image}
@@ -197,9 +197,8 @@ const FriendsConversations = () => {
 }
 
 const LeftSide = () => {
-  const { selectedConversationId } = useChatStore()
   return (
-    <div className="flex flex-col justify-between w-[25%]">
+    <div className="flex flex-col justify-between w-[700px]">
       <FriendsConversations />
     </div>
   )
