@@ -12,7 +12,7 @@ import { userSchemas } from './modules/user/user.schema'
 
 import {
   addFriendById,
-  getFriend_r,
+  getFriend,
   getUserByEmail,
 } from './modules/user/user.service'
 

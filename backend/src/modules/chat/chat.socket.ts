@@ -180,13 +180,11 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           image,
         } = data as SentMessageData
 
-        const [me, receiver, friend]: any = await Promise.all([
+        const [me, receiver]: any = await Promise.all([
           getUserByEmail(senderEmail),
           getUserById(recieverId),
-          getUserById(recieverId).then((rec: any) =>
-            rec ? getFriend(senderEmail, rec.email) : null
-          ),
         ])
+
         if (!me) {
           socket.emit('failedToSendMessage', 'Sender Not Found')
           return
@@ -197,6 +195,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           return
         }
 
+        const friend = await getFriend(senderEmail, receiver.email)
         if (!friend) {
           socket.emit(
             'failedToSendMessage',
