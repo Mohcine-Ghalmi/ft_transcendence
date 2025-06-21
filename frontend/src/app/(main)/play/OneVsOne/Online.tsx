@@ -69,7 +69,7 @@ export default function OnlineMatch() {
   async function fetchFriends() {
     try {
       // Use the correct endpoint for your backend
-      const res = await fetch(`http://localhost:5005/api/users/friends?email=mohcin.ghalmi@gmail.com`);
+      const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
       const data = await res.json();
       // Transform backend data to match frontend structure
       const formatted = data.friends.map(f => ({
