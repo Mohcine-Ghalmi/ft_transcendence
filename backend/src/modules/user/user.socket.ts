@@ -37,19 +37,27 @@ const searchForUsersInDb = (query: string, myEmail: string) => {
 
 export function setupUserSocket(socket: Socket, io: Server) {
   socket.on('searchingForUsers', (query: string) => {
-    const key = process.env.ENCRYPTION_KEY as string
-    const myEmail = CryptoJS.AES.decrypt(
-      socket.handshake.query.cryptedMail as string,
-      key
-    ).toString(CryptoJS.enc.Utf8)
+    try {
+      const key = process.env.ENCRYPTION_KEY as string
+      const myEmail = CryptoJS.AES.decrypt(
+        socket.handshake.query.cryptedMail as string,
+        key
+      ).toString(CryptoJS.enc.Utf8)
 
-    if (!query || query.trim() === '') {
+      if (!query) {
+        socket.emit('error-in-search', {
+          status: 'error',
+          message: 'query not found',
+        })
+      }
+
+      socket.emit('searchResults', searchForUsersInDb(query, myEmail))
+    } catch (err) {
+      console.log(err)
       socket.emit('error-in-search', {
         status: 'error',
         message: 'query not found',
       })
     }
-
-    socket.emit('searchResults', searchForUsersInDb(query, myEmail))
   })
 }

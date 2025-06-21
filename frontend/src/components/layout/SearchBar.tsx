@@ -1,14 +1,18 @@
 // SearchBar Component
 'use client'
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 import { Search } from 'lucide-react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'react-toastify'
 
 const Notification = ({ user }) => {
   const [status, setStatus] = useState(user.status || '')
-  const { user: me } = useAuthStore()
+  const { user: me, onlineUsers } = useAuthStore()
+  const { setSelectedConversationId } = useChatStore()
+  const router = useRouter()
 
   if (!user) return null
 
@@ -63,16 +67,28 @@ const Notification = ({ user }) => {
     return status === 'PENDING' && user.fromEmail === me.email
   }
 
+  const handleChatWithuser = () => {
+    setSelectedConversationId(user.id)
+    router.push('/chat')
+  }
+
   return (
     <div className="flex items-center justify-between px-2 py-4 border-b-1 border-[#334D66]">
       <div className="flex items-center">
-        <Image
-          src={user.avatar}
-          alt="avatar"
-          width={100}
-          height={100}
-          className="w-8 h-8 rounded-full object-cover"
-        />
+        <div className="relative">
+          <Image
+            src={user.avatar}
+            alt="avatar"
+            width={100}
+            height={100}
+            className="w-8 h-8 rounded-full object-cover"
+          />
+          <div
+            className={`${
+              onlineUsers.includes(user.email) ? 'bg-green-400' : 'bg-red-400'
+            } w-2 h-2 rounded-full  border-[#293038] absolute top-0 right-0`}
+          ></div>
+        </div>
         <div className="ml-2">
           <h3 className="text-xs">
             {user.username.length > 15
@@ -96,40 +112,95 @@ const Notification = ({ user }) => {
             : 'bg-[#334D66] cursor-pointer hover:bg-[#2a3d52]'
         }`}
       >
-        {getButtonText()}
+        {getButtonText() === 'Friends' ? (
+          <div onClick={() => handleChatWithuser()}>
+            <Image
+              src="/chat.svg"
+              alt="chat"
+              width={100}
+              height={100}
+              className="w-4 h-4"
+            />
+          </div>
+        ) : (
+          getButtonText()
+        )}
       </button>
     </div>
   )
 }
 
-export const SearchBar = ({ className = '' }) => {
-  const [searchQuery, setSearchQuery] = useState('')
-  const { searchingForUsers, seachedUsers } = useAuthStore()
+export const SearchBar = () => {
+  const [search, setSearch] = useState('')
+  const { user } = useAuthStore()
+  const [searchedUsers, setSearchedUsers] = useState([])
 
-  const handleSearch = (query: string): void => {
-    // Handle search logic here
-    console.log('Searching for:', query)
-    searchingForUsers(query)
+  const handleChatSearch = async () => {
+    if (!search.trim()) return
+  }
+
+  useEffect(() => {
+    if (!socketInstance) return
+
+    const setsearchedUsersData = async (searchedUsers) => {
+      console.log('searchedUsers in socket:', searchedUsers)
+      const data = await searchedUsers
+      if (data.length > 0) setSearchedUsers(data)
+      else setSearchedUsers([])
+    }
+
+    const searchForUsers = async () => {
+      setSearchedUsers([])
+
+      if (!search.trim()) return
+      socketInstance.emit('searchingForUsers', search.trim())
+    }
+
+    const timeoutId = setTimeout(() => {
+      searchForUsers()
+    }, 300)
+    if (socketInstance) {
+      socketInstance.on('searchResults', setsearchedUsersData)
+      socketInstance.on('error-in-search', (err) => {
+        toast.warning(err)
+      })
+
+      return () => {
+        clearTimeout(timeoutId)
+        if (socketInstance) {
+          socketInstance.off('searchingInFriends', setsearchedUsersData)
+          socketInstance.off('error-in-search')
+        }
+      }
+    }
+  }, [search, socketInstance, user.email])
+
+  const handleUserClick = (id: number) => {
+    setSearch('')
+    setSearchedUsers([])
   }
 
   return (
     <div className="relative">
-      <div className={`flex items-center relative ${className}`}>
+      <div className="flex items-center relative  m-4">
         <Search className="w-4 h-4 text-gray-400 absolute left-2 sm:left-3" />
         <input
           type="text"
           placeholder="Search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchQuery)}
-          className="pl-7 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-xs sm:text-sm w-24 sm:w-32 md:w-48 lg:w-64 placeholder-gray-500 text-white"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleChatSearch()}
+          className="pl-7 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-xs sm:text-sm w-full placeholder-gray-500 text-white"
         />
       </div>
-      {seachedUsers.length > 0 && (
-        <div className="border border-[#121A21] bg-[#121A21] overflow-y-auto h-[400px] w-full mt-2 rounded-xl absolute">
-          {seachedUsers.map((user) => (
-            <Notification key={user.id} user={user} />
-          ))}
+      {/* searched users */}
+      {searchedUsers.length > 0 && (
+        <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
+          <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
+            {searchedUsers.map((user) => (
+              <Notification key={user.id} user={user} />
+            ))}
+          </div>
         </div>
       )}
     </div>

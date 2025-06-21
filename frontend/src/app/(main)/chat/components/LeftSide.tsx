@@ -184,7 +184,7 @@ const InChatSearch = () => {
     if (chatSocket) {
       chatSocket.on('searchingInFriends', setsearchedUsersData)
       chatSocket.on('searchError', (err) => {
-        toast.error(err)
+        toast.warning(err)
       })
 
       return () => {

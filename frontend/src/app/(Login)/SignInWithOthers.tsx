@@ -89,7 +89,6 @@ const SignInWithOthers = () => {
       const handleLogin = async () => {
         try {
           setIsProcessing(true)
-          console.log('session : ', session.user)
 
           await googleLogin(session.user)
 
