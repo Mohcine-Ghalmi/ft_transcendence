@@ -103,16 +103,14 @@ export function setupChatNamespace(chatNamespace: Namespace) {
     })
 
     //searching for a user in chat
-    socket.on('searchForUser', async ({ searchedUser, email, type }) => {
-      console.log('searchedUser : ', searchedUser)
-      console.log('email : ', email)
-
+    socket.on('searchForUser', ({ searchedUser, email }) => {
       try {
         const sql = db.prepare(`
             SELECT
               f.id AS f_id,
-              f.userA,
-              f.userB,
+              f.fromEmail,
+              f.toEmail,
+              f.status,
 
               u.id AS id,
               u.email AS email,
@@ -124,17 +122,17 @@ export function setupChatNamespace(chatNamespace: Namespace) {
               u.resetOtp AS resetOtp,
               u.resetOtpExpireAt AS resetOtpExpireAt
 
-            FROM Friends f
+            FROM FriendRequest f
             JOIN User me ON me.email = ?
             JOIN User u ON (
-              (f.userA = me.email AND f.userB = u.email)
+              (f.fromEmail = me.email AND f.toEmail = u.email)
               OR
-              (f.userB = me.email AND f.userA = u.email)
+              (f.toEmail = me.email AND f.fromEmail = u.email)
             )
-            WHERE u.email LIKE ? OR u.usernam LIKE ? OR u.login LIKE ?;
+            WHERE (u.email LIKE ? OR u.username LIKE ? OR u.login LIKE ?) AND status = 'ACCEPTED';
           `)
 
-        const rawUsers = await sql.all(
+        const rawUsers = sql.all(
           email,
           `${searchedUser}%`,
           `${searchedUser}%`,
@@ -143,8 +141,8 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
         const users = rawUsers.map((row: any) => ({
           id: row.f_id,
-          userA: row.userA,
-          userB: row.userB,
+          fromEmail: row.fromEmail,
+          toEmail: row.toEmail,
           user: {
             id: row.id,
             email: row.email,

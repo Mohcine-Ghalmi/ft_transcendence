@@ -66,56 +66,75 @@ export async function getConversations(id: number) {
   try {
     const sql = db.prepare(`
       WITH LatestMessages AS (
+        SELECT
+          m.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              CASE
+                WHEN m.senderId = ? THEN m.receiverId
+                ELSE m.senderId
+              END
+            ORDER BY m.date DESC
+          ) AS row_num
+        FROM Messages m
+        WHERE m.senderId = ? OR m.receiverId = ?
+      ),
+      AcceptedFriends AS (
+        SELECT
+          u.id AS friendId
+        FROM FriendRequest fr
+        JOIN User u ON u.email = CASE
+          WHEN fr.fromEmail = (SELECT email FROM User WHERE id = ?) THEN fr.toEmail
+          ELSE fr.fromEmail
+        END
+        WHERE fr.status = 'ACCEPTED'
+          AND (
+            fr.fromEmail = (SELECT email FROM User WHERE id = ?)
+            OR fr.toEmail = (SELECT email FROM User WHERE id = ?)
+          )
+      )
+
       SELECT
-        m.*,
-        ROW_NUMBER() OVER (
-          PARTITION BY
-            CASE
-              WHEN m.senderId = ? THEN m.receiverId
-              ELSE m.senderId
-            END
-          ORDER BY m.date DESC
-        ) as row_num
-      FROM Messages m
-      WHERE m.senderId = ? OR m.receiverId = ?
-    )
+        lm.id AS message_id,
+        lm.senderId AS message_senderId,
+        lm.receiverId AS message_receiverId,
+        lm.message AS message_text,
+        lm.seen AS message_seen,
+        lm.image AS message_image,
+        lm.date AS message_date,
 
-    SELECT
-      lm.id AS message_id,
-      lm.senderId AS message_senderId,
-      lm.receiverId AS message_receiverId,
-      lm.message AS message_text,
-      lm.seen AS message_seen,
-      lm.image AS message_image,
-      lm.date AS message_date,
+        sender.id AS sender_id,
+        sender.email AS sender_email,
+        sender.username AS sender_username,
+        sender.login AS sender_login,
+        sender.level AS sender_level,
+        sender.avatar AS sender_avatar,
+        sender.type AS sender_type,
+        sender.resetOtp AS sender_resetOtp,
+        sender.resetOtpExpireAt AS sender_resetOtpExpireAt,
 
-      sender.id AS sender_id,
-      sender.email AS sender_email,
-      sender.username AS sender_username,
-      sender.login AS sender_login,
-      sender.level AS sender_level,
-      sender.avatar AS sender_avatar,
-      sender.type AS sender_type,
-      sender.resetOtp AS sender_resetOtp,
-      sender.resetOtpExpireAt AS sender_resetOtpExpireAt,
+        receiver.id AS receiver_id,
+        receiver.email AS receiver_email,
+        receiver.username AS receiver_username,
+        receiver.login AS receiver_login,
+        receiver.level AS receiver_level,
+        receiver.avatar AS receiver_avatar,
+        receiver.type AS receiver_type,
+        receiver.resetOtp AS receiver_resetOtp,
+        receiver.resetOtpExpireAt AS receiver_resetOtpExpireAt
 
-      receiver.id AS receiver_id,
-      receiver.email AS receiver_email,
-      receiver.username AS receiver_username,
-      receiver.login AS receiver_login,
-      receiver.level AS receiver_level,
-      receiver.avatar AS receiver_avatar,
-      receiver.type AS receiver_type,
-      receiver.resetOtp AS receiver_resetOtp,
-      receiver.resetOtpExpireAt AS receiver_resetOtpExpireAt
-
-    FROM LatestMessages lm
-    JOIN User sender ON lm.senderId = sender.id
-    JOIN User receiver ON lm.receiverId = receiver.id
-    WHERE lm.row_num = 1
-    ORDER BY lm.date DESC;
+      FROM LatestMessages lm
+      JOIN User sender ON lm.senderId = sender.id
+      JOIN User receiver ON lm.receiverId = receiver.id
+      WHERE lm.row_num = 1
+        AND (
+          sender.id IN (SELECT friendId FROM AcceptedFriends)
+          OR receiver.id IN (SELECT friendId FROM AcceptedFriends)
+        )
+      ORDER BY lm.date DESC;
     `)
-    const rawMessages = await sql.all(id, id, id)
+
+    const rawMessages = sql.all(id, id, id, id, id, id)
 
     const messages = formatMessages(rawMessages)
 
