@@ -6,6 +6,7 @@ import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { Search } from 'lucide-react'
 import { toast } from 'react-toastify'
+import { useSearchStore } from '@/(zustand)/useSearchStore'
 
 export const formatDate = (dateString: string) => {
   const date = new Date(dateString)
@@ -152,7 +153,11 @@ const InChatSearch = () => {
   const [search, setSearch] = useState('')
   const { user, onlineUsers } = useAuthStore()
   const { setSelectedConversationId } = useChatStore()
-  const [searchedUsers, setSearchedUsers] = useState([])
+
+  const {
+    searchedChatUsers: searchedUsers,
+    setSearchedChatUsers: setSearchedUsers,
+  } = useSearchStore()
 
   const handleChatSearch = async () => {
     if (!search.trim()) return
