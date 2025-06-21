@@ -117,7 +117,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       chatSocket.emit('seenMessage', { myId, id: selectedConversationId })
     }
 
-    if (selectedConversation)
+    if (selectedConversationId)
       set({
         selectedConversation: get().selectedConversation.filter(
           (conv: any) => conv.isSending !== true

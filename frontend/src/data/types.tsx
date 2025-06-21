@@ -29,8 +29,13 @@ interface PlayerInfo {
 }
 
 interface PingPongGameProps {
-  player1: PlayerInfo;
-  player2: PlayerInfo;
-  onExit: () => void;
+  player1: any;
+  player2: any;
+  onExit: (winner?: any) => void;
   isTournamentMode?: boolean;
+  // Remote game props
+  gameId?: string;
+  socket?: any;
+  isHost?: boolean;
+  opponent?: any;
 }

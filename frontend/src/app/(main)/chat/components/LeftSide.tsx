@@ -1,9 +1,11 @@
 'use client'
 import Image from 'next/image'
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { format, isToday, isYesterday } from 'date-fns'
-import { useChatStore } from '@/(zustand)/useChatStore'
-import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
+import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import { Search } from 'lucide-react'
+import { toast } from 'react-toastify'
 
 export const formatDate = (dateString: string) => {
   const date = new Date(dateString)
@@ -146,6 +148,113 @@ const NoConversation = () => {
   )
 }
 
+const InChatSearch = () => {
+  const [search, setSearch] = useState('')
+  const { user, onlineUsers } = useAuthStore()
+  const { setSelectedConversationId } = useChatStore()
+  const [searchedUsers, setSearchedUsers] = useState([])
+
+  const handleChatSearch = async () => {
+    if (!search.trim()) return
+  }
+
+  useEffect(() => {
+    if (!socketInstance || !chatSocket) return
+
+    const setsearchedUsersData = async (searchedUsers) => {
+      console.log('searchedUsers in socket:', searchedUsers)
+      const data = await searchedUsers
+      if (data.length > 0) setSearchedUsers(data)
+      else setSearchedUsers([])
+    }
+
+    const searchForUsers = async () => {
+      setSearchedUsers([])
+
+      if (!search.trim()) return
+      chatSocket.emit('searchForUser', {
+        email: user.email,
+        searchedUser: search.trim(),
+      })
+    }
+
+    const timeoutId = setTimeout(() => {
+      searchForUsers()
+    }, 300)
+    if (chatSocket) {
+      chatSocket.on('searchingInFriends', setsearchedUsersData)
+      chatSocket.on('searchError', (err) => {
+        toast.warning(err)
+      })
+
+      return () => {
+        clearTimeout(timeoutId)
+        if (chatSocket) {
+          chatSocket.off('searchingInFriends', setsearchedUsersData)
+          chatSocket.off('searchError')
+        }
+      }
+    }
+  }, [search, socketInstance, user.email])
+
+  const handleUserClick = (id: number) => {
+    setSearch('')
+    setSearchedUsers([])
+    setSelectedConversationId(id)
+  }
+
+  return (
+    <div className="relative">
+      <div className="flex items-center relative  m-4">
+        <Search className="w-4 h-4 text-gray-400 absolute left-2 sm:left-3" />
+        <input
+          type="text"
+          placeholder="Search With Login"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleChatSearch()}
+          className="pl-7 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-xs sm:text-sm w-full placeholder-gray-500 text-white"
+        />
+      </div>
+      {/* searched users */}
+      {searchedUsers.length > 0 && (
+        <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
+          <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
+            {searchedUsers.map((conv) => (
+              <div
+                onClick={() => handleUserClick(conv.user.id)}
+                className="relative w-full h-[100px] flex items-center rounded-2xl border border-[#293038] bg-[#121417] px-4 cursor-pointer hover:bg-[#293038d7] duration-300"
+                key={conv.id}
+              >
+                <div className="relative">
+                  <Image
+                    src={conv.user.avatar}
+                    alt={`profile`}
+                    width={100}
+                    height={100}
+                    className="rounded-full w-[60px] h-[60px] object-cover"
+                  />
+                  <div
+                    className={`${
+                      onlineUsers.includes(conv.user.email)
+                        ? 'bg-green-400'
+                        : 'bg-red-400'
+                    } w-[20px] h-[20px] rounded-full border-4 border-[#293038] absolute top-0 right-0`}
+                  ></div>
+                </div>
+                <div className="ml-4">
+                  <h2>{conv.user.username}</h2>
+                  <h3 className="text-xs text-gray-500">@{conv.user.login}</h3>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const FriendsConversations = () => {
   const { user } = useAuthStore((state) => state)
   const { onlineUsers } = useAuthStore()
@@ -157,6 +266,7 @@ const FriendsConversations = () => {
 
   return (
     <div className="bg-[#121417] rounded-xl border-[#293038]  h-full  border overflow-y-auto">
+      <InChatSearch />
       <h3 className="p-2 xl:p-5 text-xs  xl:text-xl">Friends</h3>
       {(conversations && conversations.length > 0) || isLoading ? (
         conversations.map((friend, index) => (

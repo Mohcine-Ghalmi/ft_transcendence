@@ -92,7 +92,7 @@ export async function addFriendById(hisId: number, yourId: number) {
   await sql.run(me.email, muteUser.email)
 }
 
-export async function getFriend_r(
+export async function getFriend(
   fromEmail: string,
   toEmail: string,
   status: string = 'ACCEPTED'
@@ -124,46 +124,6 @@ export async function getFriend_r(
     to.email,
     status.toUpperCase()
   )
-  const user = data.map((row: any) => ({
-    id: row.id,
-    userA: {
-      email: row.userA_email,
-      username: row.userA_username,
-      login: row.userA_login,
-      avatar: row.userA_avatar,
-    },
-    userB: {
-      email: row.userB_email,
-      username: row.userB_username,
-      login: row.userB_login,
-      avatar: row.userB_avatar,
-    },
-  }))
-  return user
-}
-
-export async function getFriend(hisEmail: string, yourEmail: string) {
-  const muteUser: any = await getUserByEmail(hisEmail)
-  const me: any = await getUserByEmail(yourEmail)
-  if (!muteUser || !me) return null
-  const sql = db.prepare(`
-        SELECT
-          Friends.*,
-          UA.email AS userA_email,
-          UA.username AS userA_username,
-          UA.login AS userA_login,
-          UA.avatar AS userA_avatar,
-          UB.email AS userB_email,
-          UB.username AS userB_username,
-          UB.login AS userB_login,
-          UB.avatar AS userB_avatar
-        FROM Friends
-        JOIN User AS UA ON UA.email = Friends.userA
-        JOIN User AS UB ON UB.email = Friends.userB
-        WHERE (Friends.userA = ? AND Friends.userB = ?)
-        OR (Friends.userA = ? AND Friends.userB = ?) LIMIT 1;
-      `)
-  const data = await sql.all(me.email, muteUser.email, muteUser.email, me.email)
   const user = data.map((row: any) => ({
     id: row.id,
     userA: {

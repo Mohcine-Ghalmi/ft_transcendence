@@ -7,14 +7,17 @@ import dotenv from 'dotenv'
 import userRoutes from './modules/user/user.route'
 import chatRoutes from './modules/chat/chat.route'
 import mailRoutes from './modules/Mail/mail.route'
+import gameRoute from './modules/game/game.route'
 
 import { userSchemas } from './modules/user/user.schema'
 
 import {
   addFriendById,
-  getFriend_r,
+  getFriend,
   getUserByEmail,
 } from './modules/user/user.service'
+
+import { initializeMatchHistoryTable } from './modules/game/game.service'
 
 import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
@@ -219,11 +222,15 @@ async function registerRoutes() {
   server.register(userRoutes, { prefix: 'api/users' })
   server.register(mailRoutes, { prefix: 'api/mail' })
   server.register(chatRoutes, { prefix: 'api/chat' })
+  server.register(gameRoute)
 }
 
 async function startServer() {
   try {
     await registerPlugins()
+
+    // Initialize match history table
+    await initializeMatchHistoryTable()
 
     await registerRoutes()
 

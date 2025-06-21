@@ -3,7 +3,6 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import CryptoJS from "crypto-js";
 import { useAuthStore } from "@/(zustand)/useAuthStore";
-import { useRouter } from "next/navigation";
 
 const GameInviteContext = createContext(null);
 
@@ -15,34 +14,26 @@ export function GameInviteProvider({ children }) {
   const { user } = useAuthStore();
   const [socket, setSocket] = useState(null);
   const [receivedInvite, setReceivedInvite] = useState(null);
-  const router = useRouter();
 
- useEffect(() => {
-  if (!user?.email) return;
-  const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
-  if (!encryptionKey) return;
+  useEffect(() => {
+    if (!user?.email) return;
+    const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
+    if (!encryptionKey) return;
 
-  const cryptedMail = CryptoJS.AES.encrypt(user.email, encryptionKey).toString();
-  const newSocket = io("http://localhost:5005", { query: { cryptedMail } });
-  setSocket(newSocket);
+    const cryptedMail = CryptoJS.AES.encrypt(user.email, encryptionKey).toString();
+    const newSocket = io("http://localhost:5005", { query: { cryptedMail } });
+    setSocket(newSocket);
 
-  const handleInvite = (data) => setReceivedInvite(data);
-  const handleCanceled = (data) => {
-    // Clear the invite if it matches the canceled game
-    if (receivedInvite && data.gameId === receivedInvite.gameId) {
+    newSocket.on("GameInviteReceived", (data) => setReceivedInvite(data));
+    newSocket.on("GameInviteCanceled", () => {
       setReceivedInvite(null);
-    }
-  };
+      console.log('Game invite was canceled, clearing invite state');
+    });
 
-  newSocket.on("GameInviteReceived", handleInvite);
-  newSocket.on("GameInviteCanceled", handleCanceled);
-
-  return () => {
-    newSocket.off("GameInviteReceived", handleInvite);
-    newSocket.off("GameInviteCanceled", handleCanceled);
-    newSocket.disconnect();
-  };
-}, [user, receivedInvite]); 
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [user]);
 
   const acceptInvite = () => {
     if (receivedInvite && socket) {
@@ -51,7 +42,8 @@ export function GameInviteProvider({ children }) {
         guestEmail: user.email,
       });
       setReceivedInvite(null);
-      router.push(`/play/game/${receivedInvite.gameId}`);
+      // Navigate to game page immediately
+      window.location.href = `/play/game/${receivedInvite.gameId}`;
     }
   };
 
@@ -65,16 +57,12 @@ export function GameInviteProvider({ children }) {
     }
   };
 
-    const clearInvite = () => {
-        setReceivedInvite(null);
-    };
+  const clearInvite = () => {
+    setReceivedInvite(null);
+  };
 
   return (
-    <GameInviteContext.Provider value={{  socket, 
-    receivedInvite, 
-    acceptInvite, 
-    declineInvite, 
-    clearInvite }}>
+    <GameInviteContext.Provider value={{ socket, receivedInvite, acceptInvite, declineInvite, clearInvite }}>
       {children}
       {receivedInvite && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

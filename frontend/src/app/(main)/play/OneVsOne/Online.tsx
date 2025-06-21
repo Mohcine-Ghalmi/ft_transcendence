@@ -53,8 +53,8 @@ const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost 
         <h1 className="text-4xl md:text-5xl font-bold mb-12 text-white">Game Ready!</h1>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12">
-          <PlayerCard player={currentUser} playerNumber={1} />
-          <PlayerCard player={opponent} playerNumber={2} />
+          <PlayerCard player={currentUser} playerNumber={1} onAddPlayer={() => {}} />
+          <PlayerCard player={opponent} playerNumber={2} onAddPlayer={() => {}} />
         </div>
         
         <div className="mb-8">
@@ -92,7 +92,7 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
         <h2 className="text-3xl font-semibold text-white mb-12"></h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12 md:mb-20">
           {/* Player 1 */}
-          <PlayerCard player={player} playerNumber={1} />
+          <PlayerCard player={player} playerNumber={1} onAddPlayer={() => {}} />
           
           {/* Player 2 - Waiting for Response */}
           <div className="flex items-center">
@@ -208,6 +208,9 @@ export default function OnlineMatch() {
             opponent: formattedOpponent
           }));
         }
+        
+        // Navigate to game page
+        window.location.href = `/play/game/${data.gameId}`;
       }
     };
 
@@ -221,15 +224,6 @@ export default function OnlineMatch() {
         console.log('Game invitation expired');
         resetGameState();
       }
-    };
-
-    const handleGameStarted = (data) => {
-      setShowGame(true);
-      setGameState('in_game');
-      setPersistentGameState(prev => ({
-        ...prev,
-        gameState: 'in_game'
-      }));
     };
 
     const handleGameInviteCanceled = (data) => {
@@ -248,7 +242,6 @@ export default function OnlineMatch() {
     socket.on('GameInviteAccepted', handleGameInviteAccepted);
     socket.on('GameInviteDeclined', handleGameInviteDeclined);
     socket.on('GameInviteTimeout', handleGameInviteTimeout);
-    socket.on('GameStarted', handleGameStarted);
     socket.on('GameInviteCanceled', handleGameInviteCanceled);
 
     return () => {
@@ -256,7 +249,6 @@ export default function OnlineMatch() {
       socket.off('GameInviteAccepted', handleGameInviteAccepted);
       socket.off('GameInviteDeclined', handleGameInviteDeclined);
       socket.off('GameInviteTimeout', handleGameInviteTimeout);
-      socket.off('GameStarted', handleGameStarted);
       socket.off('GameInviteCanceled', handleGameInviteCanceled);
     };
   }, [socket, gameId, clearInvite]);
@@ -410,23 +402,6 @@ export default function OnlineMatch() {
   const handleGameEnd = () => {
     resetGameState();
   };
-
-  // If game is active, show the game component
-  if (showGame && gameState === 'in_game') {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
-        <div className="w-full max-w-7xl">
-          <PingPongGame
-            gameId={gameId}
-            socket={socket}
-            onExit={handleGameEnd}
-            isHost={isHost}
-            opponent={invitedPlayer}
-          />
-        </div>
-      </div>
-    );
-  }
 
   // If waiting to start game, show waiting page
   if (gameState === 'waiting_to_start' && gameAccepted && invitedPlayer) {

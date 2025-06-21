@@ -2,6 +2,7 @@
 import { Socket, Server } from 'socket.io'
 import { getSocketIds } from '../../socket'
 import { getFriend, getUserByEmail } from '../user/user.service'
+import { createMatchHistory } from './game.service'
 import CryptoJS from 'crypto-js'
 import crypto from 'crypto'
 import redis from '../../utils/redis'
@@ -28,6 +29,23 @@ interface GameRoomData {
   endedAt?: number
 }
 
+interface GameState {
+  gameId: string
+  ballX: number
+  ballY: number
+  ballDx: number
+  ballDy: number
+  paddle1Y: number
+  paddle2Y: number
+  scores: {
+    p1: number
+    p2: number
+  }
+  gameStatus: 'waiting' | 'playing' | 'paused' | 'finished'
+  winner?: string
+  lastUpdate: number
+}
+
 interface User {
   username: string
   email: string
@@ -37,6 +55,9 @@ interface User {
   xp: number
   id: number
 }
+
+// Store active game states
+const activeGames = new Map<string, GameState>()
 
 export function handleGameSocket(socket: Socket, io: Server) {
   
@@ -268,11 +289,25 @@ export function handleGameSocket(socket: Socket, io: Server) {
       const hostSocketIds = await getSocketIds(host.email, 'sockets') || []
       const guestSocketIds = await getSocketIds(guest.email, 'sockets') || []
 
+      console.log('Game accepted - Host socket IDs:', hostSocketIds, 'Guest socket IDs:', guestSocketIds)
+
       const acceptedData = {
         gameId,
         status: 'ready_to_start',
         acceptedBy: guest.email
       }
+
+      console.log('Emitting GameInviteAccepted to host:', {
+        ...acceptedData,
+        guestData: {
+          username: guest.username,
+          email: guest.email,
+          avatar: guest.avatar,
+          level: guest.level,
+          xp: guest.xp,
+          login: guest.login,
+        }
+      })
 
       io.to(hostSocketIds).emit('GameInviteAccepted', {
         ...acceptedData,
@@ -283,6 +318,18 @@ export function handleGameSocket(socket: Socket, io: Server) {
           level: guest.level,
           xp: guest.xp,
           login: guest.login,
+        }
+      })
+
+      console.log('Emitting GameInviteAccepted to guest:', {
+        ...acceptedData,
+        hostData: {
+          username: host.username,
+          email: host.email,
+          avatar: host.avatar,
+          level: host.level,
+          xp: host.xp,
+          login: host.login,
         }
       })
 
@@ -375,7 +422,10 @@ export function handleGameSocket(socket: Socket, io: Server) {
     try {
       const { gameId } = data
       
+      console.log('StartGame event received:', { gameId, socketId: socket.id })
+      
       if (!gameId) {
+        console.log('StartGame error: Missing game ID')
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Missing game ID.',
@@ -383,7 +433,10 @@ export function handleGameSocket(socket: Socket, io: Server) {
       }
 
       const gameRoomData = await redis.get(`game_room:${gameId}`)
+      console.log('Game room data retrieved:', gameRoomData ? 'exists' : 'not found')
+      
       if (!gameRoomData) {
+        console.log('StartGame error: Game room not found')
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Game room not found.',
@@ -391,8 +444,10 @@ export function handleGameSocket(socket: Socket, io: Server) {
       }
 
       const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      console.log('Game room status:', gameRoom.status)
       
       if (gameRoom.status !== 'accepted') {
+        console.log('StartGame error: Game not ready to start, status:', gameRoom.status)
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Game is not ready to start.',
@@ -403,10 +458,30 @@ export function handleGameSocket(socket: Socket, io: Server) {
       gameRoom.status = 'in_progress'
       gameRoom.startedAt = Date.now()
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+      console.log('Game room updated to in_progress')
+
+      // Initialize game state
+      const gameState: GameState = {
+        gameId,
+        ballX: 440, // Center of 880 width
+        ballY: 247.5, // Center of 495 height
+        ballDx: 6 * (Math.random() > 0.5 ? 1 : -1),
+        ballDy: 6 * (Math.random() > 0.5 ? 1 : -1),
+        paddle1Y: 202.5, // Center of paddle (495 - 90) / 2
+        paddle2Y: 202.5,
+        scores: { p1: 0, p2: 0 },
+        gameStatus: 'playing',
+        lastUpdate: Date.now()
+      }
+      
+      activeGames.set(gameId, gameState)
+      console.log('Game state initialized and stored')
 
       // Notify both players
       const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
       const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
+
+      console.log('Game starting - Host socket IDs:', hostSocketIds, 'Guest socket IDs:', guestSocketIds)
 
       const gameStartData = {
         gameId,
@@ -415,8 +490,11 @@ export function handleGameSocket(socket: Socket, io: Server) {
           host: gameRoom.hostEmail,
           guest: gameRoom.guestEmail
         },
-        startedAt: gameRoom.startedAt
+        startedAt: gameRoom.startedAt,
+        gameState
       }
+
+      console.log('Emitting GameStarted to both players:', gameStartData)
 
       io.to([...hostSocketIds, ...guestSocketIds]).emit('GameStarted', gameStartData)
 
@@ -425,11 +503,179 @@ export function handleGameSocket(socket: Socket, io: Server) {
         message: 'Game started successfully.',
       })
 
+      console.log('GameStartResponse sent to host')
+
     } catch (error) {
       console.error('Error in StartGame:', error)
       socket.emit('GameStartResponse', {
         status: 'error',
         message: 'Failed to start game.',
+      })
+    }
+  })
+
+  // Handle game state updates
+  socket.on('GameStateUpdate', async (data: { gameId: string; gameState: GameState }) => {
+    try {
+      const { gameId, gameState } = data
+      
+      if (!gameId || !gameState) {
+        return
+      }
+
+      // Update the game state
+      activeGames.set(gameId, {
+        ...gameState,
+        lastUpdate: Date.now()
+      })
+
+      // Get game room to find players
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) return
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Broadcast to both players
+      const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
+      const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
+
+      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameStateUpdate', {
+        gameId,
+        gameState: activeGames.get(gameId)
+      })
+
+    } catch (error) {
+      console.error('Error in GameStateUpdate:', error)
+    }
+  })
+
+  // Handle game end
+  socket.on('GameEnd', async (data: { 
+    gameId: string; 
+    winner: string; 
+    loser: string; 
+    finalScore: { p1: number; p2: number };
+    reason?: 'normal_end' | 'player_left' | 'timeout'
+  }) => {
+    try {
+      const { gameId, winner, loser, finalScore, reason = 'normal_end' } = data
+      
+      if (!gameId || !winner || !loser) {
+        return
+      }
+
+      // Get game room
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) return
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Update game status
+      gameRoom.status = 'completed'
+      gameRoom.endedAt = Date.now()
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+      // Calculate game duration
+      const gameDuration = gameRoom.startedAt && gameRoom.endedAt 
+        ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
+        : 0
+
+      // Save match history
+      await createMatchHistory({
+        gameId,
+        player1Email: gameRoom.hostEmail,
+        player2Email: gameRoom.guestEmail,
+        player1Score: finalScore.p1,
+        player2Score: finalScore.p2,
+        winner,
+        loser,
+        gameDuration,
+        startedAt: gameRoom.startedAt || Date.now(),
+        endedAt: gameRoom.endedAt || Date.now(),
+        gameMode: '1v1',
+        status: reason === 'player_left' ? 'forfeit' : 'completed'
+      })
+
+      // Remove from active games
+      activeGames.delete(gameId)
+
+      // Notify both players
+      const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
+      const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
+
+      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameEnded', {
+        gameId,
+        winner,
+        loser,
+        finalScore,
+        gameDuration,
+        reason
+      })
+
+    } catch (error) {
+      console.error('Error in GameEnd:', error)
+    }
+  })
+
+  // Handle player leaving game
+  socket.on('LeaveGame', async (data: { gameId: string; playerEmail: string }) => {
+    try {
+      const { gameId, playerEmail } = data
+      
+      if (!gameId || !playerEmail) {
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+        })
+      }
+
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Game room not found.',
+        })
+      }
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Determine winner and loser
+      const otherPlayerEmail = gameRoom.hostEmail === playerEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+      const winner = otherPlayerEmail
+      const loser = playerEmail
+
+      // Get current game state for final score
+      const currentGameState = activeGames.get(gameId)
+      const finalScore = currentGameState?.scores || { p1: 0, p2: 0 }
+
+      // Emit game end event
+      socket.emit('GameEnd', {
+        gameId,
+        winner,
+        loser,
+        finalScore,
+        reason: 'player_left'
+      })
+
+      // Notify other player
+      const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
+      
+      io.to(otherPlayerSocketIds).emit('PlayerLeft', {
+        gameId,
+        playerWhoLeft: playerEmail,
+        reason: 'player_left'
+      })
+
+      socket.emit('GameResponse', {
+        status: 'success',
+        message: 'Left game successfully.',
+      })
+
+    } catch (error) {
+      console.error('Error in LeaveGame:', error)
+      socket.emit('GameResponse', {
+        status: 'error',
+        message: 'Failed to leave game.',
       })
     }
   })
@@ -491,63 +737,16 @@ export function handleGameSocket(socket: Socket, io: Server) {
     }
   })
 
-  // Handle leaving/ending game
-  socket.on('LeaveGame', async (data: { gameId: string; playerEmail: string }) => {
-    try {
-      const { gameId, playerEmail } = data
-      
-      if (!gameId || !playerEmail) {
-        return socket.emit('GameResponse', {
-          status: 'error',
-          message: 'Missing required information.',
-        })
-      }
-
-      const gameRoomData = await redis.get(`game_room:${gameId}`)
-      if (!gameRoomData) {
-        return socket.emit('GameResponse', {
-          status: 'error',
-          message: 'Game room not found.',
-        })
-      }
-
-      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
-      
-      // Update game status
-      gameRoom.status = 'completed'
-      gameRoom.endedAt = Date.now()
-      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
-
-      // Notify other player
-      const otherPlayerEmail = gameRoom.hostEmail === playerEmail ? gameRoom.guestEmail : gameRoom.hostEmail
-      const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
-      
-      io.to(otherPlayerSocketIds).emit('PlayerLeft', {
-        gameId,
-        playerWhoLeft: playerEmail,
-        reason: 'player_left'
-      })
-
-      socket.emit('GameResponse', {
-        status: 'success',
-        message: 'Left game successfully.',
-      })
-
-    } catch (error) {
-      console.error('Error in LeaveGame:', error)
-      socket.emit('GameResponse', {
-        status: 'error',
-        message: 'Failed to leave game.',
-      })
-    }
-  })
-
   // Handle game cleanup on disconnect
   socket.on('disconnect', async () => {
     try {
-      // Clean up any pending invitations or active games for this socket
+      // Clean up any active games for this socket
       // This would require storing socket-to-user mappings
       console.log('Player disconnected, cleaning up game state...')
+      
+      // For now, we'll rely on the client to properly handle disconnection
+      // In a production environment, you'd want to track socket-to-user mappings
+      // and handle disconnections more gracefully
     } catch (error) {
       console.error('Error in disconnect cleanup:', error)
     }

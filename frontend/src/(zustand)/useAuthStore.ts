@@ -52,7 +52,7 @@ interface UserState {
   isLoading: boolean
   user: any | null
   socketConnected: boolean
-  onlineUsers: string[]
+  onlineUsers: string[] // lasdj@gmail.com asdasd@gaialcom
   checkAuth: (accessToken: string) => Promise<boolean>
   register: (data: any) => Promise<boolean>
   login: (data: any) => Promise<boolean>

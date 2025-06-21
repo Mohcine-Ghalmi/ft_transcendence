@@ -26,7 +26,9 @@ export async function getSocketIds(
   sockets: string
 ): Promise<string[]> {
   const redisKey = `${sockets}:${userEmail}`
-  return await redis.smembers(redisKey)
+  const socketIds = await redis.smembers(redisKey)
+  console.log('Getting socket IDs for:', { userEmail, redisKey, socketIds })
+  return socketIds
 }
 
 export async function removeSocketId(
@@ -77,19 +79,25 @@ export async function setupSocketIO(server: FastifyInstance) {
         key
       ).toString(CryptoJS.enc.Utf8)
 
+      console.log('Socket connected:', { socketId: socket.id, userEmail })
+
       if (userEmail) {
         const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
         const me: typeof createUserResponseSchema = await getUserByEmail(email)
-        if (!me)
+        if (!me) {
+          console.log('User not found for email:', email)
           return socket.emit('error-in-connection', {
             status: 'error',
             message: 'User not found',
           })
+        }
 
+        console.log('User authenticated:', { email, username: (me as any).username })
         addSocketId(email, socket.id, 'sockets')
         const redisKeys = await redis.keys('sockets:*')
 
         const onlineUsers = redisKeys.map((key) => key.split(':')[1])
+        console.log('Online users:', onlineUsers)
         io.emit('getOnlineUsers', onlineUsers)
       }
 
@@ -98,6 +106,7 @@ export async function setupSocketIO(server: FastifyInstance) {
       handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {
+        console.log('Socket disconnected:', { socketId: socket.id, userEmail })
         if (userEmail) {
           const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
           removeSocketId(email, socket.id, 'sockets')
@@ -108,7 +117,7 @@ export async function setupSocketIO(server: FastifyInstance) {
         }
       })
     } catch (error) {
-      console.log(error)
+      console.log('Socket connection error:', error)
 
       return socket.emit('error-in-connection', {
         status: 'error',

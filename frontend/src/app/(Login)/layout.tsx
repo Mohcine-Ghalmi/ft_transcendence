@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { jwtDecode } from 'jwt-decode'
-import { toast } from 'react-toastify'
+import { toast, ToastContainer } from 'react-toastify'
 import { SessionProvider } from 'next-auth/react'
 
 export default function RootLayout({
@@ -58,5 +58,10 @@ export default function RootLayout({
     )
   }
 
-  return <SessionProvider>{children}</SessionProvider>
+  return (
+    <SessionProvider>
+      <ToastContainer theme="dark" stacked />
+      {children}
+    </SessionProvider>
+  )
 }
