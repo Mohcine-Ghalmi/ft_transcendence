@@ -183,7 +183,6 @@ export async function getFriend(hisEmail: string, yourEmail: string) {
 }
 
 export async function listMyFriends(email: string) {
-  // Find all FriendRequests where status is ACCEPTED and the user is either fromEmail or toEmail
   const sql = db.prepare(`
     SELECT
       fr.*, 

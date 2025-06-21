@@ -1,118 +1,555 @@
+// modules/game/game.socket.ts
 import { Socket, Server } from 'socket.io'
 import { getSocketIds } from '../../socket'
 import { getFriend, getUserByEmail } from '../user/user.service'
 import CryptoJS from 'crypto-js'
 import crypto from 'crypto'
+import redis from '../../utils/redis'
 
 interface InviteToGameData {
   myEmail: string
   hisEmail: string
 }
+
+interface GameInviteData {
+  gameId: string
+  hostEmail: string
+  guestEmail: string
+  createdAt: number
+}
+
+interface GameRoomData {
+  gameId: string
+  hostEmail: string
+  guestEmail: string
+  status: 'waiting' | 'accepted' | 'in_progress' | 'completed' | 'canceled'
+  createdAt: number
+  startedAt?: number
+  endedAt?: number
+}
+
+interface User {
+  username: string
+  email: string
+  avatar: string
+  level: number
+  login: string
+  xp: number
+  id: number
+}
+
 export function handleGameSocket(socket: Socket, io: Server) {
-  socket.on('InviteToGame', async (data) => {
+  
+  // Handle sending game invitations
+  socket.on('InviteToGame', async (encryptedData: string) => {
     try {
       const key = process.env.ENCRYPTION_KEY
-      if (!key)
+      if (!key) {
         return socket.emit('InviteToGameResponse', {
           status: 'error',
-          message: 'Encryption key is not defined.',
-        })
-
-      const bytes = CryptoJS.AES.decrypt(data, key)
-      const decrypted = bytes.toString(CryptoJS.enc.Utf8)
-      if (!decrypted)
-        return socket.emit('InviteToGameResponse', {
-          status: 'error',
-          message: 'Decryption returned empty string.',
-        })
-
-      const result = JSON.parse(decrypted)
-      const { hisEmail: invitedUserEmail, myEmail } = result as InviteToGameData
-      if (!myEmail || !invitedUserEmail) {
-        return socket.emit('InviteToGameResponse', {
-          status: 'error',
-          message: 'Missing required fields in decrypted data.',
+          message: 'Server configuration error.',
         })
       }
 
-      const [me, otherUser]: any = await Promise.all([
+      // Decrypt the invitation data
+      const bytes = CryptoJS.AES.decrypt(encryptedData, key)
+      const decrypted = bytes.toString(CryptoJS.enc.Utf8)
+      
+      if (!decrypted) {
+        return socket.emit('InviteToGameResponse', {
+          status: 'error',
+          message: 'Invalid invitation data.',
+        })
+      }
+
+      const { hisEmail: invitedUserEmail, myEmail } = JSON.parse(decrypted) as InviteToGameData
+      
+      if (!myEmail || !invitedUserEmail) {
+        return socket.emit('InviteToGameResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+        })
+      }
+
+      // Validate users exist and are friends
+      const [hostUser, guestUser] = await Promise.all([
         getUserByEmail(myEmail),
         getUserByEmail(invitedUserEmail),
       ])
 
-      if (!me || !otherUser) {
-        socket.emit('InviteToGameResponse', {
+      const host = hostUser as unknown as User
+      const guest = guestUser as unknown as User
+
+      if (!host || !guest) {
+        return socket.emit('InviteToGameResponse', {
           status: 'error',
           message: 'One or both users not found.',
         })
-        return
       }
 
-      if (me.email === otherUser.email) {
-        socket.emit('InviteToGameResponse', {
+      if (host.email === guest.email) {
+        return socket.emit('InviteToGameResponse', {
           status: 'error',
-          message: 'You cannot invite yourself to a game.',
+          message: 'Cannot invite yourself.',
         })
-        return
       }
-      const friend = await getFriend(myEmail, otherUser.email)
-      if (!friend) {
-        socket.emit('InviteToGameResponse', {
+
+      // Check if users are friends
+      const friendship = await getFriend(myEmail, guest.email)
+      if (!friendship) {
+        return socket.emit('InviteToGameResponse', {
           status: 'error',
-          message: 'You can only invite friends to a game.',
+          message: 'You can only invite friends to play.',
         })
-        return
       }
 
-      // Emit the invite to the invited user
-      const invitedUserSocketIds =
-        (await getSocketIds(invitedUserEmail, 'sockets')) || []
-
-      if (invitedUserSocketIds.length === 0) {
-        socket.emit('InviteToGameResponse', {
+      // Check if guest already has a pending invite
+      const existingInvite = await redis.get(`game_invite:${invitedUserEmail}`)
+      if (existingInvite) {
+        return socket.emit('InviteToGameResponse', {
           status: 'error',
-          message: `User ${invitedUserEmail} is not online.`,
+          message: `${guest.username} already has a pending invitation.`,
         })
-        return
       }
 
+      // Check if guest is online
+      const guestSocketIds = await getSocketIds(invitedUserEmail, 'sockets') || []
+      if (guestSocketIds.length === 0) {
+        return socket.emit('InviteToGameResponse', {
+          status: 'error',
+          message: `${guest.username} is not online.`,
+        })
+      }
+
+      // Generate unique game ID
       const gameId = crypto.randomUUID()
-      io.to(invitedUserSocketIds).emit('InviteToGameResponse', {
-        type: 'game',
-        from: myEmail,
-        message: `You have been invited to a game by ${me.username} .`,
-        hostEmail: me.email,
-        userData: {
-          username: me.username,
-          email: me.email,
-          avatar: me.avatar,
-          level: me.level,
-          login: me.login,
-          xp: me.xp,
-        },
+      
+      // Store invitation in Redis with 30-second expiration
+      const inviteData: GameInviteData = {
         gameId,
+        hostEmail: host.email,
+        guestEmail: guest.email,
+        createdAt: Date.now()
+      }
+      
+      await Promise.all([
+        redis.setex(`game_invite:${gameId}`, 30, JSON.stringify(inviteData)),
+        redis.setex(`game_invite:${guest.email}`, 30, gameId)
+      ])
+
+      // Send invitation to guest
+      io.to(guestSocketIds).emit('GameInviteReceived', {
+        type: 'game_invite',
+        gameId,
+        hostEmail: host.email,
+        message: `${host.username} invited you to play!`,
+        hostData: {
+          username: host.username,
+          email: host.email,
+          avatar: host.avatar,
+          level: host.level,
+          login: host.login,
+          xp: host.xp,
+        },
+        expiresAt: Date.now() + 30000
       })
 
+      // Confirm to host
       socket.emit('InviteToGameResponse', {
-        type: 'game',
+        type: 'invite_sent',
         status: 'success',
-        message: `Invite sent to ${invitedUserEmail}.`,
-        hostEmail: me.email,
-        userData: {
-          username: otherUser.username,
-          email: otherUser.email,
-          avatar: otherUser.avatar,
-          level: otherUser.level,
-          xp: otherUser.xp,
-          login: otherUser.login,
-        },
+        message: `Invitation sent to ${guest.username}`,
         gameId,
+        guestEmail: guest.email,
+        guestData: {
+          username: guest.username,
+          email: guest.email,
+          avatar: guest.avatar,
+          level: guest.level,
+          xp: guest.xp,
+          login: guest.login,
+        }
       })
-    } catch (err) {
-      return socket.emit('InviteToGameResponse', {
+
+      // Auto-expire invitation after 30 seconds
+      setTimeout(async () => {
+        try {
+          const stillExists = await redis.get(`game_invite:${gameId}`)
+          if (stillExists) {
+            await Promise.all([
+              redis.del(`game_invite:${gameId}`),
+              redis.del(`game_invite:${guest.email}`)
+            ])
+            
+            const hostSocketIds = await getSocketIds(host.email, 'sockets') || []
+            const currentGuestSocketIds = await getSocketIds(guest.email, 'sockets') || []
+            
+            io.to(hostSocketIds).emit('GameInviteTimeout', { gameId })
+            io.to(currentGuestSocketIds).emit('GameInviteTimeout', { gameId })
+          }
+        } catch (error) {
+          console.error('Error in invitation timeout:', error)
+        }
+      }, 30000)
+
+    } catch (error) {
+      console.error('Error in InviteToGame:', error)
+      socket.emit('InviteToGameResponse', {
         status: 'error',
-        message: 'Failed to decrypt invite data. Please try again.',
+        message: 'Failed to send invitation. Please try again.',
       })
+    }
+  })
+
+  // Handle accepting game invitations
+  socket.on('AcceptGameInvite', async (data: { gameId: string; guestEmail: string }) => {
+    try {
+      const { gameId, guestEmail } = data
+      
+      if (!gameId || !guestEmail) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+        })
+      }
+
+      // Get invitation data
+      const inviteData = await redis.get(`game_invite:${gameId}`)
+      if (!inviteData) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Invitation has expired.',
+        })
+      }
+
+      const invite: GameInviteData = JSON.parse(inviteData)
+      
+      if (invite.guestEmail !== guestEmail) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Invalid invitation.',
+        })
+      }
+
+      // Clean up invitation
+      await Promise.all([
+        redis.del(`game_invite:${gameId}`),
+        redis.del(`game_invite:${guestEmail}`)
+      ])
+
+      // Get user data
+      const [hostUser, guestUser] = await Promise.all([
+        getUserByEmail(invite.hostEmail),
+        getUserByEmail(invite.guestEmail)
+      ])
+
+      const host = hostUser as unknown as User
+      const guest = guestUser as unknown as User
+
+      if (!host || !guest) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'User data not found.',
+        })
+      }
+
+      // Create game room
+      const gameRoomData: GameRoomData = {
+        gameId,
+        hostEmail: host.email,
+        guestEmail: guest.email,
+        status: 'accepted',
+        createdAt: Date.now()
+      }
+      
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoomData))
+
+      // Notify both players
+      const hostSocketIds = await getSocketIds(host.email, 'sockets') || []
+      const guestSocketIds = await getSocketIds(guest.email, 'sockets') || []
+
+      const acceptedData = {
+        gameId,
+        status: 'ready_to_start',
+        acceptedBy: guest.email
+      }
+
+      io.to(hostSocketIds).emit('GameInviteAccepted', {
+        ...acceptedData,
+        guestData: {
+          username: guest.username,
+          email: guest.email,
+          avatar: guest.avatar,
+          level: guest.level,
+          xp: guest.xp,
+          login: guest.login,
+        }
+      })
+
+      io.to(guestSocketIds).emit('GameInviteAccepted', {
+        ...acceptedData,
+        hostData: {
+          username: host.username,
+          email: host.email,
+          avatar: host.avatar,
+          level: host.level,
+          xp: host.xp,
+          login: host.login,
+        }
+      })
+
+    } catch (error) {
+      console.error('Error in AcceptGameInvite:', error)
+      socket.emit('GameInviteResponse', {
+        status: 'error',
+        message: 'Failed to accept invitation.',
+      })
+    }
+  })
+
+  // Handle declining game invitations
+  socket.on('DeclineGameInvite', async (data: { gameId: string; guestEmail: string }) => {
+    try {
+      const { gameId, guestEmail } = data
+      
+      if (!gameId || !guestEmail) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+        })
+      }
+
+      const inviteData = await redis.get(`game_invite:${gameId}`)
+      if (!inviteData) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Invitation has expired.',
+        })
+      }
+
+      const invite: GameInviteData = JSON.parse(inviteData)
+      
+      if (invite.guestEmail !== guestEmail) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Invalid invitation.',
+        })
+      }
+
+      // Clean up invitation
+      await Promise.all([
+        redis.del(`game_invite:${gameId}`),
+        redis.del(`game_invite:${guestEmail}`)
+      ])
+
+      const guestUser = await getUserByEmail(invite.guestEmail)
+      const guest = guestUser as unknown as User
+
+      if (guest) {
+        // Notify host of decline
+        const hostSocketIds = await getSocketIds(invite.hostEmail, 'sockets') || []
+        io.to(hostSocketIds).emit('GameInviteDeclined', {
+          gameId,
+          declinedBy: guest.email,
+          guestName: guest.username
+        })
+      }
+
+      // Confirm to guest
+      socket.emit('GameInviteResponse', {
+        status: 'success',
+        message: 'Invitation declined.',
+      })
+
+    } catch (error) {
+      console.error('Error in DeclineGameInvite:', error)
+      socket.emit('GameInviteResponse', {
+        status: 'error',
+        message: 'Failed to decline invitation.',
+      })
+    }
+  })
+
+  // Handle starting the game
+  socket.on('StartGame', async (data: { gameId: string }) => {
+    try {
+      const { gameId } = data
+      
+      if (!gameId) {
+        return socket.emit('GameStartResponse', {
+          status: 'error',
+          message: 'Missing game ID.',
+        })
+      }
+
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        return socket.emit('GameStartResponse', {
+          status: 'error',
+          message: 'Game room not found.',
+        })
+      }
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      if (gameRoom.status !== 'accepted') {
+        return socket.emit('GameStartResponse', {
+          status: 'error',
+          message: 'Game is not ready to start.',
+        })
+      }
+
+      // Update game status
+      gameRoom.status = 'in_progress'
+      gameRoom.startedAt = Date.now()
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+      // Notify both players
+      const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
+      const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
+
+      const gameStartData = {
+        gameId,
+        status: 'game_started',
+        players: {
+          host: gameRoom.hostEmail,
+          guest: gameRoom.guestEmail
+        },
+        startedAt: gameRoom.startedAt
+      }
+
+      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameStarted', gameStartData)
+
+      socket.emit('GameStartResponse', {
+        status: 'success',
+        message: 'Game started successfully.',
+      })
+
+    } catch (error) {
+      console.error('Error in StartGame:', error)
+      socket.emit('GameStartResponse', {
+        status: 'error',
+        message: 'Failed to start game.',
+      })
+    }
+  })
+
+  // Handle canceling invitations
+  socket.on('CancelGameInvite', async (data: { gameId: string; hostEmail: string }) => {
+    try {
+      const { gameId, hostEmail } = data
+      
+      if (!gameId || !hostEmail) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+        })
+      }
+
+      const inviteData = await redis.get(`game_invite:${gameId}`)
+      if (!inviteData) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Invitation not found or expired.',
+        })
+      }
+
+      const invite: GameInviteData = JSON.parse(inviteData)
+      
+      if (invite.hostEmail !== hostEmail) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'You can only cancel your own invitations.',
+        })
+      }
+
+      // Clean up invitation
+      await Promise.all([
+        redis.del(`game_invite:${gameId}`),
+        redis.del(`game_invite:${invite.guestEmail}`)
+      ])
+
+      // Notify guest
+      const guestSocketIds = await getSocketIds(invite.guestEmail, 'sockets') || []
+      io.to(guestSocketIds).emit('GameInviteCanceled', {
+        gameId,
+        canceledBy: hostEmail
+      })
+
+      // Confirm to host
+      socket.emit('GameInviteResponse', {
+        status: 'success',
+        message: 'Invitation canceled.',
+      })
+
+    } catch (error) {
+      console.error('Error in CancelGameInvite:', error)
+      socket.emit('GameInviteResponse', {
+        status: 'error',
+        message: 'Failed to cancel invitation.',
+      })
+    }
+  })
+
+  // Handle leaving/ending game
+  socket.on('LeaveGame', async (data: { gameId: string; playerEmail: string }) => {
+    try {
+      const { gameId, playerEmail } = data
+      
+      if (!gameId || !playerEmail) {
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+        })
+      }
+
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Game room not found.',
+        })
+      }
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Update game status
+      gameRoom.status = 'completed'
+      gameRoom.endedAt = Date.now()
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+      // Notify other player
+      const otherPlayerEmail = gameRoom.hostEmail === playerEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+      const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
+      
+      io.to(otherPlayerSocketIds).emit('PlayerLeft', {
+        gameId,
+        playerWhoLeft: playerEmail,
+        reason: 'player_left'
+      })
+
+      socket.emit('GameResponse', {
+        status: 'success',
+        message: 'Left game successfully.',
+      })
+
+    } catch (error) {
+      console.error('Error in LeaveGame:', error)
+      socket.emit('GameResponse', {
+        status: 'error',
+        message: 'Failed to leave game.',
+      })
+    }
+  })
+
+  // Handle game cleanup on disconnect
+  socket.on('disconnect', async () => {
+    try {
+      // Clean up any pending invitations or active games for this socket
+      // This would require storing socket-to-user mappings
+      console.log('Player disconnected, cleaning up game state...')
+    } catch (error) {
+      console.error('Error in disconnect cleanup:', error)
     }
   })
 }
