@@ -3,7 +3,6 @@ import CryptoJS from 'crypto-js'
 import { getUserByEmail } from '../user/user.service'
 import { db } from '../../app'
 import { getSocketIds } from '../../socket'
-import { emit } from 'process'
 
 // changeFriendStatus
 const changeFriendStatus = (
@@ -67,6 +66,8 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
         io.to(userSockets).emit('friendResponse', {
           status: 'success',
           message: `You Recieved A friend request from ${myEmail}`,
+          hisEmail: myEmail,
+          desc: 'PENDING',
         })
     } catch (err) {
       console.log('addFriend : ', err)
@@ -100,6 +101,8 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
           io.to(userSockets).emit('friendResponse', {
             status: 'success',
             message: `${myEmail} Accept Your Friend Request`,
+            desc: 'ACCEPTED',
+            hisEmail: myEmail,
           })
       } else {
         socket.emit('friendResponse', {
@@ -139,6 +142,8 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
           io.to(userSockets).emit('friendResponse', {
             status: 'error',
             message: `${myEmail} rejected Your Friend Request`,
+            hisEmail: inviter,
+            desc: '',
           })
       } else {
         socket.emit('friendResponse', {

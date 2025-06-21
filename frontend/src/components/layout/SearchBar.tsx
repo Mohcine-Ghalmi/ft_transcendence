@@ -2,6 +2,7 @@
 'use client'
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
+import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { Search } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -72,6 +73,10 @@ const Notification = ({ user }) => {
     router.push('/chat')
   }
 
+  useEffect(() => {
+    setStatus(user.status || '')
+  }, [user.status])
+
   return (
     <div className="flex items-center justify-between px-2 py-4 border-b-1 border-[#334D66]">
       <div className="flex items-center">
@@ -133,7 +138,10 @@ const Notification = ({ user }) => {
 export const SearchBar = () => {
   const [search, setSearch] = useState('')
   const { user } = useAuthStore()
-  const [searchedUsers, setSearchedUsers] = useState([])
+  const {
+    searchedUsersGlobal: searchedUsers,
+    setSearchedUsersGlobal: setSearchedUsers,
+  } = useSearchStore()
 
   const handleChatSearch = async () => {
     if (!search.trim()) return

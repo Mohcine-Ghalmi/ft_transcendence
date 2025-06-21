@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client'
 import { jwtDecode } from 'jwt-decode'
 import { signOut } from 'next-auth/react'
 import CryptoJs from 'crypto-js'
+import { useSearchStore } from './useSearchStore'
 
 const BACK_END = process.env.NEXT_PUBLIC_BACKEND
 const FRON_END = process.env.NEXT_PUBLIC_FRONEND
@@ -63,7 +64,6 @@ interface UserState {
   notifications: any | null
   setNotifations: () => void
   seachedUsers: any
-  searchingForUsers: (query: string) => void
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -190,11 +190,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     signOut({ callbackUrl: `${FRON_END}/` })
   },
 
-  searchingForUsers: (query) => {
-    if (!socketInstance) return
-    socketInstance.emit('searchingForUsers', query)
-  },
-
   connectSocket: () => {
     if (socketInstance?.connected) return
     const { user } = get()
@@ -245,9 +240,25 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
 
     const onaddFriendResponse = (data: any) => {
-      data.status === 'error'
-        ? toast.warning(data.message)
-        : toast.success(data.message)
+      if (data.status === 'error') {
+        toast.warning(data.message)
+      } else {
+        if (data?.desc) {
+          const { searchedUsersGlobal, setSearchedUsersGlobal } =
+            useSearchStore.getState()
+
+          const updatedUsers = searchedUsersGlobal.map((tmp) =>
+            tmp.email === data.hisEmail
+              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+              : tmp
+          )
+          console.log('searchedUsersGlobal : ', searchedUsersGlobal)
+
+          console.log('updatedUsers : ', updatedUsers)
+          setSearchedUsersGlobal(updatedUsers)
+        }
+        toast.success(data.message)
+      }
     }
 
     socketInstance.on('connect', onConnect)
