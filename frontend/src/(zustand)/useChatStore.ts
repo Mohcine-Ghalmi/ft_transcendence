@@ -22,6 +22,7 @@ interface ChatStoreType {
   connectChatSocket: () => void
   disconnectChatSocket: () => void
   setConversations: (data: any) => void
+  setChatHeader: (data: any) => void
 }
 
 export let chatSocket: Socket | null = null
@@ -37,6 +38,9 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
 
   setConversations: (data: any) => {
     set({ conversations: data })
+  },
+  setChatHeader: (data: any) => {
+    set({ chatHeader: data })
   },
 
   setSearchedUsers: (conversations: any[]) => {

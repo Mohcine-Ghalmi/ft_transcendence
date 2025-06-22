@@ -8,6 +8,7 @@ import {
   animals,
 } from 'unique-names-generator'
 import { createUserResponseSchema } from './user.schema'
+import { getIsBlocked } from './user.socket'
 
 export async function getUserByEmail(email: string) {
   const sql = db.prepare(`SELECT * FROM User WHERE email = ?`)
@@ -92,6 +93,20 @@ export async function addFriendById(hisId: number, yourId: number) {
   await sql.run(me.email, muteUser.email)
 }
 
+export const isBlockedStatus = (myEmail: string, hisEmail: string) => {
+  const fromBlockedList = getIsBlocked(myEmail)
+  const toBlockedList = getIsBlocked(hisEmail)
+
+  const isBlockedByMe = fromBlockedList
+    ? fromBlockedList.some((entry: any) => entry.blockedUser === hisEmail)
+    : false
+
+  const isBlockedByHim = toBlockedList
+    ? toBlockedList.some((entry: any) => entry.blockedUser === myEmail)
+    : false
+  return { isBlockedByMe, isBlockedByHim }
+}
+
 export async function getFriend(
   fromEmail: string,
   toEmail: string,
@@ -100,23 +115,29 @@ export async function getFriend(
   const from: any = await getUserByEmail(fromEmail)
   const to: any = await getUserByEmail(toEmail)
   if (!from || !to || !status) return null
+
   const sql = db.prepare(`
-        SELECT
-          FriendRequest.*,
-          UA.email AS userA_email,
-          UA.username AS userA_username,
-          UA.login AS userA_login,
-          UA.avatar AS userA_avatar,
-          UB.email AS userB_email,
-          UB.username AS userB_username,
-          UB.login AS userB_login,
-          UB.avatar AS userB_avatar
-        FROM FriendRequest
-        JOIN User AS UA ON UA.email = FriendRequest.fromEmail
-        JOIN User AS UB ON UB.email = FriendRequest.toEmail
-        WHERE (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
-        OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?) AND status = ? LIMIT 1;
-      `)
+    SELECT
+      FriendRequest.*,
+      UA.email AS userA_email,
+      UA.username AS userA_username,
+      UA.login AS userA_login,
+      UA.avatar AS userA_avatar,
+      UB.email AS userB_email,
+      UB.username AS userB_username,
+      UB.login AS userB_login,
+      UB.avatar AS userB_avatar
+    FROM FriendRequest
+    JOIN User AS UA ON UA.email = FriendRequest.fromEmail
+    JOIN User AS UB ON UB.email = FriendRequest.toEmail
+    WHERE (
+      (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
+      OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
+    )
+    AND status = ?
+    LIMIT 1;
+  `)
+
   const data = await sql.all(
     to.email,
     from.email,
@@ -124,8 +145,21 @@ export async function getFriend(
     to.email,
     status.toUpperCase()
   )
-  const user = data.map((row: any) => ({
+
+  if (!data.length) return null
+
+  const [row]: any = data
+
+  const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(
+    to.email,
+    from.email
+  )
+
+  return {
     id: row.id,
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
     userA: {
       email: row.userA_email,
       username: row.userA_username,
@@ -138,14 +172,15 @@ export async function getFriend(
       login: row.userB_login,
       avatar: row.userB_avatar,
     },
-  }))
-  return user
+    isBlockedByMe,
+    isBlockedByHim,
+  }
 }
 
 export async function listMyFriends(email: string) {
   const sql = db.prepare(`
     SELECT
-      fr.*, 
+      fr.*,
       UA.email AS userA_email,
       UA.username AS userA_username,
       UA.login AS userA_login,

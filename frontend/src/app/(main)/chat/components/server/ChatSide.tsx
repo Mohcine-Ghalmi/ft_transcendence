@@ -67,7 +67,6 @@ export const ConversationContainer = () => {
   }, [selectedConversationId])
 
   useEffect(() => {
-    console.log('selectedConversation : ', selectedConversation)
     if (!isInitialLoad && selectedConversation?.length) {
       scrollToBottom()
     }

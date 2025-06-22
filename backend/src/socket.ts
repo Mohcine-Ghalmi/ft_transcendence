@@ -6,7 +6,7 @@ import { handleGameSocket } from './modules/game/game.socket'
 import { getUserByEmail } from './modules/user/user.service'
 import { createUserResponseSchema } from './modules/user/user.schema'
 import CryptoJS from 'crypto-js'
-import { setupUserSocket } from './modules/user/user.socket'
+import { getIsBlocked, setupUserSocket } from './modules/user/user.socket'
 import { setupFriendsSocket } from './modules/friends/friends.socket'
 
 let io: Server
@@ -92,13 +92,17 @@ export async function setupSocketIO(server: FastifyInstance) {
           })
         }
 
-        console.log('User authenticated:', { email, username: (me as any).username })
+        console.log('User authenticated:', {
+          email,
+          username: (me as any).username,
+        })
         addSocketId(email, socket.id, 'sockets')
         const redisKeys = await redis.keys('sockets:*')
 
         const onlineUsers = redisKeys.map((key) => key.split(':')[1])
         console.log('Online users:', onlineUsers)
         io.emit('getOnlineUsers', onlineUsers)
+        socket.emit('BlockedList', getIsBlocked(userEmail))
       }
 
       setupUserSocket(socket, io)

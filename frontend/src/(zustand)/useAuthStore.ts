@@ -6,6 +6,7 @@ import { jwtDecode } from 'jwt-decode'
 import { signOut } from 'next-auth/react'
 import CryptoJs from 'crypto-js'
 import { useSearchStore } from './useSearchStore'
+import { useChatStore } from './useChatStore'
 
 const BACK_END = process.env.NEXT_PUBLIC_BACKEND
 const FRON_END = process.env.NEXT_PUBLIC_FRONEND
@@ -262,19 +263,37 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
 
     const onBlockResponse = (data) => {
-      data.error === 'error'
-        ? toast.warning(data.message)
-        : toast.success(data.message)
+      if (data.status === 'error') {
+        toast.warning(data.message)
+        return
+      }
+
+      const { chatHeader, setChatHeader } = useChatStore.getState()
+      if (!chatHeader) return
+
+      const update: any = { ...chatHeader }
+
+      if (data.hisEmail === chatHeader.email) {
+        if ('isBlockedByMe' in data) update.isBlockedByMe = data.isBlockedByMe
+      }
+
+      if (data.hisEmail === useAuthStore.getState().user.email) {
+        if ('isBlockedByHim' in data)
+          update.isBlockedByHim = data.isBlockedByHim
+      }
+
+      setChatHeader(update)
     }
 
     socketInstance.on('connect', onConnect)
     socketInstance.on('getOnlineUsers', onOnlineUsers)
     socketInstance.on('disconnect', onDisconnect)
     socketInstance.on('connect_error', onConnectError)
-    socketInstance.on('blockResponse', onBlockResponse)
     //
     socketInstance.on('searchResults', onsearchResults)
     socketInstance.on('friendResponse', onaddFriendResponse)
+    socketInstance.on('blockResponse', onBlockResponse)
+
     //
     socketInstance.on('newMessageNotification', onNewMessageNotification)
     socketInstance.on('error-in-connection', (data) => {

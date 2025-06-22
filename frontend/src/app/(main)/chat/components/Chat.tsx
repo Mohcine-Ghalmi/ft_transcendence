@@ -6,63 +6,32 @@ import { toast } from 'react-toastify'
 import { ConversationContainer, EmptyChat, More } from './server/ChatSide'
 import CryptoJs from 'crypto-js'
 import '@fortawesome/fontawesome-free/css/all.min.css'
-import { axiosInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import {
+  axiosInstance,
+  socketInstance,
+  useAuthStore,
+} from '@/(zustand)/useAuthStore'
 import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 
 const ChatHeader = () => {
   const [more, setMore] = useState(false)
   const { onlineUsers } = useAuthStore()
-  const {
-    setSelectedConversationId,
-    chatHeader: user,
-    conversations,
-    setConversations,
-  } = useChatStore()
-  const [isMuted, setIsmuted] = useState(false)
+  const { setSelectedConversationId, chatHeader: user } = useChatStore()
   const { user: me } = useAuthStore()
 
   const closeMore = (e: any) => {
     e.target.id === 'more' && setMore(false)
   }
 
-  useEffect(() => {
-    if (!user) return
-    setIsmuted(user?.isMuted)
-  }, [user])
-
-  useEffect(() => {
-    if (!chatSocket) return
-
-    const onBlockResponse = (data) => {
-      if (data.error === 'error') {
-        toast.warning(data.message)
-      } else {
-        setConversations(
-          conversations.map((conv) =>
-            conv.email === data.hisEmail
-              ? { ...conv, status: data.desc ? 'BLOCKED' : 'ACCEPTED' }
-              : conv
-          )
-        )
-        // toast.success(data.message)
-      }
-    }
-
-    chatSocket.on('blockResponse', onBlockResponse)
-
-    return () => {
-      if (chatSocket) {
-        chatSocket.off('blockResponse', onBlockResponse)
-      }
-    }
-  }, [chatSocket])
-
   const handleBlock = () => {
-    if (chatSocket) {
-      chatSocket.emit('block:user', {
-        hisEmail: user.email,
-        isBlocking: user.status === 'ACCEPTED' ? true : false,
-      })
+    if (socketInstance) {
+      !user.isBlockedByMe
+        ? socketInstance.emit('block:user', {
+            hisEmail: user.email,
+          })
+        : socketInstance.emit('unblock:user', {
+            hisEmail: user.email,
+          })
     }
   }
 
@@ -145,7 +114,7 @@ const ChatHeader = () => {
             <div onClick={() => handleBlock()}>
               <More
                 src="/slash-block.svg"
-                text={user.status === 'ACCEPTED' ? 'Block' : 'unBlock'}
+                text={user.isBlockedByMe ? 'Unblock' : 'Block'}
               />
             </div>
             <div onClick={() => setSelectedConversationId(undefined)}>

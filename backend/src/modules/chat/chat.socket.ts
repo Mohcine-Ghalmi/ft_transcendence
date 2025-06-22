@@ -80,55 +80,6 @@ export function setupChatNamespace(chatNamespace: Namespace) {
       }
     })
 
-    // mute a user
-
-    socket.on('block:user', async ({ hisEmail, isBlocking }) => {
-      try {
-        const friend = await getFriend(
-          userEmail,
-          hisEmail,
-          isBlocking ? 'ACCEPTED' : 'BLOCKED'
-        )
-        if (!friend || !friend.length)
-          return socket.emit('blockResponse', {
-            status: 'error',
-            message: 'You are not friends with this user',
-          })
-
-        if (
-          changeFriendStatus(
-            hisEmail,
-            userEmail,
-            isBlocking ? 'BLOCKED' : 'ACCEPTED'
-          )
-        ) {
-          const hisSockets = await getSocketIds(hisEmail, 'sockets')
-          socket.emit('blockResponse', {
-            status: 'success',
-            message: `User ${isBlocking ? 'Blocked' : 'Unblocked'}`,
-            hisEmail,
-            desc: isBlocking,
-          })
-          io.to(hisSockets).emit('blockResponse', {
-            status: 'success',
-            message: ``,
-            userEmail,
-            desc: isBlocking,
-          })
-        } else {
-          socket.emit('blockResponse', {
-            status: 'error',
-            message: `Can't block user for now please try again`,
-          })
-        }
-      } catch (err) {
-        return socket.emit('blockResponse', {
-          status: 'error',
-          message: `Can't block user for now please try again`,
-        })
-      }
-    })
-
     //searching for a user in chat
     socket.on('searchForUser', ({ searchedUser, email }) => {
       try {
@@ -156,7 +107,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
               OR
               (f.toEmail = me.email AND f.fromEmail = u.email)
             )
-            WHERE (u.email LIKE ? OR u.username LIKE ? OR u.login LIKE ?) AND status = 'ACCEPTED' OR status = 'BLOCKED';
+            WHERE (u.email LIKE ? OR u.username LIKE ? OR u.login LIKE ?) AND status = 'ACCEPTED';
           `)
 
         const rawUsers = sql.all(
@@ -221,14 +172,15 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         }
 
         const friend = await getFriend(senderEmail, receiver.email)
-        if (!friend || !friend.length) {
+        if (!friend) {
           socket.emit(
             'failedToSendMessage',
             'You are not friends with this user'
           )
           return
         }
-        console.log('friend : ', friend)
+        if (friend.isBlockedByMe || friend.isBlockedByHim)
+          return socket.emit('failedToSendMessage', 'This User Is Blocked')
 
         if (me.email === receiver.email) {
           socket.emit('failedToSendMessage', 'You cannot message yourself')
@@ -241,8 +193,11 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           message,
           image
         )
-        const conversationsPromise = getConversations(me.id)
-        const receiverConversationsPromise = getConversations(receiver.id)
+        const conversationsPromise = getConversations(me.id, me.email)
+        const receiverConversationsPromise = getConversations(
+          receiver.id,
+          receiver.email
+        )
 
         const mySockets = await getSocketIds(me.email, 'chat')
         const recieverSockets = await getSocketIds(receiver.email, 'chat')

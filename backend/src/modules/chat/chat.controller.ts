@@ -5,6 +5,7 @@ import {
   getFriend,
   getUserByEmail,
   getUserById,
+  isBlockedStatus,
 } from '../user/user.service'
 import { db } from '../../app'
 
@@ -28,42 +29,53 @@ export async function addMessage(
   return await getSql.get(result.lastInsertRowid)
 }
 
-export function formatMessages(rawMessages: any) {
-  return rawMessages.map((row: any) => ({
-    id: row.message_id,
-    senderId: row.message_senderId,
-    receiverId: row.message_receiverId,
-    message: row.message_text,
-    seen: row.message_seen,
-    image: row.message_image,
-    date: row.message_date,
-    status: row.friend_status,
-    sender: {
-      id: row.sender_id,
-      email: row.sender_email,
-      username: row.sender_username,
-      login: row.sender_login,
-      level: row.sender_level,
-      avatar: row.sender_avatar,
-      type: row.sender_type,
-      resetOtp: row.sender_resetOtp,
-      resetOtpExpireAt: row.sender_resetOtpExpireAt,
-    },
-    receiver: {
-      id: row.receiver_id,
-      email: row.receiver_email,
-      username: row.receiver_username,
-      login: row.receiver_login,
-      level: row.receiver_level,
-      avatar: row.receiver_avatar,
-      type: row.receiver_type,
-      resetOtp: row.receiver_resetOtp,
-      resetOtpExpireAt: row.receiver_resetOtpExpireAt,
-    },
-  }))
+export function formatMessages(rawMessages: any, myEmail: string) {
+  return rawMessages.map((row: any) => {
+    const hisEmail =
+      row.sender_email === myEmail ? row.receiver_email : row.sender_email
+
+    const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(myEmail, hisEmail)
+
+    return {
+      id: row.message_id,
+      senderId: row.message_senderId,
+      receiverId: row.message_receiverId,
+      message: row.message_text,
+      seen: row.message_seen,
+      image: row.message_image,
+      date: row.message_date,
+      status: row.friend_status,
+
+      isBlockedByMe,
+      isBlockedByHim,
+
+      sender: {
+        id: row.sender_id,
+        email: row.sender_email,
+        username: row.sender_username,
+        login: row.sender_login,
+        level: row.sender_level,
+        avatar: row.sender_avatar,
+        type: row.sender_type,
+        resetOtp: row.sender_resetOtp,
+        resetOtpExpireAt: row.sender_resetOtpExpireAt,
+      },
+      receiver: {
+        id: row.receiver_id,
+        email: row.receiver_email,
+        username: row.receiver_username,
+        login: row.receiver_login,
+        level: row.receiver_level,
+        avatar: row.receiver_avatar,
+        type: row.receiver_type,
+        resetOtp: row.receiver_resetOtp,
+        resetOtpExpireAt: row.receiver_resetOtpExpireAt,
+      },
+    }
+  })
 }
 
-export async function getConversations(id: number) {
+export async function getConversations(id: number, myEmail: string) {
   try {
     const sql = db.prepare(`
       WITH LatestMessages AS (
@@ -91,7 +103,7 @@ export async function getConversations(id: number) {
           WHEN fr.fromEmail = (SELECT email FROM User WHERE id = ?) THEN fr.toEmail
           ELSE fr.fromEmail
         END
-        WHERE (fr.status = 'ACCEPTED' OR fr.status = 'BLOCKED')
+        WHERE (fr.status = 'ACCEPTED')
           AND (
             fr.fromEmail = (SELECT email FROM User WHERE id = ?)
             OR fr.toEmail = (SELECT email FROM User WHERE id = ?)
@@ -140,7 +152,7 @@ export async function getConversations(id: number) {
 
     const rawMessages = sql.all(id, id, id, id, id, id)
 
-    const messages = formatMessages(rawMessages)
+    const messages = formatMessages(rawMessages, myEmail)
 
     return messages
   } catch (err) {
@@ -152,7 +164,7 @@ export async function getConversations(id: number) {
 export async function getFriends(req: FastifyRequest, rep: FastifyReply) {
   try {
     const me: any = req.user
-    const conversations = await getConversations(me.id)
+    const conversations = await getConversations(me.id, me.email)
 
     // const data = await addMessage(1, 2, "Hey !")
     // console.log('here :', data);
@@ -188,14 +200,19 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
       JOIN User AS UA ON UA.email = FriendRequest.fromEmail
       JOIN User AS UB ON UB.email = FriendRequest.toEmail
       WHERE (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
-      OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?) AND (status = 'ACCEPTED' OR status = 'BLOCKED') LIMIT 1;
+      OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?) AND status = 'ACCEPTED' LIMIT 1;
     `)
-    const data = await sql_friend.all(
+    const data = sql_friend.all(
       reciever.email,
       me.email,
       me.email,
       reciever.email
     )
+    const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(
+      me.email,
+      reciever.email
+    )
+
     const friend = data.map((row: any) => ({
       id: row.id,
       userA: {
@@ -204,6 +221,8 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
         username: row.userA_username,
         login: row.userA_login,
         avatar: row.userA_avatar,
+        isBlockedByMe,
+        isBlockedByHim,
       },
       userB: {
         status: row.status,
@@ -211,6 +230,8 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
         username: row.userB_username,
         login: row.userB_login,
         avatar: row.userB_avatar,
+        isBlockedByMe,
+        isBlockedByHim,
       },
     }))
     // const friend = await getFriend(reciever.email, me.email)
@@ -276,7 +297,7 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
       offset
     )
 
-    const conversation = formatMessages(rawMessages)
+    const conversation = formatMessages(rawMessages, me.email)
     console.log(conversation)
 
     return rep.code(200).send({ friend, conversation })
