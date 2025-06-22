@@ -5,16 +5,16 @@ import { db } from '../../app'
 import { getSocketIds } from '../../socket'
 
 // changeFriendStatus
-const changeFriendStatus = (
+export const changeFriendStatus = (
   myEmail: string,
   inviter: string,
   status: string
 ) => {
   try {
     const sql = db.prepare(
-      'UPDATE FriendRequest SET status = ? WHERE fromEmail = ? AND toEmail = ?'
+      'UPDATE FriendRequest SET status = ? WHERE (fromEmail = ? AND toEmail = ?) OR (fromEmail = ? AND toEmail = ?)'
     )
-    sql.run(status.toUpperCase(), inviter, myEmail)
+    sql.run(status.toUpperCase(), inviter, myEmail, myEmail, inviter)
     return true
   } catch (err) {
     console.log('changeFriendStatus : ', err)

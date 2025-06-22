@@ -21,6 +21,7 @@ interface ChatStoreType {
   setSearchedUsers: (conversations: any[]) => void
   connectChatSocket: () => void
   disconnectChatSocket: () => void
+  setConversations: (data: any) => void
 }
 
 export let chatSocket: Socket | null = null
@@ -34,6 +35,10 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   isLoading: true,
   selectedConversationId: undefined,
 
+  setConversations: (data: any) => {
+    set({ conversations: data })
+  },
+
   setSearchedUsers: (conversations: any[]) => {
     set({ conversations })
   },
@@ -44,7 +49,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     set({ isLoading: true })
     try {
       const res = await axiosInstance.get('/api/chat/getFriends')
-      console.log(res)
 
       set({ conversations: res.data })
 
@@ -73,6 +77,8 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
         user.email === res.data.friend[0].userA.email
           ? res.data.friend[0].userB
           : res.data.friend[0].userA
+      console.log('friend : ', friend)
+
       set({ chatHeader: friend })
       get().updateChat()
       if (id !== undefined && chatSocket && offset === 0) {

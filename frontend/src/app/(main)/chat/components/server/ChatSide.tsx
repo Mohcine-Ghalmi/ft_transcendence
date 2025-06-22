@@ -6,21 +6,37 @@ import { useAuthStore } from '@/(zustand)/useAuthStore'
 import { useChatStore } from '@/(zustand)/useChatStore'
 
 export const EmptyChat = ({ text }: { text: string }) => {
+  const { chatHeader, selectedConversation } = useChatStore()
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-[#121417] rounded-2xl border-[#293038] border">
-      <Image
-        src="/emptyChat.svg"
-        alt="empty Chat"
-        width={100}
-        height={100}
-        className="w-[15%]"
-      />
-      <h2 className="text-xs xl:text-2xl py-5 text-center">
-        Welcome to Your Conversations
-      </h2>
-      <p className="text-[8px] xl:text-xl text-gray-400 w-[70%] text-center">
-        {text}
-      </p>
+      {selectedConversation && chatHeader && chatHeader.status === 'BLOCKED' ? (
+        <>
+          <Image
+            src="/slash-block.svg"
+            alt="empty Chat"
+            width={100}
+            height={100}
+            className="w-[15%]"
+          />
+          <h2 className="text-xs xl:text-2xl py-5 text-center">Blocked</h2>
+        </>
+      ) : (
+        <>
+          <Image
+            src="/emptyChat.svg"
+            alt="empty Chat"
+            width={100}
+            height={100}
+            className="w-[15%]"
+          />
+          <h2 className="text-xs xl:text-2xl py-5 text-center">
+            Welcome to Your Conversations
+          </h2>
+          <p className="text-[8px] xl:text-xl text-gray-400 w-[70%] text-center">
+            {text}
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -51,6 +67,7 @@ export const ConversationContainer = () => {
   }, [selectedConversationId])
 
   useEffect(() => {
+    console.log('selectedConversation : ', selectedConversation)
     if (!isInitialLoad && selectedConversation?.length) {
       scrollToBottom()
     }
@@ -229,9 +246,9 @@ export const More = ({ src, text }: { src: string; text: string }) => {
         alt=""
         width={100}
         height={100}
-        className="w-[20px] h-[20px] xl:w-[45px] xl:h-[45px] mr-2"
+        className="w-[30px] h-[20px] mr-2"
       />
-      <p className="text-xs xl:text-2xl text-[#363B4B]">{text}</p>
+      <p className="text-xs xl:text-xl text-[#363B4B]">{text}</p>
     </div>
   )
 }

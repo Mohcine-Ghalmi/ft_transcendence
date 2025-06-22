@@ -12,7 +12,12 @@ import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 const ChatHeader = () => {
   const [more, setMore] = useState(false)
   const { onlineUsers } = useAuthStore()
-  const { setSelectedConversationId, chatHeader: user } = useChatStore()
+  const {
+    setSelectedConversationId,
+    chatHeader: user,
+    conversations,
+    setConversations,
+  } = useChatStore()
   const [isMuted, setIsmuted] = useState(false)
   const { user: me } = useAuthStore()
 
@@ -28,27 +33,35 @@ const ChatHeader = () => {
   useEffect(() => {
     if (!chatSocket) return
 
-    const onError = (err) => toast.error(err)
-    const onMuted = (response) => {
-      setIsmuted(response)
+    const onBlockResponse = (data) => {
+      if (data.error === 'error') {
+        toast.warning(data.message)
+      } else {
+        setConversations(
+          conversations.map((conv) =>
+            conv.email === data.hisEmail
+              ? { ...conv, status: data.desc ? 'BLOCKED' : 'ACCEPTED' }
+              : conv
+          )
+        )
+        // toast.success(data.message)
+      }
     }
 
-    chatSocket.on('toggleMuteUserError', onError)
-    chatSocket.on('muted', onMuted)
+    chatSocket.on('blockResponse', onBlockResponse)
 
     return () => {
       if (chatSocket) {
-        chatSocket.off('toggleMuteUserError', onError)
-        chatSocket.off('muted', onMuted)
+        chatSocket.off('blockResponse', onBlockResponse)
       }
     }
   }, [chatSocket])
 
-  const handleMute = () => {
+  const handleBlock = () => {
     if (chatSocket) {
-      chatSocket.emit('toggleMuteUser', {
-        userToMuteEmail: user.email,
-        myEmail: me.email,
+      chatSocket.emit('block:user', {
+        hisEmail: user.email,
+        isBlocking: user.status === 'ACCEPTED' ? true : false,
       })
     }
   }
@@ -129,17 +142,14 @@ const ChatHeader = () => {
           ></div>
           <div className="border border-gray-500  bg-white absolute  top-10 right-5 xl:right-10 xl:top-30  rounded-2xl animate-fade-down animate-duration-400">
             <More src="/user.svg" text="See profile" />
-            <div onClick={() => handleMute()}>
+            <div onClick={() => handleBlock()}>
               <More
-                src={
-                  isMuted ? '/notification bell-off.svg' : '/Notification.svg'
-                }
-                text={isMuted ? 'notifications on' : 'notifications off'}
+                src="/slash-block.svg"
+                text={user.status === 'ACCEPTED' ? 'Block' : 'unBlock'}
               />
             </div>
-            <More src="/slash-block.svg" text="Block" />
             <div onClick={() => setSelectedConversationId(undefined)}>
-              <More src="/user.svg" text="Close Chat" />
+              <More src="/X.svg" text="Close Chat" />
             </div>
           </div>
         </div>
@@ -163,8 +173,10 @@ const SendMessageInput = ({
   image: File | null
   setImage: any
 }) => {
+  const { chatHeader } = useChatStore()
   const [imagePath, setImagePath] = useState<string | null>(null)
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // if (chatHeader.status === 'BLOCKED') return
     if (event.key === 'Enter') {
       setImagePath(null)
       sendMessage()
@@ -172,6 +184,7 @@ const SendMessageInput = ({
   }
 
   const send = () => {
+    // if (chatHeader.status === 'BLOCKED') return
     setImagePath(null)
     sendMessage()
   }

@@ -30,6 +30,7 @@ interface FriendConversationType {
   imageText: string
   isOnline: boolean
   seen: boolean
+  status: string
 }
 
 export const Conversation: React.FC<FriendConversationType> = ({
@@ -42,6 +43,7 @@ export const Conversation: React.FC<FriendConversationType> = ({
   isOnline,
   senderId,
   seen,
+  status,
 }) => {
   const { setSelectedConversationId, selectedConversationId } = useChatStore()
   const { user } = useAuthStore()
@@ -55,10 +57,14 @@ export const Conversation: React.FC<FriendConversationType> = ({
       onClick={() => {
         setSelectedConversationId(id)
       }}
-      className={`flex relative items-center justify-center border-[#293038] border-1 rounded-2xl mx-4 my-2 xl:py-0 xl:px-5 cursor-pointer transition duration-300 ease-in-out
+      className={`flex relative items-center justify-center border-[#293038] border-1 rounded-2xl mx-4 my-2 xl:py-0 xl:px-5 cursor-pointer transition duration-300 ease-in-out ${
+        status === 'BLOCKED'
+          ? 'bg-[#444]'
+          : `
         ${isUnread ? 'bg-[#293038]' : ''}
         hover:bg-[#2930386b]
-        ${isSelected ? 'bg-[#293038]' : ''}`}
+        ${isSelected ? 'bg-[#293038]' : ''}`
+      } `}
     >
       <div className="w-full relative items-center flex xl:py-6">
         <div className="relative">
@@ -293,6 +299,7 @@ const FriendsConversations = () => {
                 ? `${friend.receiver.username}`
                 : `${friend.sender.username}`
             }
+            status={friend.status}
             text={friend.message}
             imageText={friend.image}
             time={formatDate(friend.date)}

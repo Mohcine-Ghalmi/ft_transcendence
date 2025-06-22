@@ -4,6 +4,7 @@ import { getFriend, getUserByEmail, getUserById } from '../user/user.service'
 import { addMessage, getConversations } from './chat.controller'
 import { db } from '../../app'
 import CryptoJs from 'crypto-js'
+import { changeFriendStatus } from '../friends/friends.socket'
 
 interface SentMessageData {
   recieverId: number
@@ -81,24 +82,50 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
     // mute a user
 
-    socket.on('toggleMuteUser', async ({ userToMuteEmail, myEmail }) => {
+    socket.on('block:user', async ({ hisEmail, isBlocking }) => {
       try {
-        // const friend = await getFriend(userToMuteEmail, myEmail)
-        // if (!friend)
-        //   return socket.emit(
-        //     'toggleMuteUserError',
-        //     'You are not friends with this user'
-        //   )
-        // await prisma.friends.update({
-        //   where: { id: friend.id },
-        //   data: { isMuted: !friend.isMuted },
-        // })
-        // socket.emit('muted', !friend.isMuted)
-      } catch (err) {
-        return socket.emit(
-          'toggleMuteUserError',
-          `Can't mute user for now please try again`
+        const friend = await getFriend(
+          userEmail,
+          hisEmail,
+          isBlocking ? 'ACCEPTED' : 'BLOCKED'
         )
+        if (!friend || !friend.length)
+          return socket.emit('blockResponse', {
+            status: 'error',
+            message: 'You are not friends with this user',
+          })
+
+        if (
+          changeFriendStatus(
+            hisEmail,
+            userEmail,
+            isBlocking ? 'BLOCKED' : 'ACCEPTED'
+          )
+        ) {
+          const hisSockets = await getSocketIds(hisEmail, 'sockets')
+          socket.emit('blockResponse', {
+            status: 'success',
+            message: `User ${isBlocking ? 'Blocked' : 'Unblocked'}`,
+            hisEmail,
+            desc: isBlocking,
+          })
+          io.to(hisSockets).emit('blockResponse', {
+            status: 'success',
+            message: ``,
+            userEmail,
+            desc: isBlocking,
+          })
+        } else {
+          socket.emit('blockResponse', {
+            status: 'error',
+            message: `Can't block user for now please try again`,
+          })
+        }
+      } catch (err) {
+        return socket.emit('blockResponse', {
+          status: 'error',
+          message: `Can't block user for now please try again`,
+        })
       }
     })
 
@@ -129,7 +156,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
               OR
               (f.toEmail = me.email AND f.fromEmail = u.email)
             )
-            WHERE (u.email LIKE ? OR u.username LIKE ? OR u.login LIKE ?) AND status = 'ACCEPTED';
+            WHERE (u.email LIKE ? OR u.username LIKE ? OR u.login LIKE ?) AND status = 'ACCEPTED' OR status = 'BLOCKED';
           `)
 
         const rawUsers = sql.all(
@@ -194,13 +221,14 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         }
 
         const friend = await getFriend(senderEmail, receiver.email)
-        if (!friend) {
+        if (!friend || !friend.length) {
           socket.emit(
             'failedToSendMessage',
             'You are not friends with this user'
           )
           return
         }
+        console.log('friend : ', friend)
 
         if (me.email === receiver.email) {
           socket.emit('failedToSendMessage', 'You cannot message yourself')

@@ -37,6 +37,7 @@ export function formatMessages(rawMessages: any) {
     seen: row.message_seen,
     image: row.message_image,
     date: row.message_date,
+    status: row.friend_status,
     sender: {
       id: row.sender_id,
       email: row.sender_email,
@@ -81,13 +82,16 @@ export async function getConversations(id: number) {
       ),
       AcceptedFriends AS (
         SELECT
-          u.id AS friendId
+          u.id AS friendId,
+          fr.status,
+          fr.fromEmail,
+          fr.toEmail
         FROM FriendRequest fr
         JOIN User u ON u.email = CASE
           WHEN fr.fromEmail = (SELECT email FROM User WHERE id = ?) THEN fr.toEmail
           ELSE fr.fromEmail
         END
-        WHERE fr.status = 'ACCEPTED'
+        WHERE (fr.status = 'ACCEPTED' OR fr.status = 'BLOCKED')
           AND (
             fr.fromEmail = (SELECT email FROM User WHERE id = ?)
             OR fr.toEmail = (SELECT email FROM User WHERE id = ?)
@@ -102,6 +106,8 @@ export async function getConversations(id: number) {
         lm.seen AS message_seen,
         lm.image AS message_image,
         lm.date AS message_date,
+
+        af.status AS friend_status,
 
         sender.id AS sender_id,
         sender.email AS sender_email,
@@ -126,11 +132,9 @@ export async function getConversations(id: number) {
       FROM LatestMessages lm
       JOIN User sender ON lm.senderId = sender.id
       JOIN User receiver ON lm.receiverId = receiver.id
+      JOIN AcceptedFriends af ON
+        (sender.id = af.friendId OR receiver.id = af.friendId)
       WHERE lm.row_num = 1
-        AND (
-          sender.id IN (SELECT friendId FROM AcceptedFriends)
-          OR receiver.id IN (SELECT friendId FROM AcceptedFriends)
-        )
       ORDER BY lm.date DESC;
     `)
 
@@ -169,12 +173,52 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
 
     if (!reciever)
       return rep.code(200).send({ error: 'User Not Found', status: false })
-    const friend = await getFriend(reciever.email, me.email)
+    const sql_friend = db.prepare(`
+      SELECT
+        FriendRequest.*,
+        UA.email AS userA_email,
+        UA.username AS userA_username,
+        UA.login AS userA_login,
+        UA.avatar AS userA_avatar,
+        UB.email AS userB_email,
+        UB.username AS userB_username,
+        UB.login AS userB_login,
+        UB.avatar AS userB_avatar
+      FROM FriendRequest
+      JOIN User AS UA ON UA.email = FriendRequest.fromEmail
+      JOIN User AS UB ON UB.email = FriendRequest.toEmail
+      WHERE (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
+      OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?) AND (status = 'ACCEPTED' OR status = 'BLOCKED') LIMIT 1;
+    `)
+    const data = await sql_friend.all(
+      reciever.email,
+      me.email,
+      me.email,
+      reciever.email
+    )
+    const friend = data.map((row: any) => ({
+      id: row.id,
+      userA: {
+        status: row.status,
+        email: row.userA_email,
+        username: row.userA_username,
+        login: row.userA_login,
+        avatar: row.userA_avatar,
+      },
+      userB: {
+        status: row.status,
+        email: row.userB_email,
+        username: row.userB_username,
+        login: row.userB_login,
+        avatar: row.userB_avatar,
+      },
+    }))
+    // const friend = await getFriend(reciever.email, me.email)
     if (!friend)
       return rep.code(200).send({ error: 'User Not Found', status: false })
 
     const sql = db.prepare(`
-     SELECT
+        SELECT
         m.id AS message_id,
         m.senderId AS message_senderId,
         m.receiverId AS message_receiverId,
@@ -182,6 +226,8 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
         m.seen AS message_seen,
         m.image AS message_image,
         m.date AS message_date,
+
+        fr.status AS friend_status,
 
         sender.id AS sender_id,
         sender.email AS sender_email,
@@ -206,7 +252,19 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
       FROM Messages m
       JOIN User sender ON m.senderId = sender.id
       JOIN User receiver ON m.receiverId = receiver.id
-      WHERE (m.senderId = ? AND m.receiverId = ?) OR (m.senderId = ? AND m.receiverId = ?)
+
+      JOIN FriendRequest fr ON (
+        (
+          fr.fromEmail = sender.email AND fr.toEmail = receiver.email
+        ) OR (
+          fr.fromEmail = receiver.email AND fr.toEmail = sender.email
+        )
+      )
+      WHERE fr.status IN ('ACCEPTED')
+        AND (
+          (m.senderId = ? AND m.receiverId = ?) OR
+          (m.senderId = ? AND m.receiverId = ?)
+        )
       ORDER BY m.date DESC
       LIMIT 20 OFFSET ?;
     `)
@@ -219,6 +277,7 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
     )
 
     const conversation = formatMessages(rawMessages)
+    console.log(conversation)
 
     return rep.code(200).send({ friend, conversation })
   } catch (err) {

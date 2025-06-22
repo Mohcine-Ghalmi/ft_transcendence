@@ -261,10 +261,17 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
     }
 
+    const onBlockResponse = (data) => {
+      data.error === 'error'
+        ? toast.warning(data.message)
+        : toast.success(data.message)
+    }
+
     socketInstance.on('connect', onConnect)
     socketInstance.on('getOnlineUsers', onOnlineUsers)
     socketInstance.on('disconnect', onDisconnect)
     socketInstance.on('connect_error', onConnectError)
+    socketInstance.on('blockResponse', onBlockResponse)
     //
     socketInstance.on('searchResults', onsearchResults)
     socketInstance.on('friendResponse', onaddFriendResponse)
