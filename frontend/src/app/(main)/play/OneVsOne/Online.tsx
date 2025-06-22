@@ -181,7 +181,6 @@ export default function OnlineMatch() {
           opponent: data.guestData,
           isHost: true
         });
-        console.log('Invite sent successfully');
       } else if (data.status === 'error') {
         alert(data.message);
         resetGameState();
@@ -190,8 +189,6 @@ export default function OnlineMatch() {
 
     // FIXED: Improved logic for handling game invite acceptance
     const handleGameInviteAccepted = (data) => {
-      console.log('GameInviteAccepted received in Online.tsx:', data);
-      
       if (data.status === 'ready_to_start') {
         setGameAccepted(true);
         setGameState('waiting_to_start');
@@ -209,24 +206,19 @@ export default function OnlineMatch() {
           // This user is the host
           isCurrentUserHost = true;
           opponentData = data.guestData;
-          console.log('Current user confirmed as HOST');
         } else if (receivedInvite) {
           // This user received an invite, so they are the guest
           isCurrentUserHost = false;
           opponentData = data.hostData;
-          console.log('Current user confirmed as GUEST');
         } else {
           // Fallback: check email addresses to determine role
           if (data.hostData && data.hostData.email === user?.email) {
             isCurrentUserHost = true;
             opponentData = data.guestData;
-            console.log('User is host (email match)');
           } else if (data.guestData && data.guestData.email === user?.email) {
             isCurrentUserHost = false;
             opponentData = data.hostData;
-            console.log('User is guest (email match)');
           } else {
-            console.error('Could not determine host/guest status');
             resetGameState();
             return;
           }
@@ -248,11 +240,8 @@ export default function OnlineMatch() {
             opponent: formattedOpponent,
             isHost: isCurrentUserHost
           }));
-
-          console.log(`Game accepted successfully. User is ${isCurrentUserHost ? 'HOST' : 'GUEST'}`);
           
         } else {
-          console.error('Invalid opponent data received:', opponentData);
           resetGameState();
         }
       }
@@ -312,33 +301,25 @@ export default function OnlineMatch() {
 
     // FIXED: Handle game start response - navigate both players to game
     const handleGameStartResponse = (data) => {
-      console.log('GameStartResponse received in Online.tsx:', data);
       if (data.status === 'success') {
-        console.log('Game start was successful');
-        
         // Only the guest should navigate to the game page
         // The host should stay on the current page and the game will start there
         if (!isHost) {
-          console.log('Guest navigating to game page');
           const targetPath = `/play/game/${gameId}`;
           window.location.href = targetPath;
         } else {
-          console.log('Host staying on current page - game will start here');
           // The host should stay on this page and the game component will be rendered here
           // We need to transition to the game state
           setShowGame(true);
         }
       } else {
-        console.error('Game start failed:', data.message);
         alert(`Failed to start game: ${data.message}`);
       }
     };
 
     // Handle game started event
     const handleGameStarted = (data) => {
-      console.log('GameStarted event received in Online.tsx:', data);
       if (data.gameId === gameId) {
-        console.log('Game started successfully');
         // Update game state to indicate the game is now active
         setGameState('in_game');
         // The game component will handle the actual game start
@@ -429,27 +410,22 @@ export default function OnlineMatch() {
       
       try {
         // First check if backend is running
-        console.log('Checking backend health...');
         const healthRes = await fetch('http://localhost:5005/healthcheck');
         if (!healthRes.ok) {
-          console.error('Backend health check failed:', healthRes.status);
           setBackendAvailable(false);
           setFriends([]);
           return;
         }
         
         setBackendAvailable(true);
-        console.log('Fetching friends for user:', user.email);
         const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
         
         if (!res.ok) {
-          console.error('Failed to fetch friends:', res.status, res.statusText);
           setFriends([]);
           return;
         }
         
         const data = await res.json();
-        console.log('Friends data received:', data);
         
         if (data.friends && Array.isArray(data.friends)) {
           const formatted = data.friends.map(f => ({
@@ -461,11 +437,9 @@ export default function OnlineMatch() {
           }));
           setFriends(formatted);
         } else {
-          console.error('Invalid friends data structure:', data);
           setFriends([]);
         }
       } catch (err) {
-        console.error('Error fetching friends:', err);
         setFriends([]);
         // Don't show alert to user, just log the error
       }
@@ -568,13 +542,9 @@ export default function OnlineMatch() {
   // FIXED: Simplified start game logic
   const handleStartGame = () => {
     if (socket && gameId) {
-      console.log('Starting game as host:', gameId);
       socket.emit('StartGame', { gameId });
     } else {
-      console.error('Cannot start game - missing socket or gameId:', {
-        socket: !!socket,
-        gameId
-      });
+      alert('Cannot start game - missing connection or game ID');
     }
   };
 

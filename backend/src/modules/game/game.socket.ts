@@ -101,17 +101,6 @@ export function handleGameSocket(socket: Socket, io: Server) {
       const host = hostUser as unknown as User
       const guest = guestUser as unknown as User
 
-      console.log('InviteToGame - Retrieved user data - Host:', {
-        username: host?.username,
-        login: host?.login,
-        email: host?.email
-      })
-      console.log('InviteToGame - Retrieved user data - Guest:', {
-        username: guest?.username,
-        login: guest?.login,
-        email: guest?.email
-      })
-
       if (!host || !guest) {
         return socket.emit('InviteToGameResponse', {
           status: 'error',
@@ -278,20 +267,6 @@ export function handleGameSocket(socket: Socket, io: Server) {
       const host = hostUser as unknown as User
       const guest = guestUser as unknown as User
 
-      console.log('AcceptGameInvite - Retrieved user data - Host:', {
-        username: host?.username,
-        login: host?.login,
-        email: host?.email
-      })
-      console.log('AcceptGameInvite - Retrieved user data - Guest:', {
-        username: guest?.username,
-        login: guest?.login,
-        email: guest?.email
-      })
-
-      console.log('AcceptGameInvite - Complete host object:', host)
-      console.log('AcceptGameInvite - Complete guest object:', guest)
-
       if (!host || !guest) {
         return socket.emit('GameInviteResponse', {
           status: 'error',
@@ -317,22 +292,11 @@ export function handleGameSocket(socket: Socket, io: Server) {
         createdAt: Date.now()
       }
       
-      console.log('Creating game room with data:', gameRoomData)
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoomData))
-      
-      // Verify game room was created
-      const verifyGameRoom = await redis.get(`game_room:${gameId}`)
-      console.log('Game room verification:', verifyGameRoom ? 'created successfully' : 'failed to create')
-      if (verifyGameRoom) {
-        const parsedRoom = JSON.parse(verifyGameRoom)
-        console.log('Verified game room data:', parsedRoom)
-      }
 
       // Notify both players
       const hostSocketIds = await getSocketIds(host.email, 'sockets') || []
       const guestSocketIds = await getSocketIds(guest.email, 'sockets') || []
-
-      console.log('Game accepted - Host socket IDs:', hostSocketIds, 'Guest socket IDs:', guestSocketIds)
 
       const acceptedData = {
         gameId,
@@ -358,27 +322,15 @@ export function handleGameSocket(socket: Socket, io: Server) {
         login: guest.login,
       }
 
-      console.log('Emitting GameInviteAccepted to host:', {
-        ...acceptedData,
-        guestData
-      })
-
       io.to(hostSocketIds).emit('GameInviteAccepted', {
         ...acceptedData,
         guestData
-      })
-
-      console.log('Emitting GameInviteAccepted to guest:', {
-        ...acceptedData,
-        hostData
       })
 
       io.to(guestSocketIds).emit('GameInviteAccepted', {
         ...acceptedData,
         hostData
       })
-
-      console.log('GameInviteAccepted events sent successfully')
 
     } catch (error) {
       console.error('Error in AcceptGameInvite:', error)
@@ -457,10 +409,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
     try {
       const { gameId } = data
       
-      console.log('StartGame event received:', { gameId, socketId: socket.id })
-      
       if (!gameId) {
-        console.log('StartGame error: Missing game ID')
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Missing game ID.',
@@ -468,10 +417,8 @@ export function handleGameSocket(socket: Socket, io: Server) {
       }
 
       const gameRoomData = await redis.get(`game_room:${gameId}`)
-      console.log('Game room data retrieved:', gameRoomData ? 'exists' : 'not found')
       
       if (!gameRoomData) {
-        console.log('StartGame error: Game room not found')
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Game room not found.',
@@ -479,50 +426,23 @@ export function handleGameSocket(socket: Socket, io: Server) {
       }
 
       const gameRoom: GameRoomData = JSON.parse(gameRoomData)
-      console.log('Game room status:', gameRoom.status, 'Full game room data:', gameRoom)
       
       // Check if both players are ready (if ready system is enabled)
       const hostReady = await redis.get(`game_ready:${gameId}:${gameRoom.hostEmail}`)
       const guestReady = await redis.get(`game_ready:${gameId}:${gameRoom.guestEmail}`)
-      console.log('Ready status check:', {
-        hostReady: !!hostReady,
-        guestReady: !!guestReady,
-        hostEmail: gameRoom.hostEmail,
-        guestEmail: gameRoom.guestEmail
-      })
       
       // Check game room status - allow 'accepted' or 'waiting' status
       if (gameRoom.status !== 'accepted' && gameRoom.status !== 'waiting') {
-        console.log('StartGame error: Game not ready to start, status:', gameRoom.status)
-        console.log('Full game room data for debugging:', gameRoom)
-        
         // If the status is 'in_progress', the game might already be started
-        if (gameRoom.status === 'in_progress') {
-          console.log('Game is already in progress, allowing start')
-        } else {
+        if (gameRoom.status !== 'in_progress') {
           // TEMPORARY: Allow game to start even with unexpected status for debugging
-          console.log('TEMPORARY: Bypassing status check for debugging')
-          console.log('Original status was:', gameRoom.status, '- allowing start anyway')
         }
       }
 
-      // Optional: Check if both players are ready (comment out if not using ready system)
-      // if (!hostReady || !guestReady) {
-      //   console.log('StartGame error: Both players not ready yet')
-      //   return socket.emit('GameStartResponse', {
-      //     status: 'error',
-      //     message: 'Both players must be ready to start the game.',
-      //   })
-      // }
-
       // Get user email from socket data to verify authorization
       const userEmail = (socket as any).userEmail
-      console.log('StartGame - User email from socket:', userEmail)
-      console.log('StartGame - Game room host email:', gameRoom.hostEmail)
-      console.log('StartGame - Game room guest email:', gameRoom.guestEmail)
       
       if (!userEmail) {
-        console.log('StartGame error: User email not found in socket')
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'User not authenticated.',
@@ -531,26 +451,16 @@ export function handleGameSocket(socket: Socket, io: Server) {
 
       // Verify that the user trying to start the game is the host
       if (userEmail !== gameRoom.hostEmail) {
-        console.log('StartGame error: User is not the host', { 
-          userEmail, 
-          hostEmail: gameRoom.hostEmail,
-          guestEmail: gameRoom.guestEmail,
-          isHost: userEmail === gameRoom.hostEmail,
-          isGuest: userEmail === gameRoom.guestEmail
-        })
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Only the host can start the game.',
         })
       }
 
-      console.log('StartGame authorized for host:', userEmail)
-
       // Update game status
       gameRoom.status = 'in_progress'
       gameRoom.startedAt = Date.now()
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
-      console.log('Game room updated to in_progress')
 
       // Initialize game state
       const gameState: GameState = {
@@ -567,13 +477,10 @@ export function handleGameSocket(socket: Socket, io: Server) {
       }
       
       activeGames.set(gameId, gameState)
-      console.log('Game state initialized and stored')
 
       // Notify both players
       const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
       const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
-
-      console.log('Game starting - Host socket IDs:', hostSocketIds, 'Guest socket IDs:', guestSocketIds)
 
       const gameStartData = {
         gameId,
@@ -586,16 +493,12 @@ export function handleGameSocket(socket: Socket, io: Server) {
         gameState
       }
 
-      console.log('Emitting GameStarted to both players:', gameStartData)
-
       io.to([...hostSocketIds, ...guestSocketIds]).emit('GameStarted', gameStartData)
 
       socket.emit('GameStartResponse', {
         status: 'success',
         message: 'Game started successfully.',
       })
-
-      console.log('GameStartResponse sent to host')
 
     } catch (error) {
       console.error('Error in StartGame:', error)
@@ -1005,17 +908,13 @@ export function handleGameSocket(socket: Socket, io: Server) {
     try {
       const { gameId, playerEmail } = data
       
-      console.log('PlayerReady received:', { gameId, playerEmail, socketId: socket.id })
-      
       if (!gameId || !playerEmail) {
-        console.log('PlayerReady error: Missing required information')
         return
       }
 
       // Get game room
       const gameRoomData = await redis.get(`game_room:${gameId}`)
       if (!gameRoomData) {
-        console.log('PlayerReady error: Game room not found')
         return
       }
 
@@ -1023,30 +922,18 @@ export function handleGameSocket(socket: Socket, io: Server) {
       
       // Verify player is part of this game
       if (gameRoom.hostEmail !== playerEmail && gameRoom.guestEmail !== playerEmail) {
-        console.log('PlayerReady error: Player not part of this game')
         return
       }
 
       // Store ready status in Redis
       const readyKey = `game_ready:${gameId}:${playerEmail}`
       await redis.setex(readyKey, 60, 'ready') // 60 second expiration
-      
-      console.log('Player ready status stored:', readyKey)
 
       // Check if both players are ready
       const hostReady = await redis.get(`game_ready:${gameId}:${gameRoom.hostEmail}`)
       const guestReady = await redis.get(`game_ready:${gameId}:${gameRoom.guestEmail}`)
-      
-      console.log('Ready status check:', {
-        hostReady: !!hostReady,
-        guestReady: !!guestReady,
-        hostEmail: gameRoom.hostEmail,
-        guestEmail: gameRoom.guestEmail
-      })
 
       if (hostReady && guestReady) {
-        console.log('Both players ready, notifying host to start game')
-        
         // Notify both players that both are ready
         const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
         const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []

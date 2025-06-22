@@ -59,24 +59,23 @@ CREATE TABLE "Block" (
     UNIQUE (blockedBy, blockedUser)
 )
 
-CREATE TABLE Match_history (
-  'id' INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id TEXT UNIQUE NOT NULL,
-  player1_email TEXT NOT NULL,
-  player2_email TEXT NOT NULL,
-  player1_score INTEGER NOT NULL DEFAULT 0 CHECK (player1_score >= 0 AND player1_score <= 7),
-  player2_score INTEGER NOT NULL DEFAULT 0 CHECK (player2_score >= 0 AND player2_score <= 7),
-  winner TEXT NOT NULL,
-  loser TEXT NOT NULL,
-  game_duration INTEGER NOT NULL DEFAULT 0 CHECK (game_duration >= 0),
-  started_at INTEGER NOT NULL,
-  ended_at INTEGER NOT NULL CHECK (ended_at >= started_at),
-  game_mode TEXT NOT NULL DEFAULT '1v1' CHECK (game_mode IN ('1v1', 'tournament')),
-  status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('completed', 'abandoned', 'error')),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  
-  FOREIGN KEY (player1_email) REFERENCES users(email) ON DELETE CASCADE,
-  FOREIGN KEY (player2_email) REFERENCES users(email) ON DELETE CASCADE,
-  FOREIGN KEY (winner) REFERENCES users(email) ON DELETE CASCADE,
-  FOREIGN KEY (loser) REFERENCES users(email) ON DELETE CASCADE
-);
+-- CREATE TABLE "match_history" (
+--     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+--     "game_id" TEXT UNIQUE NOT NULL,
+--     "player1_email" TEXT NOT NULL,
+--     "player2_email" TEXT NOT NULL,
+--     "player1_score" INTEGER NOT NULL DEFAULT 0,
+--     "player2_score" INTEGER NOT NULL DEFAULT 0,
+--     "winner" TEXT NOT NULL,
+--     "loser" TEXT NOT NULL,
+--     "game_duration" INTEGER NOT NULL DEFAULT 0,
+--     "started_at" INTEGER NOT NULL,
+--     "ended_at" INTEGER NOT NULL,
+--     "game_mode" TEXT NOT NULL DEFAULT '1v1',
+--     "status" TEXT NOT NULL DEFAULT 'completed',
+--     "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
+--     FOREIGN KEY ("player1_email") REFERENCES "User" ("email") ON DELETE CASCADE,
+--     FOREIGN KEY ("player2_email") REFERENCES "User" ("email") ON DELETE CASCADE,
+--     FOREIGN KEY ("winner") REFERENCES "User" ("email") ON DELETE CASCADE,
+--     FOREIGN KEY ("loser") REFERENCES "User" ("email") ON DELETE CASCADE
+-- );
