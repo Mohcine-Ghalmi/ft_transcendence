@@ -209,12 +209,12 @@ export function handleGameSocket(socket: Socket, io: Server) {
             io.to(currentGuestSocketIds).emit('GameInviteTimeout', { gameId })
           }
         } catch (error) {
-          console.error('Error in invitation timeout:', error)
+          // Error handling for invitation timeout
         }
       }, 30000)
 
     } catch (error) {
-      console.error('Error in InviteToGame:', error)
+      // Error handling for InviteToGame
       socket.emit('InviteToGameResponse', {
         status: 'error',
         message: 'Failed to send invitation. Please try again.',
@@ -276,7 +276,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
 
       // Validate that users have required fields
       if (!host.email || !guest.email) {
-        console.error('Users missing required email field:', { host: host.email, guest: guest.email })
+        // Error handling for users missing required email field
         return socket.emit('GameInviteResponse', {
           status: 'error',
           message: 'Invalid user data.',
@@ -333,7 +333,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in AcceptGameInvite:', error)
+      // Error handling for AcceptGameInvite
       socket.emit('GameInviteResponse', {
         status: 'error',
         message: 'Failed to accept invitation.',
@@ -396,7 +396,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in DeclineGameInvite:', error)
+      // Error handling for DeclineGameInvite
       socket.emit('GameInviteResponse', {
         status: 'error',
         message: 'Failed to decline invitation.',
@@ -501,7 +501,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in StartGame:', error)
+      // Error handling for StartGame
       socket.emit('GameStartResponse', {
         status: 'error',
         message: 'Failed to start game.',
@@ -518,10 +518,26 @@ export function handleGameSocket(socket: Socket, io: Server) {
         return
       }
 
+      // Get current game state for comparison
+      const currentGameState = activeGames.get(gameId)
+      const currentTime = Date.now()
+      
+      // Check if this is a score update (scores changed)
+      const isScoreUpdate = currentGameState && (
+        currentGameState.scores.p1 !== gameState.scores.p1 ||
+        currentGameState.scores.p2 !== gameState.scores.p2
+      )
+      
+      // Throttle regular updates but allow immediate score updates
+      const lastUpdate = currentGameState?.lastUpdate || 0
+      if (!isScoreUpdate && currentTime - lastUpdate < 30) { // Only throttle non-score updates
+        return
+      }
+
       // Update the game state
       activeGames.set(gameId, {
         ...gameState,
-        lastUpdate: Date.now()
+        lastUpdate: currentTime
       })
 
       // Get game room to find players
@@ -540,7 +556,36 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in GameStateUpdate:', error)
+      // Error handling for GameStateUpdate
+    }
+  })
+
+  // Handle paddle position updates from guest players
+  socket.on('PaddleUpdate', async (data: { gameId: string; paddleY: number; playerType: 'p1' | 'p2' }) => {
+    try {
+      const { gameId, paddleY, playerType } = data
+      
+      if (!gameId || paddleY === undefined || !playerType) {
+        return
+      }
+
+      // Get game room to find players
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) return
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Forward paddle update to host only
+      const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
+      
+      io.to(hostSocketIds).emit('PaddleUpdate', {
+        gameId,
+        paddleY,
+        playerType
+      })
+
+    } catch (error) {
+      // Error handling for PaddleUpdate
     }
   })
 
@@ -608,7 +653,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in GameEnd:', error)
+      // Error handling for GameEnd
     }
   })
 
@@ -699,7 +744,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in LeaveGame:', error)
+      // Error handling for LeaveGame
       socket.emit('GameResponse', {
         status: 'error',
         message: 'Failed to leave game.',
@@ -756,7 +801,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in CancelGameInvite:', error)
+      // Error handling for CancelGameInvite
       socket.emit('GameInviteResponse', {
         status: 'error',
         message: 'Failed to cancel invitation.',
@@ -809,7 +854,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in CancelGame:', error)
+      // Error handling for CancelGame
       socket.emit('GameResponse', {
         status: 'error',
         message: 'Failed to cancel game.',
@@ -894,7 +939,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in CheckGameAuthorization:', error)
+      // Error handling for CheckGameAuthorization
       socket.emit('GameAuthorizationResponse', {
         status: 'error',
         message: 'Failed to check game authorization.',
@@ -945,7 +990,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       }
 
     } catch (error) {
-      console.error('Error in PlayerReady:', error)
+      // Error handling for PlayerReady
     }
   })
 
@@ -985,7 +1030,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
       })
 
     } catch (error) {
-      console.error('Error in DebugGameRoom:', error)
+      // Error handling for DebugGameRoom
       socket.emit('DebugGameRoomResponse', {
         status: 'error',
         message: 'Failed to get debug info.'
@@ -1087,7 +1132,7 @@ export function handleGameSocket(socket: Socket, io: Server) {
         }
       }
     } catch (error) {
-      console.error('Error in disconnect cleanup:', error)
+      // Error handling for disconnect cleanup
     }
   })
 }
