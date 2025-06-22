@@ -18,10 +18,14 @@ export default function GamePage() {
   const [gameAccepted, setGameAccepted] = useState(false)
   const [startGameTimeout, setStartGameTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isLeavingGame, setIsLeavingGame] = useState(false)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [authorizationChecked, setAuthorizationChecked] = useState(false)
+  const [isStartingGame, setIsStartingGame] = useState(false)
   
   // Use refs to track the latest state in event handlers
   const gameStartedRef = useRef(gameStarted)
   const isLeavingGameRef = useRef(isLeavingGame)
+  const isStartingGameRef = useRef(isStartingGame)
   
   useEffect(() => {
     gameStartedRef.current = gameStarted
@@ -30,6 +34,39 @@ export default function GamePage() {
   useEffect(() => {
     isLeavingGameRef.current = isLeavingGame
   }, [isLeavingGame])
+
+  useEffect(() => {
+    isStartingGameRef.current = isStartingGame
+  }, [isStartingGame])
+
+  // Check game authorization on mount
+  useEffect(() => {
+    if (!socket || !gameId || !user?.email) return
+
+    console.log('Checking game authorization for:', { gameId, userEmail: user.email })
+
+    // Emit a check to see if user is authorized for this game
+    socket.emit('CheckGameAuthorization', { 
+      gameId, 
+      playerEmail: user.email 
+    })
+    
+    // Set a timeout for authorization check
+    const authTimeout = setTimeout(() => {
+      if (!authorizationChecked && !isStartingGameRef.current) {
+        console.log('Authorization check timeout - redirecting to play page')
+        setIsAuthorized(false)
+        setAuthorizationChecked(true)
+        window.location.href = '/play'
+      } else if (isStartingGameRef.current) {
+        console.log('Authorization check timeout but game is being started - not redirecting')
+      }
+    }, 3000) // 3 second timeout
+
+    return () => {
+      clearTimeout(authTimeout)
+    }
+  }, [socket, gameId, user?.email, authorizationChecked])
 
   useEffect(() => {
     if (!socket || !gameId) return
@@ -42,29 +79,47 @@ export default function GamePage() {
         console.log('Setting game as accepted')
         setGameAccepted(true)
         
-        // Fix: Determine if current user is host correctly
+        // IMPROVED: Determine if current user is host correctly
         // The host receives guestData, the guest receives hostData
         let isCurrentUserHost = false;
         let opponentData = null;
         
         console.log('Checking data structure - hostData:', data.hostData, 'guestData:', data.guestData);
+        console.log('Current user email:', user?.email);
         
-        if (data.hostData && data.hostData.email) {
+        // More reliable host detection
+        if (data.hostData && data.hostData.email === user?.email) {
           // This user is the guest (received hostData)
           isCurrentUserHost = false;
           opponentData = data.hostData;
-          console.log('User is guest, opponent is host:', opponentData);
-        } else if (data.guestData && data.guestData.email) {
+          console.log('User is GUEST, opponent is host:', opponentData);
+        } else if (data.guestData && data.guestData.email === user?.email) {
           // This user is the host (received guestData)
           isCurrentUserHost = true;
           opponentData = data.guestData;
-          console.log('User is host, opponent is guest:', opponentData);
+          console.log('User is HOST, opponent is guest:', opponentData);
+        } else {
+          // Fallback: check if we have any data and determine based on what we received
+          if (data.hostData && !data.guestData) {
+            // We received hostData, so we must be the guest
+            isCurrentUserHost = false;
+            opponentData = data.hostData;
+            console.log('Fallback: User is GUEST (received hostData only)');
+          } else if (data.guestData && !data.hostData) {
+            // We received guestData, so we must be the host
+            isCurrentUserHost = true;
+            opponentData = data.guestData;
+            console.log('Fallback: User is HOST (received guestData only)');
+          } else {
+            console.error('Could not determine host/guest status - invalid data structure');
+            return;
+          }
         }
         
         setIsHost(isCurrentUserHost)
-        console.log('Is host:', isCurrentUserHost, 'user email:', user?.email, 'opponentData:', opponentData)
+        console.log('Final host determination - Is host:', isCurrentUserHost, 'user email:', user?.email, 'opponentData:', opponentData)
         
-        // Set opponent data with null checks
+        // Set opponent data with null checks and fallbacks
         if (opponentData && (opponentData.username || opponentData.login || opponentData.email)) {
           setOpponent({
             email: opponentData.email,
@@ -75,6 +130,7 @@ export default function GamePage() {
           console.log('Opponent set from GameInviteAccepted:', opponentData)
         } else {
           console.error('Invalid opponent data received:', opponentData)
+          // Don't return here, let the game continue with partial data
         }
       }
     }
@@ -85,6 +141,9 @@ export default function GamePage() {
         console.log('Setting game as started - transitioning from waiting to playing')
         setGameStarted(true)
         setGameData(data)
+        
+        // Clear the starting game flag
+        setIsStartingGame(false)
         
         // Clear the timeout since game started successfully
         if (startGameTimeout) {
@@ -103,6 +162,12 @@ export default function GamePage() {
             login: opponentEmail
           })
           console.log('Opponent set from GameStarted fallback:', opponentEmail)
+          
+          // Also set host status if not already set
+          if (!isHost && isCurrentUserHost) {
+            setIsHost(true)
+            console.log('Host status set from GameStarted event')
+          }
         }
         
         // Initialize game state from server
@@ -110,7 +175,10 @@ export default function GamePage() {
           console.log('Initializing game state from server:', data.gameState)
         }
         
-        console.log('Game state updated - gameStarted:', true, 'opponent:', opponent)
+        console.log('Game state updated - gameStarted:', true, 'opponent:', opponent, 'isHost:', isHost)
+        
+        // CRITICAL: Don't redirect here - let the component render the game
+        // The host should stay on this page and see the game component
       }
     }
 
@@ -128,6 +196,7 @@ export default function GamePage() {
         console.log('Game start was successful - waiting for GameStarted event')
         // Don't redirect or change state here - let the GameStarted event handle the transition
         // The GameStartResponse just confirms the server received the start request
+        // CRITICAL: Don't redirect the host - they should stay on this page
       } else {
         console.error('Game start failed:', data.message)
         // Show error to user but don't redirect
@@ -137,6 +206,8 @@ export default function GamePage() {
           clearTimeout(startGameTimeout)
           setStartGameTimeout(null)
         }
+        // Clear the starting game flag
+        setIsStartingGame(false)
       }
     }
 
@@ -178,6 +249,35 @@ export default function GamePage() {
       }
     }
 
+    // Handle game authorization response
+    const handleGameAuthorizationResponse = (data: any) => {
+      console.log('GameAuthorizationResponse received:', data)
+      setAuthorizationChecked(true)
+      
+      if (data.status === 'success' && data.authorized) {
+        console.log('User is authorized for this game')
+        setIsAuthorized(true)
+        
+        // Check if game is in a valid state
+        if (data.gameStatus === 'canceled' || data.gameStatus === 'completed') {
+          console.log('Game is not active (status:', data.gameStatus, ') - redirecting to play page')
+          alert('This game is no longer active.')
+          window.location.href = '/play'
+          return
+        }
+      } else {
+        console.log('User is not authorized for this game - redirecting')
+        setIsAuthorized(false)
+        // Don't redirect if we're in the process of starting the game
+        if (!isStartingGameRef.current) {
+          alert(data.message || 'You do not have access to this game.')
+          window.location.href = '/play'
+        } else {
+          console.log('Not redirecting - game is being started')
+        }
+      }
+    }
+
     socket.on('GameInviteAccepted', handleGameInviteAccepted)
     socket.on('GameStarted', handleGameStarted)
     socket.on('GameStateUpdate', handleGameStateUpdate)
@@ -185,6 +285,7 @@ export default function GamePage() {
     socket.on('PlayerLeft', handlePlayerLeft)
     socket.on('GameEnded', handleGameEnded)
     socket.on('GameCanceled', handleGameCanceled)
+    socket.on('GameAuthorizationResponse', handleGameAuthorizationResponse)
 
     return () => {
       socket.off('GameInviteAccepted', handleGameInviteAccepted)
@@ -194,6 +295,7 @@ export default function GamePage() {
       socket.off('PlayerLeft', handlePlayerLeft)
       socket.off('GameEnded', handleGameEnded)
       socket.off('GameCanceled', handleGameCanceled)
+      socket.off('GameAuthorizationResponse', handleGameAuthorizationResponse)
       
       // Clean up timeout
       if (startGameTimeout) {
@@ -268,6 +370,9 @@ export default function GamePage() {
         opponent: !!opponent
       })
       
+      // Set starting game flag to prevent redirects
+      setIsStartingGame(true)
+      
       // Test socket connection
       console.log('Socket connected:', socket.connected);
       console.log('Socket ID:', socket.id);
@@ -282,6 +387,7 @@ export default function GamePage() {
         console.log('Game start timeout - forcing game start')
         if (!isLeavingGame) {
           setGameStarted(true)
+          setIsStartingGame(false) // Clear the flag
         }
         setStartGameTimeout(null)
       }, 5000) // 5 second timeout
@@ -319,8 +425,51 @@ export default function GamePage() {
     isHost,
     gameId,
     userEmail: user?.email,
-    isLeavingGame
+    isLeavingGame,
+    isAuthorized,
+    authorizationChecked,
+    isStartingGame,
+    currentPath: window.location.pathname
   })
+
+  // Check authorization first - redirect unauthorized users
+  if (authorizationChecked && !isAuthorized) {
+    console.log('User not authorized - redirecting to play page')
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-white mb-8">Access Denied</h1>
+          <p className="text-gray-400 mb-4">You don't have permission to access this game.</p>
+          <button 
+            onClick={() => window.location.href = '/play'}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
+          >
+            Back to Play
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading while checking authorization
+  if (!authorizationChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-white mb-8">Checking Game Access...</h1>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mx-auto"></div>
+          <p className="text-gray-400 mt-4">Verifying your access to this game...</p>
+          <div className="mt-4 text-sm text-gray-500">
+            <p>Debug info:</p>
+            <p>Game ID: {gameId}</p>
+            <p>User: {user?.email}</p>
+            <p>Socket connected: {socket ? 'Yes' : 'No'}</p>
+            <p>Current path: {window.location.pathname}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // If game is started, show the game
   if (gameStarted && opponent && !isLeavingGame) {
@@ -471,6 +620,29 @@ export default function GamePage() {
               className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 rounded-lg transition-colors"
             >
               Debug: Show State
+            </button>
+            
+            {/* Debug button to check game room status */}
+            <button
+              onClick={() => {
+                console.log('Debug: Checking game room status...')
+                if (socket && gameId) {
+                  socket.emit('DebugGameRoom', { gameId })
+                  socket.once('DebugGameRoomResponse', (data) => {
+                    console.log('DebugGameRoomResponse:', data)
+                    if (data.status === 'success') {
+                      alert(`Game Room Debug:\nExists: ${data.debugInfo.gameRoomExists}\nStatus: ${data.debugInfo.gameRoomData?.status}\nHost: ${data.debugInfo.gameRoomData?.hostEmail}\nGuest: ${data.debugInfo.gameRoomData?.guestEmail}\nHost Ready: ${data.debugInfo.hostReady}\nGuest Ready: ${data.debugInfo.guestReady}`)
+                    } else {
+                      alert(`Debug Error: ${data.message}`)
+                    }
+                  })
+                } else {
+                  alert('Socket or gameId not available')
+                }
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-lg transition-colors"
+            >
+              Debug: Check Game Room
             </button>
           </div>
           

@@ -54,13 +54,18 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const [isRemoteGame, setIsRemoteGame] = useState(false);
   const [remoteGameState, setRemoteGameState] = useState<any>(null);
   const [isPlayer1, setIsPlayer1] = useState(true);
+  const [isGameHost, setIsGameHost] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const updateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastUpdateTime = useRef<number>(0);
 
   // Determine if this is a remote game
   useEffect(() => {
     setIsRemoteGame(!!gameId && !!socket);
     if (gameId && socket) {
       setIsPlayer1(isHost);
+      setIsGameHost(isHost);
+      console.log('Remote game setup - isPlayer1:', isHost, 'isHost:', isHost, 'Controls:', isHost ? 'W/S (left paddle)' : 'Arrow Keys (right paddle)');
     }
   }, [gameId, socket, isHost]);
 
@@ -70,14 +75,15 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
     const handleGameStarted = (data: any) => {
       if (data.gameId === gameId) {
-        console.log('Game started event received for player:', isPlayer1 ? 'Player 1' : 'Player 2');
+        console.log('Game started event received for player:', isPlayer1 ? 'Player 1' : 'Player 2', 'isHost:', isGameHost);
         setGameStarted(true);
         setPaused(false);
+        setIsReady(true);
         gameStartTime.current = Date.now();
         
         // Initialize game state from server if available
         if (data.gameState) {
-          console.log('Initializing game state from server data');
+          console.log('Initializing game state from server data:', data.gameState);
           ball.current.x = data.gameState.ballX;
           ball.current.y = data.gameState.ballY;
           ball.current.dx = data.gameState.ballDx;
@@ -85,16 +91,42 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           paddle1Y.current = data.gameState.paddle1Y;
           paddle2Y.current = data.gameState.paddle2Y;
           setScores(data.gameState.scores);
+        } else {
+          console.log('No game state provided, using default initialization');
+          // Initialize with default values
+          ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
+          ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
+          ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+          ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+          paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+          paddle2Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+          setScores({ p1: 0, p2: 0 });
+        }
+      }
+    };
+
+    const handlePlayerReady = (data: any) => {
+      if (data.gameId === gameId) {
+        console.log('Player ready event received:', data);
+        // Both players are ready, game can start
+        if (isGameHost) {
+          // Host starts the game after both players are ready
+          setTimeout(() => {
+            console.log('Both players ready, starting game...');
+            socket.emit('StartGame', { gameId });
+          }, 1000); // Small delay to ensure both players are ready
         }
       }
     };
 
     socket.on('GameStarted', handleGameStarted);
+    socket.on('PlayerReady', handlePlayerReady);
 
     return () => {
       socket.off('GameStarted', handleGameStarted);
+      socket.off('PlayerReady', handlePlayerReady);
     };
-  }, [isRemoteGame, socket, gameId, isPlayer1]);
+  }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost]);
 
   // Initialize game state when game starts
   useEffect(() => {
@@ -152,7 +184,15 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
     const handleGameStateUpdate = (data: any) => {
       if (data.gameId === gameId && data.gameState) {
+        console.log('GameStateUpdate received:', data.gameState);
         setRemoteGameState(data.gameState);
+        
+        // Update ball position and scores from server (host controls ball)
+        ball.current.x = data.gameState.ballX;
+        ball.current.y = data.gameState.ballY;
+        ball.current.dx = data.gameState.ballDx;
+        ball.current.dy = data.gameState.ballDy;
+        setScores(data.gameState.scores);
         
         // Only update opponent's paddle position, not your own
         if (isPlayer1) {
@@ -163,13 +203,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           paddle1Y.current = data.gameState.paddle1Y;
         }
         
-        // Update ball position and scores
-        ball.current.x = data.gameState.ballX;
-        ball.current.y = data.gameState.ballY;
-        ball.current.dx = data.gameState.ballDx;
-        ball.current.dy = data.gameState.ballDy;
-        setScores(data.gameState.scores);
-        
         if (data.gameState.gameStatus === 'finished' && data.gameState.winner) {
           handleGameEnd(data.gameState.winner);
         }
@@ -178,8 +211,28 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
     const handleGameEnded = (data: any) => {
       if (data.gameId === gameId) {
-        const winner = data.winner === user?.email ? safePlayer1 : safePlayer2;
-        handleGameEnd(winner);
+        console.log('GameEnded event received:', data);
+        setGameStarted(false);
+        setPaused(true);
+        
+        // Determine winner and loser
+        const isWinner = data.winner === user?.email;
+        const winnerName = isWinner ? safePlayer1.name : safePlayer2.name;
+        const loserName = isWinner ? safePlayer2.name : safePlayer1.name;
+        
+        console.log('Game ended - navigating to result:', {
+          isWinner,
+          winnerName,
+          loserName,
+          reason: data.reason
+        });
+        
+        // Navigate to appropriate result page
+        if (isWinner) {
+          window.location.href = `/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+        } else {
+          window.location.href = `/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+        }
       }
     };
 
@@ -346,11 +399,82 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       if (isRemoteGame) {
         // Only control your own paddle
         if (isPlayer1) {
-          if (keys.current["w"] && paddle1Y.current > 0) paddle1Y.current -= PADDLE_SPEED;
-          if (keys.current["s"] && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle1Y.current += PADDLE_SPEED;
+          // Player 1 (Host) controls left paddle (paddle1)
+          if (!mobile) {
+            if (keys.current["w"] && paddle1Y.current > 0) {
+              paddle1Y.current -= PADDLE_SPEED;
+              console.log('Host moving paddle1 up:', paddle1Y.current);
+            }
+            if (keys.current["s"] && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) {
+              paddle1Y.current += PADDLE_SPEED;
+              console.log('Host moving paddle1 down:', paddle1Y.current);
+            }
+          } else {
+            // Mobile controls for Player 1
+            if (paddle1Move === "up" && paddle1Y.current > 0) {
+              paddle1Y.current -= PADDLE_SPEED;
+              console.log('Host moving paddle1 up (mobile):', paddle1Y.current);
+            }
+            if (paddle1Move === "down" && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) {
+              paddle1Y.current += PADDLE_SPEED;
+              console.log('Host moving paddle1 down (mobile):', paddle1Y.current);
+            }
+          }
         } else {
-          if (keys.current["arrowup"] && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
-          if (keys.current["arrowdown"] && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+          // Player 2 (Guest) controls right paddle (paddle2)
+          if (!mobile) {
+            if (keys.current["arrowup"] && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
+            if (keys.current["arrowdown"] && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+          } else {
+            // Mobile controls for Player 2
+            if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
+            if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+          }
+        }
+        
+        // Only host controls ball movement
+        if (isGameHost) {
+          // Ball movement
+          ball.current.x += ball.current.dx;
+          ball.current.y += ball.current.dy;
+
+          // Wall collision
+          if (ball.current.y <= 0 || ball.current.y + BALL_SIZE >= GAME_HEIGHT) {
+            ball.current.dy *= -1;
+          }
+          
+          // Left paddle collision (Player 1 - Host)
+          if (
+            ball.current.x <= PADDLE_WIDTH &&
+            ball.current.y + BALL_SIZE >= paddle1Y.current &&
+            ball.current.y <= paddle1Y.current + PADDLE_HEIGHT
+          ) {
+            ball.current.dx = Math.abs(ball.current.dx);
+            // Increase speed after each paddle hit
+            ball.current.dx *= 1.05;
+            ball.current.dy *= 1.05;
+          }
+          
+          // Right paddle collision (Player 2 - Guest)
+          if (
+            ball.current.x + BALL_SIZE >= GAME_WIDTH - PADDLE_WIDTH &&
+            ball.current.y + BALL_SIZE >= paddle2Y.current &&
+            ball.current.y <= paddle2Y.current + PADDLE_HEIGHT
+          ) {
+            ball.current.dx = -Math.abs(ball.current.dx);
+            // Increase speed after each paddle hit
+            ball.current.dx *= 1.05;
+            ball.current.dy *= 1.05;
+          }
+          
+          // Scoring
+          if (ball.current.x < -BALL_SIZE) {
+            setScores((s) => ({ ...s, p2: s.p2 + 1 }));
+            resetBall(-1);
+          } else if (ball.current.x > GAME_WIDTH + BALL_SIZE) {
+            setScores((s) => ({ ...s, p1: s.p1 + 1 }));
+            resetBall(1);
+          }
         }
       } else {
         // Local game - both players can control
@@ -366,68 +490,68 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
           if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
         }
-      }
 
-      // Ball movement
-      ball.current.x += ball.current.dx;
-      ball.current.y += ball.current.dy;
+        // Ball movement for local game
+        ball.current.x += ball.current.dx;
+        ball.current.y += ball.current.dy;
 
-      // Wall collision
-      if (ball.current.y <= 0 || ball.current.y + BALL_SIZE >= GAME_HEIGHT) {
-        ball.current.dy *= -1;
-      }
-      // Left paddle collision
-      if (
-        ball.current.x <= PADDLE_WIDTH &&
-        ball.current.y + BALL_SIZE >= paddle1Y.current &&
-        ball.current.y <= paddle1Y.current + PADDLE_HEIGHT
-      ) {
-        ball.current.dx = Math.abs(ball.current.dx);
-        // Increase speed after each paddle hit
-        ball.current.dx *= 1.05;
-        ball.current.dy *= 1.05;
-      }
-      // Right paddle collision
-      if (
-        ball.current.x + BALL_SIZE >= GAME_WIDTH - PADDLE_WIDTH &&
-        ball.current.y + BALL_SIZE >= paddle2Y.current &&
-        ball.current.y <= paddle2Y.current + PADDLE_HEIGHT
-      ) {
-        ball.current.dx = -Math.abs(ball.current.dx);
-        // Increase speed after each paddle hit
-        ball.current.dx *= 1.05;
-        ball.current.dy *= 1.05;
-      }
-      // Scoring
-      if (ball.current.x < -BALL_SIZE) {
-        setScores((s) => ({ ...s, p2: s.p2 + 1 }));
-        resetBall(-1);
-      } else if (ball.current.x > GAME_WIDTH + BALL_SIZE) {
-        setScores((s) => ({ ...s, p1: s.p1 + 1 }));
-        resetBall(1);
+        // Wall collision
+        if (ball.current.y <= 0 || ball.current.y + BALL_SIZE >= GAME_HEIGHT) {
+          ball.current.dy *= -1;
+        }
+        // Left paddle collision
+        if (
+          ball.current.x <= PADDLE_WIDTH &&
+          ball.current.y + BALL_SIZE >= paddle1Y.current &&
+          ball.current.y <= paddle1Y.current + PADDLE_HEIGHT
+        ) {
+          ball.current.dx = Math.abs(ball.current.dx);
+          // Increase speed after each paddle hit
+          ball.current.dx *= 1.05;
+          ball.current.dy *= 1.05;
+        }
+        // Right paddle collision
+        if (
+          ball.current.x + BALL_SIZE >= GAME_WIDTH - PADDLE_WIDTH &&
+          ball.current.y + BALL_SIZE >= paddle2Y.current &&
+          ball.current.y <= paddle2Y.current + PADDLE_HEIGHT
+        ) {
+          ball.current.dx = -Math.abs(ball.current.dx);
+          // Increase speed after each paddle hit
+          ball.current.dx *= 1.05;
+          ball.current.dy *= 1.05;
+        }
+        
+        // Scoring
+        if (ball.current.x < -BALL_SIZE) {
+          setScores((s) => ({ ...s, p2: s.p2 + 1 }));
+          resetBall(-1);
+        } else if (ball.current.x > GAME_WIDTH + BALL_SIZE) {
+          setScores((s) => ({ ...s, p1: s.p1 + 1 }));
+          resetBall(1);
+        }
       }
 
       // Send game state update for remote game - only send paddle position updates
       if (isRemoteGame && socket && gameId) {
-        const gameState = {
-          gameId,
-          ballX: ball.current.x,
-          ballY: ball.current.y,
-          ballDx: ball.current.dx,
-          ballDy: ball.current.dy,
-          paddle1Y: paddle1Y.current,
-          paddle2Y: paddle2Y.current,
-          scores,
-          gameStatus: 'playing',
-          lastUpdate: Date.now()
-        };
-        
-        // Throttle updates to reduce network traffic
-        if (!updateTimeout.current) {
-          updateTimeout.current = setTimeout(() => {
-            socket.emit('GameStateUpdate', { gameId, gameState });
-            updateTimeout.current = null;
-          }, 16); // ~60fps
+        const currentTime = Date.now();
+        // Throttle updates to reduce network traffic (60fps max)
+        if (currentTime - lastUpdateTime.current >= 16) {
+          const gameState = {
+            gameId,
+            ballX: ball.current.x,
+            ballY: ball.current.y,
+            ballDx: ball.current.dx,
+            ballDy: ball.current.dy,
+            paddle1Y: paddle1Y.current,
+            paddle2Y: paddle2Y.current,
+            scores,
+            gameStatus: 'playing',
+            lastUpdate: currentTime
+          };
+          
+          socket.emit('GameStateUpdate', { gameId, gameState });
+          lastUpdateTime.current = currentTime;
         }
       }
     };
@@ -451,7 +575,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     return () => {
       cancelAnimationFrame(animation);
     };
-  }, [gameStarted, paused, mobile, canvasDims, paddle1Move, paddle2Move, isRemoteGame, socket, gameId, scores, isPlayer1]);
+  }, [gameStarted, paused, mobile, canvasDims, paddle1Move, paddle2Move, isRemoteGame, socket, gameId, scores, isPlayer1, isGameHost]);
 
   // Win condition - Updated for tournament mode with better winner object
   useEffect(() => {
@@ -467,6 +591,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         const winnerEmail = scores.p1 >= 7 ? user?.email : opponent?.email;
         const loserEmail = scores.p1 >= 7 ? opponent?.email : user?.email;
         
+        console.log('Game ended - sending to server:', {
+          winnerEmail,
+          loserEmail,
+          finalScore,
+          isHost: isGameHost
+        });
+        
         socket.emit('GameEnd', {
           gameId,
           winner: winnerEmail,
@@ -474,6 +605,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           finalScore,
           reason: 'normal_end'
         });
+        
+        // Don't navigate immediately - wait for server confirmation
+        return;
       }
       
       if (isTournamentMode) {
@@ -491,9 +625,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         }
       }
     }
-  }, [scores, safePlayer1, safePlayer2, onExit, isTournamentMode, isRemoteGame, socket, gameId, user?.email, opponent?.email]);
+  }, [scores, safePlayer1, safePlayer2, onExit, isTournamentMode, isRemoteGame, socket, gameId, user?.email, opponent?.email, isGameHost]);
 
   const handleGameEnd = (winner: any) => {
+    console.log('handleGameEnd called with winner:', winner);
+    
     if (isRemoteGame && socket && gameId) {
       // Leave the game
       socket.emit('LeaveGame', { gameId, playerEmail: user?.email });
@@ -501,6 +637,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     
     if (isTournamentMode) {
       onExit(winner);
+    } else if (isRemoteGame) {
+      // For remote games, let the GameEnded event handle navigation
+      console.log('Remote game ended, waiting for server navigation');
     } else {
       onExit();
     }
@@ -578,14 +717,27 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Start Button Overlay */}
             {!gameStarted && (
               <div className="absolute inset-0 z-20 flex items-center justify-center">
-                <button
-                  onClick={handleStart}
-                  className="flex items-center justify-center w-20 h-20 rounded-full bg-black/60 border-4 border-white/80 hover:bg-black/80 hover:scale-110 transition-all duration-150"
-                >
-                  <svg width={40} height={40} viewBox="0 0 24 24" fill="#fff">
-                    <polygon points="8,6 19,12 8,18" />
-                  </svg>
-                </button>
+                {isRemoteGame && !isReady ? (
+                  <button
+                    onClick={() => {
+                      console.log('Player ready button clicked');
+                      setIsReady(true);
+                      socket.emit('PlayerReady', { gameId, playerEmail: user?.email });
+                    }}
+                    className="flex items-center justify-center px-8 py-4 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition-colors"
+                  >
+                    Ready to Play
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStart}
+                    className="flex items-center justify-center w-20 h-20 rounded-full bg-black/60 border-4 border-white/80 hover:bg-black/80 hover:scale-110 transition-all duration-150"
+                  >
+                    <svg width={40} height={40} viewBox="0 0 24 24" fill="#fff">
+                      <polygon points="8,6 19,12 8,18" />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
 
@@ -604,39 +756,57 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Mobile Controls */}
             {mobile && isGameActive && (
               <>
-                <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p1up', true)}
-                    onTouchEnd={() => handleMobilePress('p1up', false)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p1down', true)}
-                    onTouchEnd={() => handleMobilePress('p1down', false)}
-                  >
-                    ↓
-                  </button>
-                </div>
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p2up', true)}
-                    onTouchEnd={() => handleMobilePress('p2up', false)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p2down', true)}
-                    onTouchEnd={() => handleMobilePress('p2down', false)}
-                  >
-                    ↓
-                  </button>
-                </div>
+                {/* Player 1 controls (left side) - only show if player 1 or local game */}
+                {(!isRemoteGame || isPlayer1) && (
+                  <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
+                    <button
+                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      onTouchStart={() => handleMobilePress('p1up', true)}
+                      onTouchEnd={() => handleMobilePress('p1up', false)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      onTouchStart={() => handleMobilePress('p1down', true)}
+                      onTouchEnd={() => handleMobilePress('p1down', false)}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                )}
+                
+                {/* Player 2 controls (right side) - only show if player 2 or local game */}
+                {(!isRemoteGame || !isPlayer1) && (
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
+                    <button
+                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      onTouchStart={() => handleMobilePress('p2up', true)}
+                      onTouchEnd={() => handleMobilePress('p2up', false)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      onTouchStart={() => handleMobilePress('p2down', true)}
+                      onTouchEnd={() => handleMobilePress('p2down', false)}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                )}
               </>
+            )}
+
+            {/* Debug Info - only show in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="absolute top-4 left-4 bg-black/50 text-white p-2 rounded text-xs z-30">
+                <div>Player: {isPlayer1 ? '1 (Host)' : '2 (Guest)'}</div>
+                <div>Controls: {isPlayer1 ? 'W/S' : 'Arrow Keys'}</div>
+                <div>Mobile: {mobile ? 'Yes' : 'No'}</div>
+                <div>Game Active: {isGameActive ? 'Yes' : 'No'}</div>
+                <div>Remote: {isRemoteGame ? 'Yes' : 'No'}</div>
+              </div>
             )}
           </div>
         </div>
@@ -726,6 +896,34 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
               Exit
             </button>
           </div>
+
+          {/* Debug Info - Only show in development */}
+          {process.env.NODE_ENV === 'development' && isRemoteGame && (
+            <div className="mt-4 p-3 bg-gray-800 rounded-lg text-xs text-gray-300">
+              <h4 className="font-bold mb-2">Debug Info:</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p>Is Player 1: {isPlayer1 ? 'Yes' : 'No'}</p>
+                  <p>Is Host: {isGameHost ? 'Yes' : 'No'}</p>
+                  <p>Game Started: {gameStarted ? 'Yes' : 'No'}</p>
+                  <p>Is Ready: {isReady ? 'Yes' : 'No'}</p>
+                  <p>Socket Connected: {socket?.connected ? 'Yes' : 'No'}</p>
+                </div>
+                <div>
+                  <p>Ball X: {Math.round(ball.current.x)}</p>
+                  <p>Ball Y: {Math.round(ball.current.y)}</p>
+                  <p>Paddle 1 Y: {Math.round(paddle1Y.current)}</p>
+                  <p>Paddle 2 Y: {Math.round(paddle2Y.current)}</p>
+                </div>
+              </div>
+              <div className="mt-2">
+                <p>Game ID: {gameId}</p>
+                <p>User Email: {user?.email}</p>
+                <p>Opponent Email: {opponent?.email}</p>
+                <p>Game Status: {gameStarted ? (paused ? 'Paused' : 'Playing') : 'Not Started'}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

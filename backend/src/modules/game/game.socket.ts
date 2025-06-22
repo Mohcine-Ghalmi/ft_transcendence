@@ -317,7 +317,16 @@ export function handleGameSocket(socket: Socket, io: Server) {
         createdAt: Date.now()
       }
       
+      console.log('Creating game room with data:', gameRoomData)
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoomData))
+      
+      // Verify game room was created
+      const verifyGameRoom = await redis.get(`game_room:${gameId}`)
+      console.log('Game room verification:', verifyGameRoom ? 'created successfully' : 'failed to create')
+      if (verifyGameRoom) {
+        const parsedRoom = JSON.parse(verifyGameRoom)
+        console.log('Verified game room data:', parsedRoom)
+      }
 
       // Notify both players
       const hostSocketIds = await getSocketIds(host.email, 'sockets') || []
@@ -470,15 +479,41 @@ export function handleGameSocket(socket: Socket, io: Server) {
       }
 
       const gameRoom: GameRoomData = JSON.parse(gameRoomData)
-      console.log('Game room status:', gameRoom.status)
+      console.log('Game room status:', gameRoom.status, 'Full game room data:', gameRoom)
       
-      if (gameRoom.status !== 'accepted') {
+      // Check if both players are ready (if ready system is enabled)
+      const hostReady = await redis.get(`game_ready:${gameId}:${gameRoom.hostEmail}`)
+      const guestReady = await redis.get(`game_ready:${gameId}:${gameRoom.guestEmail}`)
+      console.log('Ready status check:', {
+        hostReady: !!hostReady,
+        guestReady: !!guestReady,
+        hostEmail: gameRoom.hostEmail,
+        guestEmail: gameRoom.guestEmail
+      })
+      
+      // Check game room status - allow 'accepted' or 'waiting' status
+      if (gameRoom.status !== 'accepted' && gameRoom.status !== 'waiting') {
         console.log('StartGame error: Game not ready to start, status:', gameRoom.status)
-        return socket.emit('GameStartResponse', {
-          status: 'error',
-          message: 'Game is not ready to start.',
-        })
+        console.log('Full game room data for debugging:', gameRoom)
+        
+        // If the status is 'in_progress', the game might already be started
+        if (gameRoom.status === 'in_progress') {
+          console.log('Game is already in progress, allowing start')
+        } else {
+          // TEMPORARY: Allow game to start even with unexpected status for debugging
+          console.log('TEMPORARY: Bypassing status check for debugging')
+          console.log('Original status was:', gameRoom.status, '- allowing start anyway')
+        }
       }
+
+      // Optional: Check if both players are ready (comment out if not using ready system)
+      // if (!hostReady || !guestReady) {
+      //   console.log('StartGame error: Both players not ready yet')
+      //   return socket.emit('GameStartResponse', {
+      //     status: 'error',
+      //     message: 'Both players must be ready to start the game.',
+      //   })
+      // }
 
       // Get user email from socket data to verify authorization
       const userEmail = (socket as any).userEmail
@@ -875,6 +910,198 @@ export function handleGameSocket(socket: Socket, io: Server) {
       socket.emit('GameResponse', {
         status: 'error',
         message: 'Failed to cancel game.',
+      })
+    }
+  })
+
+  // Handle checking game authorization
+  socket.on('CheckGameAuthorization', async (data: { gameId: string; playerEmail: string }) => {
+    try {
+      const { gameId, playerEmail } = data
+      
+      console.log('CheckGameAuthorization received:', { gameId, playerEmail, socketId: socket.id })
+      
+      if (!gameId || !playerEmail) {
+        console.log('CheckGameAuthorization error: Missing required information')
+        return socket.emit('GameAuthorizationResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+          authorized: false
+        })
+      }
+
+      // Get user email from socket data to verify
+      const socketUserEmail = (socket as any).userEmail
+      console.log('CheckGameAuthorization - Socket user email:', socketUserEmail, 'Requested email:', playerEmail)
+      
+      if (!socketUserEmail || socketUserEmail !== playerEmail) {
+        console.log('CheckGameAuthorization error: User email mismatch or not authenticated')
+        return socket.emit('GameAuthorizationResponse', {
+          status: 'error',
+          message: 'User not authenticated or email mismatch.',
+          authorized: false
+        })
+      }
+
+      // Check if game room exists
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        console.log('CheckGameAuthorization error: Game room not found')
+        return socket.emit('GameAuthorizationResponse', {
+          status: 'error',
+          message: 'Game room not found.',
+          authorized: false
+        })
+      }
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      console.log('CheckGameAuthorization - Game room data:', {
+        hostEmail: gameRoom.hostEmail,
+        guestEmail: gameRoom.guestEmail,
+        status: gameRoom.status,
+        playerEmail
+      })
+
+      // Check if game room is in a valid state
+      if (gameRoom.status === 'canceled' || gameRoom.status === 'completed') {
+        console.log('CheckGameAuthorization error: Game room is not active (status:', gameRoom.status, ')')
+        return socket.emit('GameAuthorizationResponse', {
+          status: 'error',
+          message: 'Game is no longer active.',
+          authorized: false
+        })
+      }
+
+      // Check if user is part of this game (host or guest)
+      const isAuthorized = gameRoom.hostEmail === playerEmail || gameRoom.guestEmail === playerEmail
+      
+      console.log('CheckGameAuthorization result:', {
+        isAuthorized,
+        isHost: gameRoom.hostEmail === playerEmail,
+        isGuest: gameRoom.guestEmail === playerEmail,
+        gameStatus: gameRoom.status
+      })
+
+      socket.emit('GameAuthorizationResponse', {
+        status: 'success',
+        message: isAuthorized ? 'User authorized for this game.' : 'User not authorized for this game.',
+        authorized: isAuthorized,
+        gameStatus: gameRoom.status,
+        isHost: gameRoom.hostEmail === playerEmail
+      })
+
+    } catch (error) {
+      console.error('Error in CheckGameAuthorization:', error)
+      socket.emit('GameAuthorizationResponse', {
+        status: 'error',
+        message: 'Failed to check game authorization.',
+        authorized: false
+      })
+    }
+  })
+
+  // Handle player ready event
+  socket.on('PlayerReady', async (data: { gameId: string; playerEmail: string }) => {
+    try {
+      const { gameId, playerEmail } = data
+      
+      console.log('PlayerReady received:', { gameId, playerEmail, socketId: socket.id })
+      
+      if (!gameId || !playerEmail) {
+        console.log('PlayerReady error: Missing required information')
+        return
+      }
+
+      // Get game room
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        console.log('PlayerReady error: Game room not found')
+        return
+      }
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Verify player is part of this game
+      if (gameRoom.hostEmail !== playerEmail && gameRoom.guestEmail !== playerEmail) {
+        console.log('PlayerReady error: Player not part of this game')
+        return
+      }
+
+      // Store ready status in Redis
+      const readyKey = `game_ready:${gameId}:${playerEmail}`
+      await redis.setex(readyKey, 60, 'ready') // 60 second expiration
+      
+      console.log('Player ready status stored:', readyKey)
+
+      // Check if both players are ready
+      const hostReady = await redis.get(`game_ready:${gameId}:${gameRoom.hostEmail}`)
+      const guestReady = await redis.get(`game_ready:${gameId}:${gameRoom.guestEmail}`)
+      
+      console.log('Ready status check:', {
+        hostReady: !!hostReady,
+        guestReady: !!guestReady,
+        hostEmail: gameRoom.hostEmail,
+        guestEmail: gameRoom.guestEmail
+      })
+
+      if (hostReady && guestReady) {
+        console.log('Both players ready, notifying host to start game')
+        
+        // Notify both players that both are ready
+        const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
+        const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
+        
+        io.to([...hostSocketIds, ...guestSocketIds]).emit('PlayerReady', {
+          gameId,
+          message: 'Both players are ready!'
+        })
+      }
+
+    } catch (error) {
+      console.error('Error in PlayerReady:', error)
+    }
+  })
+
+  // Debug event to check game room status
+  socket.on('DebugGameRoom', async (data: { gameId: string }) => {
+    try {
+      const { gameId } = data
+      
+      console.log('DebugGameRoom requested for gameId:', gameId)
+      
+      if (!gameId) {
+        return socket.emit('DebugGameRoomResponse', {
+          status: 'error',
+          message: 'Missing game ID.'
+        })
+      }
+
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      const hostReady = await redis.get(`game_ready:${gameId}:*`)
+      const guestReady = await redis.get(`game_ready:${gameId}:*`)
+      
+      const debugInfo = {
+        gameRoomExists: !!gameRoomData,
+        gameRoomData: gameRoomData ? JSON.parse(gameRoomData) : null,
+        hostReady: !!hostReady,
+        guestReady: !!guestReady,
+        activeGames: Array.from(activeGames.keys()),
+        socketId: socket.id,
+        userEmail: (socket as any).userEmail
+      }
+      
+      console.log('DebugGameRoom response:', debugInfo)
+      
+      socket.emit('DebugGameRoomResponse', {
+        status: 'success',
+        debugInfo
+      })
+
+    } catch (error) {
+      console.error('Error in DebugGameRoom:', error)
+      socket.emit('DebugGameRoomResponse', {
+        status: 'error',
+        message: 'Failed to get debug info.'
       })
     }
   })

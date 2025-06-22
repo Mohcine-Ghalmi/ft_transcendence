@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import { PlayerCard } from './Locale';
 import { useGameInvite } from './GameInviteProvider';
+import { PingPongGame } from '../game/PingPongGame';
 import CryptoJS from 'crypto-js';
 
 const PlayerListItem = ({ player, onInvite, isInviting }) => {
@@ -313,12 +314,35 @@ export default function OnlineMatch() {
     const handleGameStartResponse = (data) => {
       console.log('GameStartResponse received in Online.tsx:', data);
       if (data.status === 'success') {
-        console.log('Game start was successful, navigating to game page');
-        // Both host and guest should navigate to the game page
-        window.location.href = `/play/game/${gameId}`;
+        console.log('Game start was successful');
+        
+        // Only the guest should navigate to the game page
+        // The host should stay on the current page and the game will start there
+        if (!isHost) {
+          console.log('Guest navigating to game page');
+          const targetPath = `/play/game/${gameId}`;
+          window.location.href = targetPath;
+        } else {
+          console.log('Host staying on current page - game will start here');
+          // The host should stay on this page and the game component will be rendered here
+          // We need to transition to the game state
+          setShowGame(true);
+        }
       } else {
         console.error('Game start failed:', data.message);
         alert(`Failed to start game: ${data.message}`);
+      }
+    };
+
+    // Handle game started event
+    const handleGameStarted = (data) => {
+      console.log('GameStarted event received in Online.tsx:', data);
+      if (data.gameId === gameId) {
+        console.log('Game started successfully');
+        // Update game state to indicate the game is now active
+        setGameState('in_game');
+        // The game component will handle the actual game start
+        // This event confirms that the server has started the game
       }
     };
 
@@ -332,6 +356,7 @@ export default function OnlineMatch() {
     socket.on('GameEnded', handleGameEnded);
     socket.on('GameCanceled', handleGameCanceled);
     socket.on('GameStartResponse', handleGameStartResponse);
+    socket.on('GameStarted', handleGameStarted);
 
     return () => {
       socket.off('InviteToGameResponse', handleInviteResponse);
@@ -343,6 +368,7 @@ export default function OnlineMatch() {
       socket.off('GameEnded', handleGameEnded);
       socket.off('GameCanceled', handleGameCanceled);
       socket.off('GameStartResponse', handleGameStartResponse);
+      socket.off('GameStarted', handleGameStarted);
     };
   }, [socket, gameId, clearInvite, user?.email, gameState, isHost, receivedInvite]);
 
@@ -663,7 +689,18 @@ export default function OnlineMatch() {
                 onCancel={handleCancelInvite}
               />
             )
-          ) : null}
+          ) : (
+            // Game Component for Host
+            <PingPongGame
+              player1={user}
+              player2={invitedPlayer}
+              onExit={handleGameEnd}
+              gameId={gameId}
+              socket={socket}
+              isHost={isHost}
+              opponent={invitedPlayer}
+            />
+          )}
         </div>
       </div>
     </div>
