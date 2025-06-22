@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { useAuthStore } from '@/(zustand)/useAuthStore'
-import { PingPongGame } from "../game/PingPongGame";
 import { PlayerCard } from './Locale';
 import { useGameInvite } from './GameInviteProvider';
 import CryptoJS from 'crypto-js';
@@ -46,7 +45,7 @@ const PlayerListItem = ({ player, onInvite, isInviting }) => {
   );
 };
 
-const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost }) => {
+const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost, gameId }) => {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
       <div className="w-full max-w-4xl text-center">
@@ -60,7 +59,7 @@ const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost 
         <div className="mb-8">
           <p className="text-xl text-green-400 mb-4">🎮 Both players are ready!</p>
           <p className="text-gray-300">
-            {isHost ? "You can start the game when ready." : "Waiting for host to start the game..."}
+            {isHost ? "You are the host. Click 'Start Game' to begin!" : "Waiting for host to start the game..."}
           </p>
         </div>
         
@@ -144,6 +143,7 @@ export default function OnlineMatch() {
   const [isInviting, setIsInviting] = useState(false);
   const [gameState, setGameState] = useState('idle'); // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
   const [isHost, setIsHost] = useState(false);
+  const [backendAvailable, setBackendAvailable] = useState(true);
   
   const { user } = useAuthStore();
   const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } = useGameInvite();
@@ -187,30 +187,73 @@ export default function OnlineMatch() {
       }
     };
 
+    // FIXED: Improved logic for handling game invite acceptance
     const handleGameInviteAccepted = (data) => {
+      console.log('GameInviteAccepted received in Online.tsx:', data);
+      
       if (data.status === 'ready_to_start') {
         setGameAccepted(true);
         setGameState('waiting_to_start');
         setIsWaitingForResponse(false);
         clearCountdown();
+
+        // CRITICAL FIX: Determine host/guest based on current game state
+        // If we were already waiting for response (host sent invite), we are the host
+        // If we received an invite through context, we are the guest
+        let isCurrentUserHost = false;
+        let opponentData = null;
         
-        const opponentData = data.guestData || data.hostData;
-        if (opponentData) {
+        // Check if this user was already in 'waiting_response' state (meaning they sent the invite = host)
+        if (gameState === 'waiting_response' || isHost) {
+          // This user is the host
+          isCurrentUserHost = true;
+          opponentData = data.guestData;
+          console.log('Current user confirmed as HOST');
+        } else if (receivedInvite) {
+          // This user received an invite, so they are the guest
+          isCurrentUserHost = false;
+          opponentData = data.hostData;
+          console.log('Current user confirmed as GUEST');
+        } else {
+          // Fallback: check email addresses to determine role
+          if (data.hostData && data.hostData.email === user?.email) {
+            isCurrentUserHost = true;
+            opponentData = data.guestData;
+            console.log('User is host (email match)');
+          } else if (data.guestData && data.guestData.email === user?.email) {
+            isCurrentUserHost = false;
+            opponentData = data.hostData;
+            console.log('User is guest (email match)');
+          } else {
+            console.error('Could not determine host/guest status');
+            resetGameState();
+            return;
+          }
+        }
+
+        // Format opponent data
+        if (opponentData && (opponentData.username || opponentData.login || opponentData.email)) {
           const formattedOpponent = {
             ...opponentData,
-            name: opponentData.username,
+            name: opponentData.username || opponentData.login || opponentData.email,
             GameStatus: 'Available'
           };
+          
           setInvitedPlayer(formattedOpponent);
+          setIsHost(isCurrentUserHost);
           setPersistentGameState(prev => ({
             ...prev,
             gameState: 'waiting_to_start',
-            opponent: formattedOpponent
+            opponent: formattedOpponent,
+            isHost: isCurrentUserHost
           }));
+
+          console.log(`Game accepted successfully. User is ${isCurrentUserHost ? 'HOST' : 'GUEST'}`);
+          
+        } else {
+          console.error('Invalid opponent data received:', opponentData);
+          resetGameState();
         }
-        
-        // Navigate to game page
-        window.location.href = `/play/game/${data.gameId}`;
       }
     };
 
@@ -237,12 +280,58 @@ export default function OnlineMatch() {
       resetGameState();
     };
 
+    // Handle when a player leaves the game
+    const handlePlayerLeft = (data) => {
+      console.log('Player left the game:', data);
+      if (data.gameId === gameId) {
+        alert('The other player left the game.');
+        resetGameState();
+        window.location.href = '/play';
+      }
+    };
+
+    // Handle game ended
+    const handleGameEnded = (data) => {
+      console.log('Game ended:', data);
+      if (data.gameId === gameId) {
+        resetGameState();
+        window.location.href = '/play';
+      }
+    };
+
+    // Handle game canceled
+    const handleGameCanceled = (data) => {
+      console.log('Game canceled:', data);
+      if (data.gameId === gameId) {
+        alert('The game was canceled.');
+        resetGameState();
+        window.location.href = '/play';
+      }
+    };
+
+    // FIXED: Handle game start response - navigate both players to game
+    const handleGameStartResponse = (data) => {
+      console.log('GameStartResponse received in Online.tsx:', data);
+      if (data.status === 'success') {
+        console.log('Game start was successful, navigating to game page');
+        // Both host and guest should navigate to the game page
+        window.location.href = `/play/game/${gameId}`;
+      } else {
+        console.error('Game start failed:', data.message);
+        alert(`Failed to start game: ${data.message}`);
+      }
+    };
+
     // Add event listeners
     socket.on('InviteToGameResponse', handleInviteResponse);
     socket.on('GameInviteAccepted', handleGameInviteAccepted);
     socket.on('GameInviteDeclined', handleGameInviteDeclined);
     socket.on('GameInviteTimeout', handleGameInviteTimeout);
     socket.on('GameInviteCanceled', handleGameInviteCanceled);
+    socket.on('PlayerLeft', handlePlayerLeft);
+    socket.on('GameEnded', handleGameEnded);
+    socket.on('GameCanceled', handleGameCanceled);
+    socket.on('GameStartResponse', handleGameStartResponse);
 
     return () => {
       socket.off('InviteToGameResponse', handleInviteResponse);
@@ -250,8 +339,43 @@ export default function OnlineMatch() {
       socket.off('GameInviteDeclined', handleGameInviteDeclined);
       socket.off('GameInviteTimeout', handleGameInviteTimeout);
       socket.off('GameInviteCanceled', handleGameInviteCanceled);
+      socket.off('PlayerLeft', handlePlayerLeft);
+      socket.off('GameEnded', handleGameEnded);
+      socket.off('GameCanceled', handleGameCanceled);
+      socket.off('GameStartResponse', handleGameStartResponse);
     };
-  }, [socket, gameId, clearInvite]);
+  }, [socket, gameId, clearInvite, user?.email, gameState, isHost, receivedInvite]);
+
+  // Handle page refresh and disconnection
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // If we're in a game, notify the server that we're leaving
+      if (socket && gameId && user?.email) {
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email 
+        });
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // If page becomes hidden (user switches tabs or minimizes), treat as leaving
+      if (document.hidden && socket && gameId && user?.email) {
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email 
+        });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [socket, gameId, user?.email]);
 
   // Handle accepting invite from context
   useEffect(() => {
@@ -262,6 +386,7 @@ export default function OnlineMatch() {
         GameStatus: 'Available'
       });
       setGameId(receivedInvite.gameId);
+      setIsHost(false); // Guest is not host
       setPersistentGameState({
         gameState: 'idle',
         gameId: receivedInvite.gameId,
@@ -277,19 +402,46 @@ export default function OnlineMatch() {
       if (!user?.email) return;
       
       try {
+        // First check if backend is running
+        console.log('Checking backend health...');
+        const healthRes = await fetch('http://localhost:5005/healthcheck');
+        if (!healthRes.ok) {
+          console.error('Backend health check failed:', healthRes.status);
+          setBackendAvailable(false);
+          setFriends([]);
+          return;
+        }
+        
+        setBackendAvailable(true);
+        console.log('Fetching friends for user:', user.email);
         const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
+        
+        if (!res.ok) {
+          console.error('Failed to fetch friends:', res.status, res.statusText);
+          setFriends([]);
+          return;
+        }
+        
         const data = await res.json();
-        const formatted = data.friends.map(f => ({
-          name: f.username,
-          avatar: f.avatar,
-          nickname: f.login,
-          GameStatus: 'Available',
-          ...f,
-        }));
-        setFriends(formatted);
+        console.log('Friends data received:', data);
+        
+        if (data.friends && Array.isArray(data.friends)) {
+          const formatted = data.friends.map(f => ({
+            name: f.username,
+            avatar: f.avatar,
+            nickname: f.login,
+            GameStatus: 'Available',
+            ...f,
+          }));
+          setFriends(formatted);
+        } else {
+          console.error('Invalid friends data structure:', data);
+          setFriends([]);
+        }
       } catch (err) {
         console.error('Error fetching friends:', err);
         setFriends([]);
+        // Don't show alert to user, just log the error
       }
     }
     fetchFriends();
@@ -361,6 +513,8 @@ export default function OnlineMatch() {
           if (prev <= 1) {
             clearInterval(countdownIntervalRef.current);
             countdownIntervalRef.current = null;
+            // If time runs out, cancel the invite automatically
+            handleCancelInvite();
             return 0;
           }
           return prev - 1;
@@ -375,20 +529,26 @@ export default function OnlineMatch() {
     }
   };
 
- const handleCancelInvite = () => {
-  if (socket && gameId && user?.email) {
-    socket.emit('CancelGameInvite', { 
-      gameId,
-      hostEmail: user.email  // Add the hostEmail
-    });
-  }
+  const handleCancelInvite = () => {
+    if (socket && gameId && user?.email) {
+      socket.emit('CancelGameInvite', { 
+        gameId,
+        hostEmail: user.email
+      });
+    }
     resetGameState();
   };
 
-
+  // FIXED: Simplified start game logic
   const handleStartGame = () => {
     if (socket && gameId) {
+      console.log('Starting game as host:', gameId);
       socket.emit('StartGame', { gameId });
+    } else {
+      console.error('Cannot start game - missing socket or gameId:', {
+        socket: !!socket,
+        gameId
+      });
     }
   };
 
@@ -412,6 +572,7 @@ export default function OnlineMatch() {
         onStartGame={handleStartGame}
         onCancelGame={handleCancelGame}
         isHost={isHost}
+        gameId={gameId}
       />
     );
   }
@@ -446,6 +607,21 @@ export default function OnlineMatch() {
                 <div className="mb-8">
                   <h2 className="text-2xl font-semibold text-white mb-6">Online Players</h2>
                   
+                  {!backendAvailable && (
+                    <div className="text-center py-8 mb-6 bg-red-900/20 border border-red-500/30 rounded-lg">
+                      <p className="text-red-400 text-lg mb-2">Backend server is not available</p>
+                      <p className="text-gray-400 text-sm mb-4">
+                        Please make sure the backend server is running on port 5005
+                      </p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     {filteredPlayers.length > 0 ? (
                       filteredPlayers.map((player, index) => (
@@ -458,9 +634,22 @@ export default function OnlineMatch() {
                       ))
                     ) : (
                       <div className="text-center py-12">
-                        <p className="text-gray-400 text-lg">
+                        <p className="text-gray-400 text-lg mb-4">
                           {searchQuery ? 'No players found matching your search.' : 'No friends online right now.'}
                         </p>
+                        {!searchQuery && backendAvailable && (
+                          <div className="space-y-2">
+                            <p className="text-gray-500 text-sm">
+                              Make sure you have friends added to your account.
+                            </p>
+                            <button
+                              onClick={() => window.location.reload()}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                            >
+                              Refresh
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

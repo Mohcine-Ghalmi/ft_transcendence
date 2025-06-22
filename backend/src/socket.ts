@@ -94,6 +94,10 @@ export async function setupSocketIO(server: FastifyInstance) {
 
         console.log('User authenticated:', { email, username: (me as any).username })
         addSocketId(email, socket.id, 'sockets')
+        
+        // Store user email on socket for later use
+        ;(socket as any).userEmail = email
+        
         const redisKeys = await redis.keys('sockets:*')
 
         const onlineUsers = redisKeys.map((key) => key.split(':')[1])

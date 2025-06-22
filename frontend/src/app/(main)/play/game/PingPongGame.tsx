@@ -54,6 +54,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const [isRemoteGame, setIsRemoteGame] = useState(false);
   const [remoteGameState, setRemoteGameState] = useState<any>(null);
   const [isPlayer1, setIsPlayer1] = useState(true);
+  const updateTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Determine if this is a remote game
   useEffect(() => {
@@ -62,6 +63,53 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       setIsPlayer1(isHost);
     }
   }, [gameId, socket, isHost]);
+
+  // Listen for game start event from server
+  useEffect(() => {
+    if (!isRemoteGame || !socket) return;
+
+    const handleGameStarted = (data: any) => {
+      if (data.gameId === gameId) {
+        console.log('Game started event received for player:', isPlayer1 ? 'Player 1' : 'Player 2');
+        setGameStarted(true);
+        setPaused(false);
+        gameStartTime.current = Date.now();
+        
+        // Initialize game state from server if available
+        if (data.gameState) {
+          console.log('Initializing game state from server data');
+          ball.current.x = data.gameState.ballX;
+          ball.current.y = data.gameState.ballY;
+          ball.current.dx = data.gameState.ballDx;
+          ball.current.dy = data.gameState.ballDy;
+          paddle1Y.current = data.gameState.paddle1Y;
+          paddle2Y.current = data.gameState.paddle2Y;
+          setScores(data.gameState.scores);
+        }
+      }
+    };
+
+    socket.on('GameStarted', handleGameStarted);
+
+    return () => {
+      socket.off('GameStarted', handleGameStarted);
+    };
+  }, [isRemoteGame, socket, gameId, isPlayer1]);
+
+  // Initialize game state when game starts
+  useEffect(() => {
+    if (isRemoteGame && gameStarted) {
+      console.log('Initializing remote game state for player:', isPlayer1 ? 'Player 1' : 'Player 2');
+      // Reset game state
+      setScores({ p1: 0, p2: 0 });
+      paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      paddle2Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
+      ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
+      ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+      ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+    }
+  }, [isRemoteGame, gameStarted, isPlayer1]);
 
   // Validate players have required properties
   const safePlayer1 = {
@@ -106,13 +154,20 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       if (data.gameId === gameId && data.gameState) {
         setRemoteGameState(data.gameState);
         
-        // Update local game state from remote
+        // Only update opponent's paddle position, not your own
+        if (isPlayer1) {
+          // Player 1 controls left paddle, so only update right paddle (opponent)
+          paddle2Y.current = data.gameState.paddle2Y;
+        } else {
+          // Player 2 controls right paddle, so only update left paddle (opponent)
+          paddle1Y.current = data.gameState.paddle1Y;
+        }
+        
+        // Update ball position and scores
         ball.current.x = data.gameState.ballX;
         ball.current.y = data.gameState.ballY;
         ball.current.dx = data.gameState.ballDx;
         ball.current.dy = data.gameState.ballDy;
-        paddle1Y.current = data.gameState.paddle1Y;
-        paddle2Y.current = data.gameState.paddle2Y;
         setScores(data.gameState.scores);
         
         if (data.gameState.gameStatus === 'finished' && data.gameState.winner) {
@@ -143,8 +198,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       socket.off('GameStateUpdate', handleGameStateUpdate);
       socket.off('GameEnded', handleGameEnded);
       socket.off('PlayerLeft', handlePlayerLeft);
+      // Clean up update timeout
+      if (updateTimeout.current) {
+        clearTimeout(updateTimeout.current);
+        updateTimeout.current = null;
+      }
     };
-  }, [isRemoteGame, socket, gameId, user?.email, safePlayer1, safePlayer2]);
+  }, [isRemoteGame, socket, gameId, user?.email, safePlayer1, safePlayer2, isPlayer1]);
 
   // Game timer
   useEffect(() => {
@@ -347,7 +407,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         resetBall(1);
       }
 
-      // Send game state update for remote game
+      // Send game state update for remote game - only send paddle position updates
       if (isRemoteGame && socket && gameId) {
         const gameState = {
           gameId,
@@ -361,7 +421,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           gameStatus: 'playing',
           lastUpdate: Date.now()
         };
-        socket.emit('GameStateUpdate', { gameId, gameState });
+        
+        // Throttle updates to reduce network traffic
+        if (!updateTimeout.current) {
+          updateTimeout.current = setTimeout(() => {
+            socket.emit('GameStateUpdate', { gameId, gameState });
+            updateTimeout.current = null;
+          }, 16); // ~60fps
+        }
       }
     };
 

@@ -101,6 +101,17 @@ export function handleGameSocket(socket: Socket, io: Server) {
       const host = hostUser as unknown as User
       const guest = guestUser as unknown as User
 
+      console.log('InviteToGame - Retrieved user data - Host:', {
+        username: host?.username,
+        login: host?.login,
+        email: host?.email
+      })
+      console.log('InviteToGame - Retrieved user data - Guest:', {
+        username: guest?.username,
+        login: guest?.login,
+        email: guest?.email
+      })
+
       if (!host || !guest) {
         return socket.emit('InviteToGameResponse', {
           status: 'error',
@@ -267,10 +278,33 @@ export function handleGameSocket(socket: Socket, io: Server) {
       const host = hostUser as unknown as User
       const guest = guestUser as unknown as User
 
+      console.log('AcceptGameInvite - Retrieved user data - Host:', {
+        username: host?.username,
+        login: host?.login,
+        email: host?.email
+      })
+      console.log('AcceptGameInvite - Retrieved user data - Guest:', {
+        username: guest?.username,
+        login: guest?.login,
+        email: guest?.email
+      })
+
+      console.log('AcceptGameInvite - Complete host object:', host)
+      console.log('AcceptGameInvite - Complete guest object:', guest)
+
       if (!host || !guest) {
         return socket.emit('GameInviteResponse', {
           status: 'error',
           message: 'User data not found.',
+        })
+      }
+
+      // Validate that users have required fields
+      if (!host.email || !guest.email) {
+        console.error('Users missing required email field:', { host: host.email, guest: guest.email })
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Invalid user data.',
         })
       }
 
@@ -297,53 +331,45 @@ export function handleGameSocket(socket: Socket, io: Server) {
         acceptedBy: guest.email
       }
 
+      const hostData = {
+        username: host.username || host.login || 'Unknown Player',
+        email: host.email,
+        avatar: host.avatar,
+        level: host.level,
+        xp: host.xp,
+        login: host.login,
+      }
+
+      const guestData = {
+        username: guest.username || guest.login || 'Unknown Player',
+        email: guest.email,
+        avatar: guest.avatar,
+        level: guest.level,
+        xp: guest.xp,
+        login: guest.login,
+      }
+
       console.log('Emitting GameInviteAccepted to host:', {
         ...acceptedData,
-        guestData: {
-          username: guest.username,
-          email: guest.email,
-          avatar: guest.avatar,
-          level: guest.level,
-          xp: guest.xp,
-          login: guest.login,
-        }
+        guestData
       })
 
       io.to(hostSocketIds).emit('GameInviteAccepted', {
         ...acceptedData,
-        guestData: {
-          username: guest.username,
-          email: guest.email,
-          avatar: guest.avatar,
-          level: guest.level,
-          xp: guest.xp,
-          login: guest.login,
-        }
+        guestData
       })
 
       console.log('Emitting GameInviteAccepted to guest:', {
         ...acceptedData,
-        hostData: {
-          username: host.username,
-          email: host.email,
-          avatar: host.avatar,
-          level: host.level,
-          xp: host.xp,
-          login: host.login,
-        }
+        hostData
       })
 
       io.to(guestSocketIds).emit('GameInviteAccepted', {
         ...acceptedData,
-        hostData: {
-          username: host.username,
-          email: host.email,
-          avatar: host.avatar,
-          level: host.level,
-          xp: host.xp,
-          login: host.login,
-        }
+        hostData
       })
+
+      console.log('GameInviteAccepted events sent successfully')
 
     } catch (error) {
       console.error('Error in AcceptGameInvite:', error)
@@ -453,6 +479,37 @@ export function handleGameSocket(socket: Socket, io: Server) {
           message: 'Game is not ready to start.',
         })
       }
+
+      // Get user email from socket data to verify authorization
+      const userEmail = (socket as any).userEmail
+      console.log('StartGame - User email from socket:', userEmail)
+      console.log('StartGame - Game room host email:', gameRoom.hostEmail)
+      console.log('StartGame - Game room guest email:', gameRoom.guestEmail)
+      
+      if (!userEmail) {
+        console.log('StartGame error: User email not found in socket')
+        return socket.emit('GameStartResponse', {
+          status: 'error',
+          message: 'User not authenticated.',
+        })
+      }
+
+      // Verify that the user trying to start the game is the host
+      if (userEmail !== gameRoom.hostEmail) {
+        console.log('StartGame error: User is not the host', { 
+          userEmail, 
+          hostEmail: gameRoom.hostEmail,
+          guestEmail: gameRoom.guestEmail,
+          isHost: userEmail === gameRoom.hostEmail,
+          isGuest: userEmail === gameRoom.guestEmail
+        })
+        return socket.emit('GameStartResponse', {
+          status: 'error',
+          message: 'Only the host can start the game.',
+        })
+      }
+
+      console.log('StartGame authorized for host:', userEmail)
 
       // Update game status
       gameRoom.status = 'in_progress'
@@ -648,18 +705,50 @@ export function handleGameSocket(socket: Socket, io: Server) {
       const currentGameState = activeGames.get(gameId)
       const finalScore = currentGameState?.scores || { p1: 0, p2: 0 }
 
-      // Emit game end event
-      socket.emit('GameEnd', {
+      // Update game status
+      gameRoom.status = 'completed'
+      gameRoom.endedAt = Date.now()
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+      // Calculate game duration
+      const gameDuration = gameRoom.startedAt && gameRoom.endedAt 
+        ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
+        : 0
+
+      // Save match history for forfeit
+      await createMatchHistory({
+        gameId,
+        player1Email: gameRoom.hostEmail,
+        player2Email: gameRoom.guestEmail,
+        player1Score: finalScore.p1,
+        player2Score: finalScore.p2,
+        winner,
+        loser,
+        gameDuration,
+        startedAt: gameRoom.startedAt || Date.now(),
+        endedAt: gameRoom.endedAt || Date.now(),
+        gameMode: '1v1',
+        status: 'forfeit'
+      })
+
+      // Remove from active games
+      activeGames.delete(gameId)
+
+      // Notify both players
+      const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
+      const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
+
+      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameEnded', {
         gameId,
         winner,
         loser,
         finalScore,
+        gameDuration,
         reason: 'player_left'
       })
 
-      // Notify other player
+      // Notify other player specifically
       const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
-      
       io.to(otherPlayerSocketIds).emit('PlayerLeft', {
         gameId,
         playerWhoLeft: playerEmail,
@@ -737,16 +826,152 @@ export function handleGameSocket(socket: Socket, io: Server) {
     }
   })
 
+  // Handle canceling accepted games
+  socket.on('CancelGame', async (data: { gameId: string }) => {
+    try {
+      const { gameId } = data
+      
+      if (!gameId) {
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Missing game ID.',
+        })
+      }
+
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Game room not found.',
+        })
+      }
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Update game status
+      gameRoom.status = 'canceled'
+      gameRoom.endedAt = Date.now()
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+      // Remove from active games if it exists
+      activeGames.delete(gameId)
+
+      // Notify both players
+      const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
+      const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
+
+      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameCanceled', {
+        gameId,
+        canceledBy: socket.id // This could be enhanced to track who canceled
+      })
+
+      socket.emit('GameResponse', {
+        status: 'success',
+        message: 'Game canceled successfully.',
+      })
+
+    } catch (error) {
+      console.error('Error in CancelGame:', error)
+      socket.emit('GameResponse', {
+        status: 'error',
+        message: 'Failed to cancel game.',
+      })
+    }
+  })
+
   // Handle game cleanup on disconnect
   socket.on('disconnect', async () => {
     try {
-      // Clean up any active games for this socket
-      // This would require storing socket-to-user mappings
       console.log('Player disconnected, cleaning up game state...')
       
-      // For now, we'll rely on the client to properly handle disconnection
-      // In a production environment, you'd want to track socket-to-user mappings
-      // and handle disconnections more gracefully
+      // Get user email from socket data (this should be set when user connects)
+      const userEmail = (socket as any).userEmail
+      
+      if (userEmail) {
+        // Find all active games for this user
+        const gameRooms = await redis.keys('game_room:*')
+        
+        for (const roomKey of gameRooms) {
+          const gameRoomData = await redis.get(roomKey)
+          if (gameRoomData) {
+            const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+            
+            // Check if this user is in this game
+            if (gameRoom.hostEmail === userEmail || gameRoom.guestEmail === userEmail) {
+              const gameId = gameRoom.gameId
+              
+              // If game is in progress, mark the other player as winner
+              if (gameRoom.status === 'in_progress') {
+                const otherPlayerEmail = gameRoom.hostEmail === userEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+                const winner = otherPlayerEmail
+                const loser = userEmail
+                
+                // Get current game state for final score
+                const currentGameState = activeGames.get(gameId)
+                const finalScore = currentGameState?.scores || { p1: 0, p2: 0 }
+                
+                // Update game status
+                gameRoom.status = 'completed'
+                gameRoom.endedAt = Date.now()
+                await redis.setex(roomKey, 3600, JSON.stringify(gameRoom))
+                
+                // Calculate game duration
+                const gameDuration = gameRoom.startedAt && gameRoom.endedAt 
+                  ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
+                  : 0
+                
+                // Save match history
+                await createMatchHistory({
+                  gameId,
+                  player1Email: gameRoom.hostEmail,
+                  player2Email: gameRoom.guestEmail,
+                  player1Score: finalScore.p1,
+                  player2Score: finalScore.p2,
+                  winner,
+                  loser,
+                  gameDuration,
+                  startedAt: gameRoom.startedAt || Date.now(),
+                  endedAt: Date.now(),
+                  gameMode: '1v1',
+                  status: 'forfeit'
+                })
+                
+                // Remove from active games
+                activeGames.delete(gameId)
+                
+                // Emit game end event
+                const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
+                io.to(otherPlayerSocketIds).emit('GameEnded', {
+                  gameId,
+                  winner,
+                  loser,
+                  finalScore,
+                  gameDuration,
+                  reason: 'player_left'
+                })
+              } else if (gameRoom.status === 'accepted') {
+                // Game was accepted but not started yet - mark as canceled
+                const otherPlayerEmail = gameRoom.hostEmail === userEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+                
+                // Update game status
+                gameRoom.status = 'canceled'
+                gameRoom.endedAt = Date.now()
+                await redis.setex(roomKey, 3600, JSON.stringify(gameRoom))
+                
+                // Notify other player
+                const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
+                io.to(otherPlayerSocketIds).emit('PlayerLeft', {
+                  gameId,
+                  playerWhoLeft: userEmail,
+                  reason: 'disconnected'
+                })
+              }
+              
+              break // Only handle one game per user
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error in disconnect cleanup:', error)
     }
