@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'http',
-        hostname: 'localhost',
+        hostname: '10.11.11.2',
       },
       {
         protocol: 'http',
@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'http',
-        hostname: 'localhost',
+        hostname: '10.11.11.2',
       },
       {
         protocol: 'https',

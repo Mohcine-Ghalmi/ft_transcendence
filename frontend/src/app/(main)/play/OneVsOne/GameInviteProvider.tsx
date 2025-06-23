@@ -24,13 +24,12 @@ export function GameInviteProvider({ children }) {
     if (!encryptionKey) return;
 
     const cryptedMail = CryptoJS.AES.encrypt(user.email, encryptionKey).toString();
-    const newSocket = io("http://localhost:5005", { query: { cryptedMail } });
+    const newSocket = io("http://10.11.11.2:5005", { query: { cryptedMail } });
     setSocket(newSocket);
 
     newSocket.on("GameInviteReceived", (data) => setReceivedInvite(data));
     newSocket.on("GameInviteCanceled", () => {
       setReceivedInvite(null);
-      console.log('Game invite was canceled, clearing invite state');
     });
 
     return () => {

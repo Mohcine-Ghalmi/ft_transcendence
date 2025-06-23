@@ -49,7 +49,7 @@ services:
   #   networks:
   #     - ft_transcendence
   #   healthcheck:
-  #     test: ['CMD', 'curl', '-f', 'http://localhost:5005/healthcheck']
+  #     test: ['CMD', 'curl', '-f', 'http://10.11.11.2:5005/healthcheck']
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3

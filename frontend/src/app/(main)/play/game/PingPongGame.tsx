@@ -128,19 +128,19 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   // Validate players have required properties
   const safePlayer1 = {
-    id: user?.id || crypto.randomUUID(),
+    id: user?.id || 1000,
     name: user?.username,
     avatar: user?.avatar || '/mghalmi.jpg',
     nickname: user?.login || 'Player 1'
   };
 
   const safePlayer2 = isRemoteGame ? {
-    id: opponent?.id || crypto.randomUUID(),
+    id: opponent?.id || 1000,
     name: opponent?.username || opponent?.name,
     avatar: opponent?.avatar || '/mghalmi.jpg',
     nickname: opponent?.login || opponent?.nickname || 'Player 2'
   } : {
-    id: player2?.id || crypto.randomUUID(),
+    id: player2?.id || 1000,
     name: player2?.username || player2?.name,
     avatar: player2?.avatar || '/mghalmi.jpg',
     nickname: player2?.login || player2?.nickname || 'Player 2'

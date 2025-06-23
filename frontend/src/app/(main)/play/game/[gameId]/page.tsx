@@ -1,12 +1,13 @@
 "use client"
 import React, { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import { useGameInvite } from '../../OneVsOne/GameInviteProvider'
 import { PingPongGame } from '../PingPongGame'
 
 export default function GamePage() {
   const params = useParams()
+  const router = useRouter()
   const gameId = params.gameId as string
   const { user } = useAuthStore()
   const { socket } = useGameInvite()
@@ -160,7 +161,7 @@ export default function GamePage() {
         // CRITICAL: Don't redirect the host - they should stay on this page
       } else {
         // Show error to user but don't redirect
-        alert(`Failed to start game: ${data.message}`)
+        // alert(`Failed to start game: ${data.message}`)
         // Clear the timeout since start failed
         if (startGameTimeout) {
           clearTimeout(startGameTimeout)
@@ -176,9 +177,9 @@ export default function GamePage() {
       if (data.gameId === gameId) {
         // Only show alert and redirect if we're not the one leaving
         if (!isLeavingGameRef.current) {
-          alert('The other player left the game.')
+          // alert('The other player left the game.')
           setIsLeavingGame(true)
-          window.location.href = '/play'
+          router.push('/play')
         }
       }
     }
@@ -189,7 +190,7 @@ export default function GamePage() {
         // Only redirect if we're not already leaving and the game was actually started
         if (!isLeavingGameRef.current && gameStartedRef.current) {
           setIsLeavingGame(true)
-          window.location.href = '/play'
+          router.push('/play')
         }
       }
     }
@@ -199,9 +200,9 @@ export default function GamePage() {
       if (data.gameId === gameId) {
         // Only show alert and redirect if we're not the one canceling
         if (!isLeavingGameRef.current) {
-          alert('The game was canceled.')
+          // alert('The game was canceled.')
           setIsLeavingGame(true)
-          window.location.href = '/play'
+          router.push('/play')
         }
       }
     }
@@ -216,7 +217,7 @@ export default function GamePage() {
         // Check if game is in a valid state
         if (data.gameStatus === 'canceled' || data.gameStatus === 'completed') {
           alert('This game is no longer active.')
-          window.location.href = '/play'
+          router.push('/play')
           return
         }
       } else {
@@ -224,7 +225,7 @@ export default function GamePage() {
         // Don't redirect if we're in the process of starting the game
         if (!isStartingGameRef.current) {
           alert(data.message || 'You do not have access to this game.')
-          window.location.href = '/play'
+          router.push('/play')
         }
       }
     }
@@ -270,11 +271,11 @@ export default function GamePage() {
         })
         
         // Show confirmation dialog if game is in progress
-        if (gameStartedRef.current) {
-          e.preventDefault()
-          e.returnValue = 'Are you sure you want to leave the game?'
-          return 'Are you sure you want to leave the game?'
-        }
+        // if (gameStartedRef.current) {
+        //   e.preventDefault()
+        //   e.returnValue = 'Are you sure you want to leave the game?'
+        //   return 'Are you sure you want to leave the game?'
+        // }
       }
     }
 
@@ -338,14 +339,14 @@ export default function GamePage() {
       setIsLeavingGame(true)
       socket.emit('LeaveGame', { gameId, playerEmail: user?.email })
     }
-    window.location.href = '/play'
+    router.push('/play')
   }
 
   const handleGameEnd = () => {
     // Set leaving flag to prevent duplicate events
     setIsLeavingGame(true)
     // Navigate back to play page
-    window.location.href = '/play'
+    router.push('/play')
   }
 
   // Check authorization first - redirect unauthorized users

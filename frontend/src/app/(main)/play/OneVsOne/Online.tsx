@@ -1,6 +1,7 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
 import { Search } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import { PlayerCard } from './Locale';
 import { useGameInvite } from './GameInviteProvider';
@@ -132,6 +133,22 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
   );
 };
 
+// Notification component
+const Notification = ({ message, type, onClose }) => {
+  if (!message) return null;
+
+  const bgColor = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600';
+  
+  return (
+    <div className={`fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-3`}>
+      <span>{message}</span>
+      <button onClick={onClose} className="text-white hover:text-gray-200">
+        ✕
+      </button>
+    </div>
+  );
+};
+
 export default function OnlineMatch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
@@ -145,11 +162,20 @@ export default function OnlineMatch() {
   const [gameState, setGameState] = useState('idle'); // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
   const [isHost, setIsHost] = useState(false);
   const [backendAvailable, setBackendAvailable] = useState(true);
+  const [notification, setNotification] = useState({ message: '', type: 'info' });
   
   const { user } = useAuthStore();
   const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } = useGameInvite();
+  const router = useRouter();
   
   const countdownIntervalRef = useRef(null);
+
+  // Helper function to show notifications
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+    // Auto-hide after 5 seconds
+    setTimeout(() => setNotification({ message: '', type: 'info' }), 5000);
+  };
 
   // Load game state from memory storage (not localStorage due to artifact restrictions)
   const [persistentGameState, setPersistentGameState] = useState({
@@ -182,7 +208,7 @@ export default function OnlineMatch() {
           isHost: true
         });
       } else if (data.status === 'error') {
-        alert(data.message);
+        showNotification(data.message, 'error');
         resetGameState();
       }
     };
@@ -198,105 +224,126 @@ export default function OnlineMatch() {
         // CRITICAL FIX: Determine host/guest based on current game state
         // If we were already waiting for response (host sent invite), we are the host
         // If we received an invite through context, we are the guest
-        let isCurrentUserHost = false;
-        let opponentData = null;
-        
-        // Check if this user was already in 'waiting_response' state (meaning they sent the invite = host)
-        if (gameState === 'waiting_response' || isHost) {
-          // This user is the host
-          isCurrentUserHost = true;
-          opponentData = data.guestData;
-        } else if (receivedInvite) {
-          // This user received an invite, so they are the guest
-          isCurrentUserHost = false;
-          opponentData = data.hostData;
+        if (gameState === 'waiting_response') {
+          // We are the host
+          setIsHost(true);
+          setInvitedPlayer({
+            ...data.guestData,
+            name: data.guestData.username,
+            GameStatus: 'Available'
+          });
         } else {
-          // Fallback: check email addresses to determine role
-          if (data.hostData && data.hostData.email === user?.email) {
-            isCurrentUserHost = true;
-            opponentData = data.guestData;
-          } else if (data.guestData && data.guestData.email === user?.email) {
-            isCurrentUserHost = false;
-            opponentData = data.hostData;
-          } else {
-            resetGameState();
-            return;
-          }
+          // We are the guest
+          setIsHost(false);
+          setInvitedPlayer({
+            ...data.hostData,
+            name: data.hostData.username,
+            GameStatus: 'Available'
+          });
         }
 
-        // Format opponent data
-        if (opponentData && (opponentData.username || opponentData.login || opponentData.email)) {
-          const formattedOpponent = {
-            ...opponentData,
-            name: opponentData.username || opponentData.login || opponentData.email,
-            GameStatus: 'Available'
-          };
-          
-          setInvitedPlayer(formattedOpponent);
-          setIsHost(isCurrentUserHost);
-          setPersistentGameState(prev => ({
-            ...prev,
-            gameState: 'waiting_to_start',
-            opponent: formattedOpponent,
-            isHost: isCurrentUserHost
-          }));
-          
-        } else {
-          resetGameState();
-        }
+        setPersistentGameState({
+          gameState: 'waiting_to_start',
+          gameId: data.gameId,
+          opponent: isHost ? data.guestData : data.hostData,
+          isHost: gameState === 'waiting_response'
+        });
       }
     };
 
     const handleGameInviteDeclined = (data) => {
-      console.log('Game invite declined:', data);
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification(`${data.guestName} declined your invitation.`, 'error');
+      
+      // Reset game state and redirect host back to play page
       resetGameState();
+      
+      router.push('/play');
     };
 
     const handleGameInviteTimeout = (data) => {
-      if (data.gameId === gameId) {
-        console.log('Game invitation expired');
-        resetGameState();
-      }
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Game invitation expired.', 'error');
+      
+      // Reset game state and redirect host back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
     };
 
     const handleGameInviteCanceled = (data) => {
-      console.log('Game invitation was canceled by host:', data);
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
       
-      // Clear any received invite from the context
-      if (clearInvite) {
-        clearInvite();
-      }
+      showNotification('Game invitation was canceled by host.', 'error');
       
+      // Reset game state and redirect host back to play page
       resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
     };
 
-    // Handle when a player leaves the game
     const handlePlayerLeft = (data) => {
-      console.log('Player left the game:', data);
-      if (data.gameId === gameId) {
-        alert('The other player left the game.');
-        resetGameState();
-        window.location.href = '/play';
-      }
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Player left the game.', 'error');
+      
+      // Reset game state and redirect back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
     };
 
-    // Handle game ended
     const handleGameEnded = (data) => {
-      console.log('Game ended:', data);
-      if (data.gameId === gameId) {
-        resetGameState();
-        window.location.href = '/play';
-      }
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Game ended.', 'info');
+      
+      // Reset game state and redirect back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
     };
 
-    // Handle game canceled
     const handleGameCanceled = (data) => {
-      console.log('Game canceled:', data);
-      if (data.gameId === gameId) {
-        alert('The game was canceled.');
-        resetGameState();
-        window.location.href = '/play';
-      }
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Game was canceled.', 'error');
+      
+      // Reset game state and redirect back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
     };
 
     // FIXED: Handle game start response - navigate both players to game
@@ -410,7 +457,7 @@ export default function OnlineMatch() {
       
       try {
         // First check if backend is running
-        const healthRes = await fetch('http://localhost:5005/healthcheck');
+        const healthRes = await fetch('http://10.11.11.2:5005/healthcheck');
         if (!healthRes.ok) {
           setBackendAvailable(false);
           setFriends([]);
@@ -418,7 +465,7 @@ export default function OnlineMatch() {
         }
         
         setBackendAvailable(true);
-        const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
+        const res = await fetch(`http://10.11.11.2:5005/api/users/friends?email=${user.email}`);
         
         if (!res.ok) {
           setFriends([]);
@@ -484,7 +531,6 @@ export default function OnlineMatch() {
     }
     
     setIsInviting(true);
-    console.log('Inviting player:', player);
     setInvitedPlayer(player);
     setIsWaitingForResponse(true);
     setGameAccepted(false);
