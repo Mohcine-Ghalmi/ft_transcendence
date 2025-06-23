@@ -1,5 +1,10 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import { createUser, getUserByEmail, listMyFriends } from './user.service'
+import {
+  createUser,
+  getUserByEmail,
+  isBlockedStatus,
+  listMyFriends,
+} from './user.service'
 import {
   CreateUserInput,
   type LoginInput,
@@ -14,6 +19,7 @@ import {
   sendEmailBodyType,
   OtpType,
 } from '../Mail/mail.schema'
+import { getIsBlocked } from './user.socket'
 
 export async function registerUserHandler(
   req: FastifyRequest<{
@@ -307,11 +313,12 @@ export async function resetPassword(
 }
 
 export async function getUser(
-  req: FastifyRequest<{ Body: loginResponse }>,
+  req: FastifyRequest<{ Body: any }>,
   rep: FastifyReply
 ) {
   try {
-    const { login } = req.body
+    const { login }: any = req.body
+    const { email }: any = req.user
 
     if (!login)
       return rep.code(400).send({ status: false, message: 'User Not Found' })
@@ -319,9 +326,10 @@ export async function getUser(
       'SELECT id, login, username, email, xp, avatar, type, level FROM User WHERE login = ?'
     )
     const user: any = await sql.get(login)
-    console.log(user)
 
-    rep.code(200).send(user)
+    const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(email, user.email)
+
+    rep.code(200).send({ ...user, isBlockedByMe, isBlockedByHim })
   } catch (err) {
     console.log(err)
   }

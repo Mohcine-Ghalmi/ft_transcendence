@@ -1,11 +1,11 @@
 'use client'
 
-import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { useChatStore } from '@/(zustand)/useChatStore'
 import { StatisticsChart } from '@/components/dashboard/StatisticsChart'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const Card = ({ number, text }) => {
   return (
@@ -17,13 +17,32 @@ const Card = ({ number, text }) => {
 }
 
 const TopProfile = ({ user }) => {
-  const { user: me } = useAuthStore()
+  const {
+    user: me,
+    isLoading: isBlocking,
+    setIsLoading: setIsBlocking,
+  } = useAuthStore()
   const { setSelectedConversationId } = useChatStore()
   const router = useRouter()
+
   const ConvoWith = () => {
     setSelectedConversationId(user.id)
     router.push('/chat')
   }
+
+  const handleBlock = () => {
+    if (!socketInstance) return
+
+    setIsBlocking(true)
+
+    const event = user.isBlockedByMe ? 'unblock:user' : 'block:user'
+
+    socketInstance.emit(event, {
+      hisEmail: user.email,
+    })
+  }
+
+  useEffect(() => {}, [user.isBlockedByMe])
 
   return (
     <div className="w-full flex items-center justify-center flex-col">
@@ -36,6 +55,7 @@ const TopProfile = ({ user }) => {
       />
       <h2 className="text-4xl">{user.username}</h2>
       <h3 className="text-gray-400 text-xl my-2">@{user.login}</h3>
+
       {me.email === user.email ? (
         <button className="mt-4 w-[300px] hover:bg-[#2b3036b6] cursor-pointer rounded-2xl py-2 bg-[#2B3036] text-white duration-300 hover:scale-99">
           Edit Profile
@@ -43,13 +63,25 @@ const TopProfile = ({ user }) => {
       ) : (
         <div className="flex gap-4">
           <button
-            onClick={() => ConvoWith()}
+            onClick={ConvoWith}
             className="mt-4 w-[300px] hover:bg-[#0f7fdbc9] cursor-pointer rounded-2xl py-2 bg-[#0F80DB] text-white duration-300 hover:scale-99"
           >
             Chat
           </button>
-          <button className="mt-4 w-[300px] hover:bg-[#2b3036b6] cursor-pointer rounded-2xl py-2 bg-[#2B3036] text-white duration-300 hover:scale-99">
-            Block
+          <button
+            onClick={handleBlock}
+            disabled={isBlocking}
+            className={`mt-4 w-[300px] rounded-2xl py-2 text-white duration-300 hover:scale-99 ${
+              isBlocking
+                ? 'bg-gray-500 cursor-not-allowed'
+                : 'bg-[#2B3036] hover:bg-[#2b3036b6] cursor-pointer'
+            }`}
+          >
+            {isBlocking
+              ? 'Processing...'
+              : user.isBlockedByMe
+              ? 'Unblock'
+              : 'Block'}
           </button>
         </div>
       )}

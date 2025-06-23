@@ -65,6 +65,7 @@ interface UserState {
   notifications: any | null
   setNotifations: () => void
   seachedUsers: any
+  setIsLoading: (data: boolean) => void
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -78,6 +79,9 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   setNotifations: () => {
     set({ notifications: null })
+  },
+  setIsLoading: (data) => {
+    set({ isLoading: data })
   },
   checkAuth: async (accessToken) => {
     set({ isLoading: true })
@@ -263,6 +267,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
 
     const onBlockResponse = (data) => {
+      get().setIsLoading(false)
       if (data.status === 'error') {
         toast.warning(data.message)
         return
