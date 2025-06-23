@@ -457,7 +457,7 @@ export default function OnlineMatch() {
       
       try {
         // First check if backend is running
-        const healthRes = await fetch('http://10.11.11.2:5005/healthcheck');
+        const healthRes = await fetch('http://localhost:5005/healthcheck');
         if (!healthRes.ok) {
           setBackendAvailable(false);
           setFriends([]);
@@ -465,7 +465,7 @@ export default function OnlineMatch() {
         }
         
         setBackendAvailable(true);
-        const res = await fetch(`http://10.11.11.2:5005/api/users/friends?email=${user.email}`);
+        const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
         
         if (!res.ok) {
           setFriends([]);

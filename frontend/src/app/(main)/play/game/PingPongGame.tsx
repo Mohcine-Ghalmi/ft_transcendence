@@ -1,6 +1,7 @@
 "use client";
 import { useAuthStore } from "@/(zustand)/useAuthStore";
 import React, { useRef, useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 const GAME_RATIO = 16 / 9;
 
@@ -58,6 +59,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const updateTimeout = useRef<NodeJS.Timeout | null>(null);
   const lastUpdateTime = useRef<number>(0);
   const animationRef = useRef<number | null>(null);
+  const router = useRouter();
 
   // Mobile paddle state
   const [paddle1Move, setPaddle1Move] = useState<'' | 'up' | 'down'>('');
@@ -599,9 +601,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         
         // Check if current user won (assuming player1 is always the user in 1v1 mode)
         if (scores.p1 >= 7) {
-          window.location.href = `/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+            router.push(`/play/result/win`);
         } else {
-          window.location.href = `/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+            router.push(`/play/result/loss`);
         }
       }
     }
@@ -682,9 +684,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       
       // Navigate to appropriate result page
       if (isWinner) {
-        window.location.href = `/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
       } else {
-        window.location.href = `/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
       }
     }
   }, [gameId, user?.email, safePlayer1.name, safePlayer2.name]);
