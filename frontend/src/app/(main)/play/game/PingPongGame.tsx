@@ -757,7 +757,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   };
 
   return (
-    <div className="flex flex-col overflow-hidden">
+    <div className="flex flex-col">
       {/* Game Container - Full Screen */}
       <div className="flex-1 flex flex-col">
         
