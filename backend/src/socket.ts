@@ -27,7 +27,7 @@ export async function getSocketIds(
 ): Promise<string[]> {
   const redisKey = `${sockets}:${userEmail}`
   const socketIds = await redis.smembers(redisKey)
-  console.log('Getting socket IDs for:', { userEmail, redisKey, socketIds })
+  // console.log('Getting socket IDs for:', { userEmail, redisKey, socketIds })
   return socketIds
 }
 
@@ -79,7 +79,7 @@ export async function setupSocketIO(server: FastifyInstance) {
         key
       ).toString(CryptoJS.enc.Utf8)
 
-      console.log('Socket connected:', { socketId: socket.id, userEmail })
+      // console.log('Socket connected:', { socketId: socket.id, userEmail })
 
       if (userEmail) {
         const email = Array.isArray(userEmail) ? userEmail[0] : userEmail

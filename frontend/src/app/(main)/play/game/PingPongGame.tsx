@@ -495,8 +495,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       // Send game state update for remote game - only host sends updates
       if (isRemoteGame && isGameHost && socket && gameId) {
         const currentTime = Date.now();
-        // Increase update frequency to 30fps (33ms) for better synchronization
-        if (currentTime - lastUpdateTime.current >= 33) {
+        // Increase update frequency to 60fps (16ms) for smoother remote gameplay
+        if (currentTime - lastUpdateTime.current >= 16) {
           const gameState = {
             gameId,
             ballX: ball.current.x,
