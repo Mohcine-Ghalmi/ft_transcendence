@@ -168,12 +168,9 @@ export const Profile = ({ user }) => {
   )
 }
 
-export default function ProfilePage() {
+export default function Page() {
   const { user } = useAuthStore()
   const { userProfile } = useSearchStore()
-  useEffect(() => {
-    console.log('userProfile : ', userProfile)
-  }, [userProfile])
   return (
     <div className="flex items-center justify-center text-white">
       <Profile user={userProfile ? userProfile : user} />

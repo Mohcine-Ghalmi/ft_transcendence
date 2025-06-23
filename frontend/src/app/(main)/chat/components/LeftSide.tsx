@@ -31,6 +31,8 @@ interface FriendConversationType {
   isOnline: boolean
   seen: boolean
   status: string
+  isBlockedByMe: boolean
+  isBlockedByHim: boolean
 }
 
 export const Conversation: React.FC<FriendConversationType> = ({
@@ -44,6 +46,8 @@ export const Conversation: React.FC<FriendConversationType> = ({
   senderId,
   seen,
   status,
+  isBlockedByMe,
+  isBlockedByHim,
 }) => {
   const { setSelectedConversationId, selectedConversationId } = useChatStore()
   const { user } = useAuthStore()
@@ -57,34 +61,36 @@ export const Conversation: React.FC<FriendConversationType> = ({
       onClick={() => {
         setSelectedConversationId(id)
       }}
-      className={`flex relative items-center justify-center border-[#293038] border-1 rounded-2xl mx-4 my-2 xl:py-0 xl:px-5 cursor-pointer transition duration-300 ease-in-out ${
-        status === 'BLOCKED'
-          ? 'bg-[#444]'
-          : `
-        ${isUnread ? 'bg-[#293038]' : ''}
-        hover:bg-[#2930386b]
-        ${isSelected ? 'bg-[#293038]' : ''}`
+      className={`flex relative items-center justify-center border-[#293038] border-1 m-2 rounded-2xl px-5 cursor-pointer transition duration-300 ease-in-out ${
+        isUnread ? 'bg-[#293038]' : ''
+      }
+      hover:bg-[#2930386b]
+      ${isSelected ? 'bg-[#293038]' : ''}
       } `}
     >
-      <div className="w-full relative items-center flex xl:py-6">
+      <div className="w-full relative items-center flex py-4 xl:py-6">
         <div className="relative">
           <Image
             src={image}
             alt={`${sender} profile`}
             width={100}
             height={100}
-            className="rounded-full w-[60px] h-[60px] object-cover"
+            className="rounded-full xl:w-[60px] xl:h-[60px] w-[40px] h-[40px] object-cover"
           />
           <div
             className={`${
               isOnline ? 'bg-green-400' : 'bg-red-400'
-            } w-[20px] h-[20px] rounded-full border-4 border-[#293038] absolute top-0 right-0`}
+            } xl:w-[15px] xl:h-[15px] w-[10px] h-[10px] rounded-full border-1 border-[#293038] absolute top-0 right-0`}
           ></div>
         </div>
         <div className="ml-4 flex-grow">
           <div className="flex justify-between items-center">
-            <h3 className="text-md font-medium">{sender}</h3>
-            {time && <span className="text-[10px] text-gray-400">{time}</span>}
+            <h3 className="xl:text-md text-xs font-medium">{sender}</h3>
+            {time && (
+              <span className="xl:text-[10px] text-[8px] text-gray-400">
+                {time}
+              </span>
+            )}
           </div>
           <div className="flex justify-between items-center mt-1">
             <div className="text-xs flex text-gray-400 break-all max-w-[70%]">
@@ -289,6 +295,9 @@ const FriendsConversations = () => {
   useEffect(() => {
     getConversations()
   }, [])
+  useEffect(() => {
+    console.log(conversations)
+  }, [conversations])
 
   return (
     <div className="bg-[#121417] rounded-xl border-[#293038]  h-full  border overflow-y-auto">
@@ -314,6 +323,8 @@ const FriendsConversations = () => {
                 ? `${friend.receiver.username}`
                 : `${friend.sender.username}`
             }
+            isBlockedByHim={friend.isBlockedByHim}
+            isBlockedByMe={friend.isBlockedByMe}
             status={friend.status}
             text={friend.message}
             imageText={friend.image}

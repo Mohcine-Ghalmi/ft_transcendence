@@ -102,6 +102,10 @@ export const ConversationContainer = () => {
     setIsInitialLoad(false)
   }
 
+  useEffect(() => {
+    scrollToBottom()
+  }, [chatHeader])
+
   const handleGettingMsgOnScroll = async (e) => {
     const container = e.currentTarget
 
