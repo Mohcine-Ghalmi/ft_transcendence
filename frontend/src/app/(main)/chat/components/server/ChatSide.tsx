@@ -43,8 +43,12 @@ export const EmptyChat = ({ text }: { text: string }) => {
 
 export const ConversationContainer = () => {
   const { user } = useAuthStore()
-  const { selectedConversation, selectedConversationId, getMessage } =
-    useChatStore()
+  const {
+    selectedConversation,
+    selectedConversationId,
+    getMessage,
+    chatHeader,
+  } = useChatStore()
 
   const offset = useRef(20)
   const containerRef: any = useRef(null)
@@ -228,6 +232,24 @@ export const ConversationContainer = () => {
         )
       ) : (
         <EmptyChat text="No messages yet. Say hi and start the conversation!" />
+      )}
+      {!chatHeader.isBlockedByHim && chatHeader.isBlockedByMe && (
+        <div className="w-full py-2 text-center">
+          <span className="text-xs text-gray-400">This User Is Blocked</span>
+        </div>
+      )}
+
+      {chatHeader.isBlockedByHim && !chatHeader.isBlockedByMe && (
+        <div className="w-full py-2 text-center">
+          <span className="text-xs text-gray-400">This User Blocked You</span>
+        </div>
+      )}
+      {chatHeader.isBlockedByHim && chatHeader.isBlockedByMe && (
+        <div className="w-full py-2 text-center">
+          <span className="text-xs text-gray-400">
+            You Both Blocked each other
+          </span>
+        </div>
       )}
     </div>
   )

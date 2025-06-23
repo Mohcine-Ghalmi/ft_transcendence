@@ -179,8 +179,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           )
           return
         }
-        if (friend.isBlockedByMe || friend.isBlockedByHim)
-          return socket.emit('failedToSendMessage', 'This User Is Blocked')
+        if (friend.isBlockedByMe || friend.isBlockedByHim) return //socket.emit('failedToSendMessage', 'This User Is Blocked')
 
         if (me.email === receiver.email) {
           socket.emit('failedToSendMessage', 'You cannot message yourself')

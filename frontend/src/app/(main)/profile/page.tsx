@@ -2,6 +2,7 @@
 
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { useChatStore } from '@/(zustand)/useChatStore'
+import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { StatisticsChart } from '@/components/dashboard/StatisticsChart'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -169,9 +170,13 @@ export const Profile = ({ user }) => {
 
 export default function ProfilePage() {
   const { user } = useAuthStore()
+  const { userProfile } = useSearchStore()
+  useEffect(() => {
+    console.log('userProfile : ', userProfile)
+  }, [userProfile])
   return (
     <div className="flex items-center justify-center text-white">
-      <Profile user={user} />
+      <Profile user={userProfile ? userProfile : user} />
     </div>
   )
 }

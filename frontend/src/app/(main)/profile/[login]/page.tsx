@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'react-toastify'
 import { axiosInstance } from '@/(zustand)/useAuthStore'
 import { Profile } from '../page'
+import { useSearchStore } from '@/(zustand)/useSearchStore'
 
 // interface User {
 //   id: number
@@ -18,7 +19,7 @@ import { Profile } from '../page'
 const ProfilePage = () => {
   const { login } = useParams()
   const router = useRouter()
-  const [user, setUser] = useState<any | null>(null)
+  const { userProfile, setUserProfile } = useSearchStore()
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -29,8 +30,9 @@ const ProfilePage = () => {
           router.push('/dashboard')
           return
         }
-        setUser(res.data)
+        setUserProfile(res.data)
       } catch (err) {
+        setUserProfile(null)
         toast.warning('Error fetching user, redirecting...')
         router.push('/dashboard')
       }
@@ -39,7 +41,11 @@ const ProfilePage = () => {
     if (login) fetchUser()
   }, [login])
 
-  if (!user) {
+  useEffect(() => {
+    setUserProfile(null)
+  }, [router])
+
+  if (!userProfile) {
     return (
       <div className="flex justify-center items-center h-screen text-white">
         Loading...
@@ -49,7 +55,7 @@ const ProfilePage = () => {
 
   return (
     <div className="flex items-center justify-center text-white">
-      <Profile user={user} />
+      <Profile user={userProfile} />
     </div>
   )
 }

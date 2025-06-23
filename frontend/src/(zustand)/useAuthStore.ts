@@ -274,20 +274,31 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
 
       const { chatHeader, setChatHeader } = useChatStore.getState()
-      if (!chatHeader) return
+      const { userProfile, setUserProfile } = useSearchStore.getState()
 
-      const update: any = { ...chatHeader }
-
-      if (data.hisEmail === chatHeader.email) {
-        if ('isBlockedByMe' in data) update.isBlockedByMe = data.isBlockedByMe
+      if (
+        data.hisEmail === chatHeader?.email ||
+        data.hisEmail === userProfile?.email
+      ) {
+        chatHeader &&
+          'isBlockedByMe' in data &&
+          setChatHeader({ ...chatHeader, isBlockedByMe: data.isBlockedByMe })
+        userProfile &&
+          'isBlockedByMe' in data &&
+          setUserProfile({ ...userProfile, isBlockedByMe: data.isBlockedByMe })
       }
 
       if (data.hisEmail === useAuthStore.getState().user.email) {
-        if ('isBlockedByHim' in data)
-          update.isBlockedByHim = data.isBlockedByHim
+        chatHeader &&
+          'isBlockedByHim' in data &&
+          setChatHeader({ ...chatHeader, isBlockedByHim: data.isBlockedByHim })
+        userProfile &&
+          'isBlockedByHim' in data &&
+          setUserProfile({
+            ...userProfile,
+            isBlockedByHim: data.isBlockedByHim,
+          })
       }
-
-      setChatHeader(update)
     }
 
     socketInstance.on('connect', onConnect)
