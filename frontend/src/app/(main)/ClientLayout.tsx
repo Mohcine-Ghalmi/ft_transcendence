@@ -45,7 +45,7 @@ export default function ClientLayout({
   return (
     <SessionProvider>
       <ToastContainer theme="dark" stacked />
-      {socketInstance && (
+      {socketInstance && socketInstance.connected && (
         <>
           <Header />
           {children}

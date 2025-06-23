@@ -12,12 +12,14 @@ import {
   useAuthStore,
 } from '@/(zustand)/useAuthStore'
 import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
+import { useRouter } from 'next/navigation'
 
 const ChatHeader = () => {
   const [more, setMore] = useState(false)
   const { onlineUsers } = useAuthStore()
   const { setSelectedConversationId, chatHeader: user } = useChatStore()
   const { user: me } = useAuthStore()
+  const router = useRouter()
 
   const closeMore = (e: any) => {
     e.target.id === 'more' && setMore(false)
@@ -110,7 +112,9 @@ const ChatHeader = () => {
             onClick={() => setMore(!more)}
           ></div>
           <div className="border border-gray-500  bg-white absolute  top-10 right-5 xl:right-10 xl:top-30  rounded-2xl animate-fade-down animate-duration-400">
-            <More src="/user.svg" text="See profile" />
+            <div onClick={() => router.push(`/profile/${user.login}`)}>
+              <More src="/user.svg" text="See profile" />
+            </div>
             <div onClick={() => handleBlock()}>
               <More
                 src="/slash-block.svg"

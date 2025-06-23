@@ -60,14 +60,10 @@ async function userRoutes(server: FastifyInstance) {
     },
     loginUserHandler
   )
-  server.get(
+  server.post(
     '/getUser',
     {
-      schema: {
-        response: {
-          200: $ref('loginResponseSchema'),
-        },
-      },
+      preHandler: [server.authenticate],
     },
     getUser
   )

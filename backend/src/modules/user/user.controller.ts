@@ -311,13 +311,17 @@ export async function getUser(
   rep: FastifyReply
 ) {
   try {
-    const user: any = req.body
-    console.log('user : ', user)
-    if (!user)
+    const { login } = req.body
+
+    if (!login)
       return rep.code(400).send({ status: false, message: 'User Not Found' })
-    const dbUser: any = await getUserByEmail(user.email)
-    console.log('dbUser : ', dbUser)
-    rep.code(200).code(dbUser)
+    const sql = db.prepare(
+      'SELECT id, login, username, email, xp, avatar, type, level FROM User WHERE login = ?'
+    )
+    const user: any = await sql.get(login)
+    console.log(user)
+
+    rep.code(200).send(user)
   } catch (err) {
     console.log(err)
   }
@@ -345,6 +349,8 @@ export async function listMyFriendsHandler(
     const friends = await listMyFriends(email)
     return rep.code(200).send({ status: true, friends })
   } catch (err) {
-    return rep.code(500).send({ status: false, message: 'Internal Server Error' })
+    return rep
+      .code(500)
+      .send({ status: false, message: 'Internal Server Error' })
   }
 }
