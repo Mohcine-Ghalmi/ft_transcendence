@@ -113,7 +113,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         const rawUsers = sql.all(
           email,
           `${searchedUser}%`,
-          `${searchedUser}%`,
+          `%${searchedUser}%`,
           `${searchedUser}%`
         )
 

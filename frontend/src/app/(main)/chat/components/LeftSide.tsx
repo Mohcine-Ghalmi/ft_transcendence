@@ -159,6 +159,7 @@ const InChatSearch = () => {
   const [search, setSearch] = useState('')
   const { user, onlineUsers } = useAuthStore()
   const { setSelectedConversationId } = useChatStore()
+  const [isSearching, setIsSearching] = useState(false)
 
   const {
     searchedChatUsers: searchedUsers,
@@ -172,8 +173,9 @@ const InChatSearch = () => {
   useEffect(() => {
     if (!socketInstance || !chatSocket) return
 
+    setIsSearching(true)
+
     const setsearchedUsersData = async (searchedUsers) => {
-      console.log('searchedUsers in socket:', searchedUsers)
       const data = await searchedUsers
       if (data.length > 0) setSearchedUsers(data)
       else setSearchedUsers([])
@@ -191,6 +193,7 @@ const InChatSearch = () => {
 
     const timeoutId = setTimeout(() => {
       searchForUsers()
+      setIsSearching(false)
     }, 300)
     if (chatSocket) {
       chatSocket.on('searchingInFriends', setsearchedUsersData)
@@ -228,39 +231,51 @@ const InChatSearch = () => {
         />
       </div>
       {/* searched users */}
-      {searchedUsers.length > 0 && (
+      {isSearching ? (
         <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
-          <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
-            {searchedUsers.map((conv) => (
-              <div
-                onClick={() => handleUserClick(conv.user.id)}
-                className="relative w-full h-[100px] flex items-center rounded-2xl border border-[#293038] bg-[#121417] px-4 cursor-pointer hover:bg-[#293038d7] duration-300"
-                key={conv.id}
-              >
-                <div className="relative">
-                  <Image
-                    src={conv.user.avatar}
-                    alt={`profile`}
-                    width={100}
-                    height={100}
-                    className="rounded-full w-[60px] h-[60px] object-cover"
-                  />
-                  <div
-                    className={`${
-                      onlineUsers.includes(conv.user.email)
-                        ? 'bg-green-400'
-                        : 'bg-red-400'
-                    } w-[20px] h-[20px] rounded-full border-4 border-[#293038] absolute top-0 right-0`}
-                  ></div>
-                </div>
-                <div className="ml-4">
-                  <h2>{conv.user.username}</h2>
-                  <h3 className="text-xs text-gray-500">@{conv.user.login}</h3>
-                </div>
-              </div>
-            ))}
+          <div className="w-[95%] items-center mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
+            <div className="w-[20px] h-[20px] xl:w-[35px] xl:h-[35px] flex items-center gap-4 justify-center">
+              Searching <i className="animate-spin fa-solid fa-spinner"></i>
+            </div>
           </div>
         </div>
+      ) : (
+        searchedUsers.length > 0 && (
+          <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
+            <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
+              {searchedUsers.map((conv) => (
+                <div
+                  onClick={() => handleUserClick(conv.user.id)}
+                  className="relative w-full h-[100px] flex items-center rounded-2xl border border-[#293038] bg-[#121417] px-4 cursor-pointer hover:bg-[#293038d7] duration-300"
+                  key={conv.id}
+                >
+                  <div className="relative">
+                    <Image
+                      src={conv.user.avatar}
+                      alt={`profile`}
+                      width={100}
+                      height={100}
+                      className="rounded-full w-[60px] h-[60px] object-cover"
+                    />
+                    <div
+                      className={`${
+                        onlineUsers.includes(conv.user.email)
+                          ? 'bg-green-400'
+                          : 'bg-red-400'
+                      } w-[20px] h-[20px] rounded-full border-4 border-[#293038] absolute top-0 right-0`}
+                    ></div>
+                  </div>
+                  <div className="ml-4">
+                    <h2>{conv.user.username}</h2>
+                    <h3 className="text-xs text-gray-500">
+                      @{conv.user.login}
+                    </h3>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
       )}
     </div>
   )

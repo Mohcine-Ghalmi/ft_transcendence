@@ -142,6 +142,7 @@ export const SearchBar = () => {
     searchedUsersGlobal: searchedUsers,
     setSearchedUsersGlobal: setSearchedUsers,
   } = useSearchStore()
+  const [isSearching, setIsSearching] = useState(false)
 
   const handleChatSearch = async () => {
     if (!search.trim()) return
@@ -150,8 +151,9 @@ export const SearchBar = () => {
   useEffect(() => {
     if (!socketInstance) return
 
+    setIsSearching(true)
+
     const setsearchedUsersData = async (searchedUsers) => {
-      console.log('searchedUsers in socket:', searchedUsers)
       const data = await searchedUsers
       if (data.length > 0) setSearchedUsers(data)
       else setSearchedUsers([])
@@ -166,6 +168,7 @@ export const SearchBar = () => {
 
     const timeoutId = setTimeout(() => {
       searchForUsers()
+      setIsSearching(false)
     }, 300)
     if (socketInstance) {
       socketInstance.on('searchResults', setsearchedUsersData)
@@ -202,14 +205,24 @@ export const SearchBar = () => {
         />
       </div>
       {/* searched users */}
-      {searchedUsers.length > 0 && (
+      {isSearching ? (
         <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
-          <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
-            {searchedUsers.map((user) => (
-              <Notification key={user.id} user={user} />
-            ))}
+          <div className="w-[95%] items-center mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
+            <div className="w-[20px] h-[20px] xl:w-[35px] xl:h-[35px] flex items-center gap-4 justify-center">
+              Searching <i className="animate-spin fa-solid fa-spinner"></i>
+            </div>
           </div>
         </div>
+      ) : (
+        searchedUsers.length > 0 && (
+          <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
+            <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
+              {searchedUsers.map((user) => (
+                <Notification key={user.id} user={user} />
+              ))}
+            </div>
+          </div>
+        )
       )}
     </div>
   )
