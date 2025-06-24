@@ -8,6 +8,7 @@ import { createUserResponseSchema } from './modules/user/user.schema'
 import CryptoJS from 'crypto-js'
 import { setupUserSocket } from './modules/user/user.socket'
 import { setupFriendsSocket } from './modules/friends/friends.socket'
+import { matchmakingQueue, removeFromQueueByEmail } from './modules/game/game.socket.types'
 
 let io: Server
 
@@ -48,6 +49,7 @@ export async function cleanupStaleSocketsOnStartup() {
     const redisChatKeys = await redis.keys('chat:*')
     const redisGameKeys = await redis.keys('game_room:*')
     
+    // Clean up all socket data on startup
     for (const key of redisSocketsKeys) {
       await redis.del(key)
     }
@@ -55,7 +57,26 @@ export async function cleanupStaleSocketsOnStartup() {
       await redis.del(key)
     }
     
+    // Clean up ALL game rooms on startup to ensure clean state
+    for (const key of redisGameKeys) {
+      await redis.del(key)
+    }
+    
+    console.log(`Cleaned up ${redisSocketsKeys.length} socket keys, ${redisChatKeys.length} chat keys, and ${redisGameKeys.length} game rooms on startup`)
+  } catch (error) {
+    console.error('Error cleaning up stale sockets and game rooms:', error)
+  }
+}
+
+// Periodic cleanup function
+async function periodicCleanup() {
+  try {
+    console.log('Running periodic cleanup...')
+    
     // Clean up stale game rooms
+    const redisGameKeys = await redis.keys('game_room:*')
+    let cleanedGameRooms = 0
+    
     for (const key of redisGameKeys) {
       try {
         const gameRoomData = await redis.get(key)
@@ -63,21 +84,34 @@ export async function cleanupStaleSocketsOnStartup() {
           const gameRoom = JSON.parse(gameRoomData)
           const gameAge = Date.now() - gameRoom.createdAt
           
-          // Remove game rooms older than 1 hour or with completed/canceled status
-          if (gameAge > 3600000 || gameRoom.status === 'completed' || gameRoom.status === 'canceled') {
+          // Remove game rooms older than 10 minutes or with completed/canceled status
+          if (gameAge > 600000 || gameRoom.status === 'completed' || gameRoom.status === 'canceled') {
             await redis.del(key)
+            cleanedGameRooms++
           }
         }
       } catch (parseError) {
         // If we can't parse the game room data, it's corrupted, so delete it
-        console.error('Error parsing game room data during cleanup:', parseError)
         await redis.del(key)
+        cleanedGameRooms++
       }
     }
     
-    console.log('Cleaned up stale sockets and game rooms on startup')
+    // Clean up stale matchmaking queue entries (older than 5 minutes)
+    const now = Date.now()
+    const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 300000) // 5 minutes
+    
+    for (const player of stalePlayers) {
+      removeFromQueueByEmail(player.email)
+      console.log(`Removed stale player ${player.email} from matchmaking queue`)
+    }
+    
+    if (cleanedGameRooms > 0 || stalePlayers.length > 0) {
+      console.log(`Periodic cleanup: Removed ${cleanedGameRooms} stale game rooms and ${stalePlayers.length} stale queue entries`)
+    }
+    
   } catch (error) {
-    console.error('Error cleaning up stale sockets and game rooms:', error)
+    console.error('Error during periodic cleanup:', error)
   }
 }
 
@@ -91,6 +125,9 @@ export async function setupSocketIO(server: FastifyInstance) {
   })
   const chatNamespace = io.of('/chat')
   setupChatNamespace(chatNamespace)
+
+  // Start periodic cleanup every 2 minutes
+  setInterval(periodicCleanup, 120000) // 2 minutes
 
   io.on('connection', async (socket) => {
     const key = process.env.ENCRYPTION_KEY || ''
@@ -155,3 +192,4 @@ export async function setupSocketIO(server: FastifyInstance) {
 }
 
 export { io }
+

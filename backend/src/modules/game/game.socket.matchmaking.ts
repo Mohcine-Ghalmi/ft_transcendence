@@ -13,8 +13,87 @@ import {
 import { createMatchHistory } from './game.service'
 import { v4 as uuidv4 } from 'uuid'
 
+// Function to clean up user's game data
+async function cleanupUserGameData(email: string): Promise<{ cleanedCount: number, details: any[] }> {
+  const redisGameRooms = await redis.keys('game_room:*')
+  let cleanedCount = 0
+  let details = []
+  
+  for (const roomKey of redisGameRooms) {
+    const gameRoomData = await redis.get(roomKey)
+    if (gameRoomData) {
+      try {
+        const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+        
+        // Check if user is in this game
+        if (gameRoom.hostEmail === email || gameRoom.guestEmail === email) {
+          const gameAge = Date.now() - gameRoom.createdAt
+          const ageMinutes = Math.round(gameAge / 1000 / 60)
+          
+          // Clean up if game is completed, canceled, or older than 5 minutes
+          if (gameRoom.status === 'completed' || 
+              gameRoom.status === 'canceled' || 
+              gameAge > 300000) { // 5 minutes in milliseconds
+            
+            await redis.del(roomKey)
+            cleanedCount++
+            details.push({
+              roomKey,
+              status: 'cleaned',
+              age: ageMinutes,
+              reason: gameRoom.status === 'completed' ? 'completed' : 
+                     gameRoom.status === 'canceled' ? 'canceled' : 'stale'
+            })
+          }
+        }
+      } catch (parseError) {
+        // If we can't parse the game room data, it's corrupted, so delete it
+        await redis.del(roomKey)
+        cleanedCount++
+        details.push({
+          roomKey,
+          status: 'corrupted',
+          error: 'Failed to parse game room data'
+        })
+      }
+    }
+  }
+  
+  return { cleanedCount, details }
+}
+
 export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server) => {
   
+  // Handle socket disconnect - clean up user data
+  socket.on('disconnect', async () => {
+    try {
+      // Find user email from socket ID in queue
+      const playerInQueue = matchmakingQueue.find(p => p.socketId === socket.id)
+      if (playerInQueue) {
+        const { email } = playerInQueue
+        console.log(`User ${email} disconnected, cleaning up game data...`)
+        
+        // Remove from queue
+        removeFromQueueByEmail(email)
+        
+        // Clean up any stale game data
+        await cleanupUserGameData(email)
+      }
+      
+      // Also clean up any stale queue entries (older than 2 minutes)
+      const now = Date.now()
+      const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000) // 2 minutes
+      
+      for (const player of stalePlayers) {
+        removeFromQueueByEmail(player.email)
+        console.log(`Removed stale player ${player.email} from matchmaking queue on disconnect`)
+      }
+      
+    } catch (error) {
+      console.error('Error cleaning up on disconnect:', error)
+    }
+  })
+
   // Join matchmaking queue
   socket.on('JoinMatchmaking', async (data: { email: string }) => {
     try {
@@ -35,10 +114,24 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         })
       }
 
-      // Check if user is already in an active game and clean up stale data
+      // Always clean up any stale game data first
+      const { cleanedCount } = await cleanupUserGameData(email)
+      if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email}`)
+      }
+
+      // Clean up any stale queue entries (older than 2 minutes)
+      const now = Date.now()
+      const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000) // 2 minutes
+      
+      for (const player of stalePlayers) {
+        removeFromQueueByEmail(player.email)
+        console.log(`Removed stale player ${player.email} from matchmaking queue when joining`)
+      }
+
+      // Check if user is still in an active game after cleanup
       const redisGameRooms = await redis.keys('game_room:*')
       let hasActiveGame = false
-      let cleanedCount = 0
       
       for (const roomKey of redisGameRooms) {
         const gameRoomData = await redis.get(roomKey)
@@ -48,21 +141,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
             
             // Check if user is in this game
             if (gameRoom.hostEmail === email || gameRoom.guestEmail === email) {
-              // If game is completed or canceled, clean it up
-              if (gameRoom.status === 'completed' || gameRoom.status === 'canceled') {
-                await redis.del(roomKey)
-                cleanedCount++
-                continue
-              }
-              
-              // If game is older than 30 minutes, consider it stale and clean it up
-              const gameAge = Date.now() - gameRoom.createdAt
-              if (gameAge > 1800000) { // 30 minutes in milliseconds
-                await redis.del(roomKey)
-                cleanedCount++
-                continue
-              }
-              
               // If game is still active, prevent joining matchmaking
               if (gameRoom.status === 'waiting' || gameRoom.status === 'accepted' || gameRoom.status === 'in_progress') {
                 hasActiveGame = true
@@ -70,9 +148,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
               }
             }
           } catch (parseError) {
-            // If we can't parse the game room data, it's corrupted, so delete it
-            await redis.del(roomKey)
-            cleanedCount++
+            // Ignore parse errors, corrupted data was already cleaned up
           }
         }
       }
@@ -124,6 +200,21 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       // Remove from queue
       removeFromQueueByEmail(email)
+
+      // Clean up any stale game data when leaving matchmaking
+      const { cleanedCount } = await cleanupUserGameData(email)
+      if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email} when leaving matchmaking`)
+      }
+
+      // Also clean up any stale queue entries (older than 2 minutes)
+      const now = Date.now()
+      const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000) // 2 minutes
+      
+      for (const player of stalePlayers) {
+        removeFromQueueByEmail(player.email)
+        console.log(`Removed stale player ${player.email} from matchmaking queue when leaving`)
+      }
 
       socket.emit('MatchmakingResponse', {
         status: 'success',
@@ -183,49 +274,11 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         })
       }
 
-      const redisGameRooms = await redis.keys('game_room:*')
-      let cleanedCount = 0
-      let details = []
-      
-      for (const roomKey of redisGameRooms) {
-        const gameRoomData = await redis.get(roomKey)
-        if (gameRoomData) {
-          try {
-            const gameRoom = JSON.parse(gameRoomData)
-            
-            // Check if user is in this game
-            if (gameRoom.hostEmail === email || gameRoom.guestEmail === email) {
-              const gameAge = Date.now() - gameRoom.createdAt
-              const ageMinutes = Math.round(gameAge / 1000 / 60)
-              
-              details.push({
-                roomKey,
-                status: gameRoom.status,
-                age: ageMinutes,
-                hostEmail: gameRoom.hostEmail,
-                guestEmail: gameRoom.guestEmail
-              })
-              
-              // Remove the game room
-              await redis.del(roomKey)
-              cleanedCount++
-            }
-          } catch (parseError) {
-            // If we can't parse the game room data, it's corrupted, so delete it
-            await redis.del(roomKey)
-            cleanedCount++
-            details.push({
-              roomKey,
-              error: 'Corrupted data',
-              rawData: gameRoomData.substring(0, 100) + '...'
-            })
-          }
-        }
-      }
+      const { cleanedCount, details } = await cleanupUserGameData(email)
 
       socket.emit('CleanupResponse', {
         status: 'success',
-        message: `Cleaned up ${cleanedCount} game room(s) for user.`,
+        message: `Cleaned up ${cleanedCount} game room(s).`,
         cleanedCount,
         details
       })
@@ -239,68 +292,62 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     }
   })
 
-  // Handle disconnect from matchmaking
-  socket.on('disconnect', () => {
-    // Remove from queue if disconnected
-    removeFromQueue(socket.id)
-  })
-}
+  // Function to try matching players in the queue
+  async function tryMatchPlayers(io: Server) {
+    if (matchmakingQueue.length < 2) {
+      return // Need at least 2 players to match
+    }
 
-// Function to try matching players in the queue
-async function tryMatchPlayers(io: Server) {
-  if (matchmakingQueue.length < 2) {
-    return // Need at least 2 players to match
-  }
+    // Get first two players from queue
+    const player1 = matchmakingQueue.shift()!
+    const player2 = matchmakingQueue.shift()!
 
-  // Get first two players from queue
-  const player1 = matchmakingQueue.shift()!
-  const player2 = matchmakingQueue.shift()!
+    if (!player1 || !player2) {
+      return
+    }
 
-  if (!player1 || !player2) {
-    return
-  }
-
-  // Create a new game room
-  const gameId = uuidv4()
-  const gameRoom: GameRoomData = {
-    gameId,
-    hostEmail: player1.email,
-    guestEmail: player2.email,
-    status: 'accepted',
-    createdAt: Date.now()
-  }
-
-  // Save game room to Redis
-  await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
-
-  // Get socket IDs for both players
-  const player1SocketIds = await getSocketIds(player1.email, 'sockets') || []
-  const player2SocketIds = await getSocketIds(player2.email, 'sockets') || []
-
-  // Notify both players about the match
-  const matchData = {
-    gameId,
-    hostEmail: player1.email,
-    guestEmail: player2.email,
-    status: 'match_found',
-    message: 'Match found! Game will start shortly.'
-  }
-
-  io.to([...player1SocketIds, ...player2SocketIds]).emit('MatchFound', matchData)
-
-  // Wait a moment for players to prepare, then start the game
-  setTimeout(async () => {
-    // Update game status to in_progress
-    gameRoom.status = 'in_progress'
-    gameRoom.startedAt = Date.now()
-    await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
-
-    // Notify players that game is starting
-    io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
+    // Create a new game room
+    const gameId = uuidv4()
+    const gameRoom: GameRoomData = {
       gameId,
       hostEmail: player1.email,
       guestEmail: player2.email,
-      startedAt: gameRoom.startedAt
-    })
-  }, 3000) // 3 second delay before starting
+      status: 'accepted',
+      createdAt: Date.now()
+    }
+
+    // Save game room to Redis
+    await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+    // Get socket IDs for both players
+    const player1SocketIds = await getSocketIds(player1.email, 'sockets') || []
+    const player2SocketIds = await getSocketIds(player2.email, 'sockets') || []
+
+    // Notify both players about the match
+    const matchData = {
+      gameId,
+      hostEmail: player1.email,
+      guestEmail: player2.email,
+      status: 'match_found',
+      message: 'Match found! Game will start shortly.'
+    }
+
+    io.to([...player1SocketIds, ...player2SocketIds]).emit('MatchFound', matchData)
+
+    // Wait a moment for players to prepare, then start the game
+    setTimeout(async () => {
+      // Update game status to in_progress
+      gameRoom.status = 'in_progress'
+      gameRoom.startedAt = Date.now()
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+      // Notify players that game is starting
+      io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
+        gameId,
+        hostEmail: player1.email,
+        guestEmail: player2.email,
+        startedAt: gameRoom.startedAt
+      })
+    }, 3000) // 3 second delay before starting
+  }
 } 

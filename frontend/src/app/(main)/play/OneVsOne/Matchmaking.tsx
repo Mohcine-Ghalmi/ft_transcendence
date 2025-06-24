@@ -140,6 +140,12 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         // Show cleanup option if user is already in a game
         if (data.message && data.message.includes('already in a game')) {
           setShowCleanupOption(true);
+          // Automatically try to clean up and retry
+          setTimeout(() => {
+            if (socket && user?.email) {
+              socket.emit('CleanupGameData', { email: user.email });
+            }
+          }, 1000);
         }
       }
     };
@@ -187,6 +193,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
           ).join('\n');
           
         }           
+        // Automatically retry joining matchmaking after cleanup
         setTimeout(() => {
           if (socket && user?.email) {
             socket.emit('JoinMatchmaking', { email: user.email });
@@ -255,7 +262,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   // If in game, show the game component
   if (matchmakingStatus === 'in_game' && gameId && opponent) {
     return (
-       <div className="h-full text-white border">
+       <div className="h-full text-white">
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
