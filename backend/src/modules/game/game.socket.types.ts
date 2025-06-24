@@ -57,10 +57,16 @@ export interface PlayerData {
   avatar: string
 }
 
+export interface MatchmakingPlayer {
+  socketId: string
+  email: string
+  joinedAt: number
+}
+
 // Global state (shared across modules)
 export const activeGames = new Map<string, GameState>()
 export const gameRooms = new Map<string, GameRoomData>()
-export const matchmakingQueue: { socketId: string; email: string }[] = []
+export const matchmakingQueue: MatchmakingPlayer[] = []
 
 // Helper functions
 export function getPlayerData(user: User): PlayerData {
@@ -74,6 +80,15 @@ export function getPlayerData(user: User): PlayerData {
 export function removeFromQueue(socketId: string) {
   const idx = matchmakingQueue.findIndex((p) => p.socketId === socketId);
   if (idx !== -1) matchmakingQueue.splice(idx, 1);
+}
+
+export function removeFromQueueByEmail(email: string) {
+  const idx = matchmakingQueue.findIndex((p) => p.email === email);
+  if (idx !== -1) matchmakingQueue.splice(idx, 1);
+}
+
+export function isInQueue(email: string): boolean {
+  return matchmakingQueue.some(p => p.email === email);
 }
 
 // Socket handler type

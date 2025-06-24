@@ -169,18 +169,28 @@ export const OnlineGames = () => {
       {/* Online 1v1 Match */}
       <GameModeCard
         title="1v1 Match"
-        description="Play a single game against a friend."
-        subDescription="Challenge a friend to a head-to-head match."
+        description="Play a single game against a friend or find a random opponent."
+        subDescription="Challenge a friend to a head-to-head match or join matchmaking to find an opponent."
         illustration={<PingPongTableIllustration />}
         buttons={
-          <Link href={`/play/OneVsOne?mode=Online`}>
-            <button 
-              onClick={() => handleGameClick('1v1 Match', 'Invite')}
-              className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Invite
-            </button>
-          </Link>
+          <>
+            <Link href={`/play/OneVsOne?mode=Online`}>
+              <button 
+                onClick={() => handleGameClick('1v1 Match', 'Invite')}
+                className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
+              >
+                Invite Friend
+              </button>
+            </Link>
+            <Link href={`/play/OneVsOne?mode=Online&matchmaking=true`}>
+              <button 
+                onClick={() => handleGameClick('1v1 Match', 'Matchmaking')}
+                className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
+              >
+                Random Matchmaking
+              </button>
+            </Link>
+          </>
         }
       />
 

@@ -1,8 +1,6 @@
 "use client"
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { io } from "socket.io-client";
-import CryptoJS from "crypto-js";
-import { useAuthStore } from "@/(zustand)/useAuthStore";
+import { useAuthStore, getSocketInstance } from "@/(zustand)/useAuthStore";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -14,28 +12,29 @@ export function useGameInvite() {
 
 export function GameInviteProvider({ children }) {
   const { user } = useAuthStore();
-  const [socket, setSocket] = useState(null);
+  const socket = getSocketInstance();
   const [receivedInvite, setReceivedInvite] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
-    if (!user?.email) return;
-    const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
-    if (!encryptionKey) return;
+    if (!socket || !user?.email) return;
 
-    const cryptedMail = CryptoJS.AES.encrypt(user.email, encryptionKey).toString();
-    const newSocket = io("http://localhost:5005", { query: { cryptedMail } });
-    setSocket(newSocket);
-
-    newSocket.on("GameInviteReceived", (data) => setReceivedInvite(data));
-    newSocket.on("GameInviteCanceled", () => {
+    // Socket event listeners for game invites
+    const handleGameInviteReceived = (data) => setReceivedInvite(data);
+    const handleGameInviteCanceled = () => {
       setReceivedInvite(null);
-    });
-
-    return () => {
-      newSocket.disconnect();
     };
-  }, [user]);
+
+    // Add event listeners
+    socket.on("GameInviteReceived", handleGameInviteReceived);
+    socket.on("GameInviteCanceled", handleGameInviteCanceled);
+
+    // Cleanup event listeners on unmount
+    return () => {
+      socket.off("GameInviteReceived", handleGameInviteReceived);
+      socket.off("GameInviteCanceled", handleGameInviteCanceled);
+    };
+  }, [socket, user?.email]);
 
   const acceptInvite = () => {
     if (receivedInvite && socket) {

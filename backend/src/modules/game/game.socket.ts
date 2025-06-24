@@ -5,6 +5,7 @@ import { handleGameAcceptance } from './game.socket.acceptance'
 import { handleGameplay } from './game.socket.gameplay'
 import { handleGameManagement } from './game.socket.management'
 import { handleGameDisconnect } from './game.socket.disconnect'
+import { handleMatchmaking } from './game.socket.matchmaking'
 
 export function handleGameSocket(socket: Socket, io: Server) {
   // Register all game socket handlers
@@ -13,4 +14,5 @@ export function handleGameSocket(socket: Socket, io: Server) {
   handleGameplay(socket, io)
   handleGameManagement(socket, io)
   handleGameDisconnect(socket, io)
+  handleMatchmaking(socket, io)
 }

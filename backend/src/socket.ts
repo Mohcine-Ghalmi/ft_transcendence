@@ -46,15 +46,38 @@ export async function cleanupStaleSocketsOnStartup() {
   try {
     const redisSocketsKeys = await redis.keys('sockets:*')
     const redisChatKeys = await redis.keys('chat:*')
+    const redisGameKeys = await redis.keys('game_room:*')
+    
     for (const key of redisSocketsKeys) {
       await redis.del(key)
     }
     for (const key of redisChatKeys) {
       await redis.del(key)
     }
-    console.log('Cleaned up stale sockets on startup')
+    
+    // Clean up stale game rooms
+    for (const key of redisGameKeys) {
+      try {
+        const gameRoomData = await redis.get(key)
+        if (gameRoomData) {
+          const gameRoom = JSON.parse(gameRoomData)
+          const gameAge = Date.now() - gameRoom.createdAt
+          
+          // Remove game rooms older than 1 hour or with completed/canceled status
+          if (gameAge > 3600000 || gameRoom.status === 'completed' || gameRoom.status === 'canceled') {
+            await redis.del(key)
+          }
+        }
+      } catch (parseError) {
+        // If we can't parse the game room data, it's corrupted, so delete it
+        console.error('Error parsing game room data during cleanup:', parseError)
+        await redis.del(key)
+      }
+    }
+    
+    console.log('Cleaned up stale sockets and game rooms on startup')
   } catch (error) {
-    console.error('Error cleaning up stale sockets:', error)
+    console.error('Error cleaning up stale sockets and game rooms:', error)
   }
 }
 
