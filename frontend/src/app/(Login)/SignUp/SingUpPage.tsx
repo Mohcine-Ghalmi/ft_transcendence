@@ -162,7 +162,6 @@ export default function Signup() {
     formData.append('file', image)
     try {
       const res = await axiosInstance.post('/api/chat/postImage', formData)
-      console.log(res.data)
       imageName.current = res.data.success ? res.data.filename : null
     } catch (err: any) {
       console.log(err)
@@ -225,7 +224,8 @@ export default function Signup() {
     }
   }
 
-  const handleBrowseClick = () => {
+  const handleBrowseClick = (e) => {
+    e.preventDefault()
     fileInputRef.current?.click()
   }
 
@@ -309,7 +309,6 @@ export default function Signup() {
       ...formData,
       avatar: imageName.current,
     })
-    alert('Account created successfully!')
   }
 
   const handle2FaVerify = (e: any) => {
@@ -325,7 +324,6 @@ export default function Signup() {
     }))
     if (!error) {
       // 2FA code is valid
-      alert('Account created successfully!')
       // You can add further logic here (e.g., redirect, API call)
     }
   }

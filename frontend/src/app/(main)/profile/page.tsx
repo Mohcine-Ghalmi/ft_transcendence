@@ -5,7 +5,7 @@ import { useChatStore } from '@/(zustand)/useChatStore'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { StatisticsChart } from '@/components/dashboard/StatisticsChart'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 const Card = ({ number, text }) => {
@@ -170,7 +170,11 @@ export const Profile = ({ user }) => {
 
 export default function Page() {
   const { user } = useAuthStore()
-  const { userProfile } = useSearchStore()
+  const { userProfile, setUserProfile } = useSearchStore()
+  const pathname = usePathname()
+  useEffect(() => {
+    setUserProfile(null)
+  }, [pathname])
   return (
     <div className="flex items-center justify-center text-white">
       <Profile user={userProfile ? userProfile : user} />

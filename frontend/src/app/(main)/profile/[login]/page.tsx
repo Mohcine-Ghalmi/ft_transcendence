@@ -41,10 +41,6 @@ const ProfilePage = () => {
     if (login) fetchUser()
   }, [login])
 
-  useEffect(() => {
-    setUserProfile(null)
-  }, [router])
-
   if (!userProfile) {
     return (
       <div className="flex justify-center items-center h-screen text-white">
