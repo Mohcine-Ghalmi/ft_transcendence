@@ -57,4 +57,25 @@ CREATE TABLE "Block" (
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (blockedBy, blockedUser)
-)
+);
+
+CREATE TABLE "match_history" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "game_id" TEXT UNIQUE NOT NULL,
+    "player1_email" TEXT NOT NULL,
+    "player2_email" TEXT NOT NULL,
+    "player1_score" INTEGER NOT NULL DEFAULT 0,
+    "player2_score" INTEGER NOT NULL DEFAULT 0,
+    "winner" TEXT NOT NULL,
+    "loser" TEXT NOT NULL,
+    "game_duration" INTEGER NOT NULL DEFAULT 0,
+    "started_at" INTEGER NOT NULL,
+    "ended_at" INTEGER NOT NULL,
+    "game_mode" TEXT NOT NULL DEFAULT '1v1',
+    "status" TEXT NOT NULL DEFAULT 'completed',
+    "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("player1_email") REFERENCES "User" ("email") ON DELETE CASCADE,
+    FOREIGN KEY ("player2_email") REFERENCES "User" ("email") ON DELETE CASCADE,
+    FOREIGN KEY ("winner") REFERENCES "User" ("email") ON DELETE CASCADE,
+    FOREIGN KEY ("loser") REFERENCES "User" ("email") ON DELETE CASCADE
+);

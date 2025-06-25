@@ -1,10 +1,11 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
 import { Search } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/(zustand)/useAuthStore'
-import { PingPongGame } from "../game/PingPongGame";
 import { PlayerCard } from './Locale';
 import { useGameInvite } from './GameInviteProvider';
+import { PingPongGame } from '../game/PingPongGame';
 import CryptoJS from 'crypto-js';
 
 const PlayerListItem = ({ player, onInvite, isInviting }) => {
@@ -46,7 +47,7 @@ const PlayerListItem = ({ player, onInvite, isInviting }) => {
   );
 };
 
-const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost }) => {
+const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost, gameId }) => {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
       <div className="w-full max-w-4xl text-center">
@@ -60,7 +61,7 @@ const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost 
         <div className="mb-8">
           <p className="text-xl text-green-400 mb-4">🎮 Both players are ready!</p>
           <p className="text-gray-300">
-            {isHost ? "You can start the game when ready." : "Waiting for host to start the game..."}
+            {isHost ? "You are the host. Click 'Start Game' to begin!" : "Waiting for host to start the game..."}
           </p>
         </div>
         
@@ -132,6 +133,22 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
   );
 };
 
+// Notification component
+const Notification = ({ message, type, onClose }) => {
+  if (!message) return null;
+
+  const bgColor = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600';
+  
+  return (
+    <div className={`fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-3`}>
+      <span>{message}</span>
+      <button onClick={onClose} className="text-white hover:text-gray-200">
+        ✕
+      </button>
+    </div>
+  );
+};
+
 export default function OnlineMatch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
@@ -144,11 +161,21 @@ export default function OnlineMatch() {
   const [isInviting, setIsInviting] = useState(false);
   const [gameState, setGameState] = useState('idle'); // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
   const [isHost, setIsHost] = useState(false);
+  const [backendAvailable, setBackendAvailable] = useState(true);
+  const [notification, setNotification] = useState({ message: '', type: 'info' });
   
   const { user } = useAuthStore();
   const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } = useGameInvite();
+  const router = useRouter();
   
   const countdownIntervalRef = useRef(null);
+
+  // Helper function to show notifications
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+    // Auto-hide after 5 seconds
+    setTimeout(() => setNotification({ message: '', type: 'info' }), 5000);
+  };
 
   // Load game state from memory storage (not localStorage due to artifact restrictions)
   const [persistentGameState, setPersistentGameState] = useState({
@@ -180,61 +207,171 @@ export default function OnlineMatch() {
           opponent: data.guestData,
           isHost: true
         });
-        console.log('Invite sent successfully');
       } else if (data.status === 'error') {
-        alert(data.message);
+        showNotification(data.message, 'error');
         resetGameState();
       }
     };
 
+    // FIXED: Improved logic for handling game invite acceptance
     const handleGameInviteAccepted = (data) => {
       if (data.status === 'ready_to_start') {
         setGameAccepted(true);
         setGameState('waiting_to_start');
         setIsWaitingForResponse(false);
         clearCountdown();
-        
-        const opponentData = data.guestData || data.hostData;
-        if (opponentData) {
-          const formattedOpponent = {
-            ...opponentData,
-            name: opponentData.username,
+
+        // CRITICAL FIX: Determine host/guest based on current game state
+        // If we were already waiting for response (host sent invite), we are the host
+        // If we received an invite through context, we are the guest
+        if (gameState === 'waiting_response') {
+          // We are the host
+          setIsHost(true);
+          setInvitedPlayer({
+            ...data.guestData,
+            name: data.guestData.username,
             GameStatus: 'Available'
-          };
-          setInvitedPlayer(formattedOpponent);
-          setPersistentGameState(prev => ({
-            ...prev,
-            gameState: 'waiting_to_start',
-            opponent: formattedOpponent
-          }));
+          });
+        } else {
+          // We are the guest
+          setIsHost(false);
+          setInvitedPlayer({
+            ...data.hostData,
+            name: data.hostData.username,
+            GameStatus: 'Available'
+          });
         }
-        
-        // Navigate to game page
-        window.location.href = `/play/game/${data.gameId}`;
+
+        setPersistentGameState({
+          gameState: 'waiting_to_start',
+          gameId: data.gameId,
+          opponent: isHost ? data.guestData : data.hostData,
+          isHost: gameState === 'waiting_response'
+        });
       }
     };
 
     const handleGameInviteDeclined = (data) => {
-      console.log('Game invite declined:', data);
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification(`${data.guestName} declined your invitation.`, 'error');
+      
+      // Reset game state and redirect host back to play page
       resetGameState();
+      
+      router.push('/play');
     };
 
     const handleGameInviteTimeout = (data) => {
-      if (data.gameId === gameId) {
-        console.log('Game invitation expired');
-        resetGameState();
-      }
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Game invitation expired.', 'error');
+      
+      // Reset game state and redirect host back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
     };
 
     const handleGameInviteCanceled = (data) => {
-      console.log('Game invitation was canceled by host:', data);
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
       
-      // Clear any received invite from the context
-      if (clearInvite) {
-        clearInvite();
-      }
+      showNotification('Game invitation was canceled by host.', 'error');
       
+      // Reset game state and redirect host back to play page
       resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
+    };
+
+    const handlePlayerLeft = (data) => {
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Player left the game.', 'error');
+      
+      // Reset game state and redirect back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
+    };
+
+    const handleGameEnded = (data) => {
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Game ended.', 'info');
+      
+      // Reset game state and redirect back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
+    };
+
+    const handleGameCanceled = (data) => {
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      
+      showNotification('Game was canceled.', 'error');
+      
+      // Reset game state and redirect back to play page
+      resetGameState();
+      
+      // Navigate back to the main play page using React router
+      router.push('/play');
+    };
+
+    // FIXED: Handle game start response - navigate both players to game
+    const handleGameStartResponse = (data) => {
+      if (data.status === 'success') {
+        // Only the guest should navigate to the game page
+        // The host should stay on the current page and the game will start there
+        if (!isHost) {
+          const targetPath = `/play/game/${gameId}`;
+          window.location.href = targetPath;
+        } else {
+          // The host should stay on this page and the game component will be rendered here
+          // We need to transition to the game state
+          setShowGame(true);
+        }
+      } else {
+        alert(`Failed to start game: ${data.message}`);
+      }
+    };
+
+    // Handle game started event
+    const handleGameStarted = (data) => {
+      if (data.gameId === gameId) {
+        // Update game state to indicate the game is now active
+        setGameState('in_game');
+        // The game component will handle the actual game start
+        // This event confirms that the server has started the game
+      }
     };
 
     // Add event listeners
@@ -243,6 +380,11 @@ export default function OnlineMatch() {
     socket.on('GameInviteDeclined', handleGameInviteDeclined);
     socket.on('GameInviteTimeout', handleGameInviteTimeout);
     socket.on('GameInviteCanceled', handleGameInviteCanceled);
+    socket.on('PlayerLeft', handlePlayerLeft);
+    socket.on('GameEnded', handleGameEnded);
+    socket.on('GameCanceled', handleGameCanceled);
+    socket.on('GameStartResponse', handleGameStartResponse);
+    socket.on('GameStarted', handleGameStarted);
 
     return () => {
       socket.off('InviteToGameResponse', handleInviteResponse);
@@ -250,8 +392,44 @@ export default function OnlineMatch() {
       socket.off('GameInviteDeclined', handleGameInviteDeclined);
       socket.off('GameInviteTimeout', handleGameInviteTimeout);
       socket.off('GameInviteCanceled', handleGameInviteCanceled);
+      socket.off('PlayerLeft', handlePlayerLeft);
+      socket.off('GameEnded', handleGameEnded);
+      socket.off('GameCanceled', handleGameCanceled);
+      socket.off('GameStartResponse', handleGameStartResponse);
+      socket.off('GameStarted', handleGameStarted);
     };
-  }, [socket, gameId, clearInvite]);
+  }, [socket, gameId, clearInvite, user?.email, gameState, isHost, receivedInvite]);
+
+  // Handle page refresh and disconnection
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // If we're in a game, notify the server that we're leaving
+      if (socket && gameId && user?.email) {
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email 
+        });
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // If page becomes hidden (user switches tabs or minimizes), treat as leaving
+      if (document.hidden && socket && gameId && user?.email) {
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email 
+        });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [socket, gameId, user?.email]);
 
   // Handle accepting invite from context
   useEffect(() => {
@@ -262,6 +440,7 @@ export default function OnlineMatch() {
         GameStatus: 'Available'
       });
       setGameId(receivedInvite.gameId);
+      setIsHost(false); // Guest is not host
       setPersistentGameState({
         gameState: 'idle',
         gameId: receivedInvite.gameId,
@@ -277,19 +456,39 @@ export default function OnlineMatch() {
       if (!user?.email) return;
       
       try {
+        // First check if backend is running
+        const healthRes = await fetch('http://localhost:5005/healthcheck');
+        if (!healthRes.ok) {
+          setBackendAvailable(false);
+          setFriends([]);
+          return;
+        }
+        
+        setBackendAvailable(true);
         const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
+        
+        if (!res.ok) {
+          setFriends([]);
+          return;
+        }
+        
         const data = await res.json();
-        const formatted = data.friends.map(f => ({
-          name: f.username,
-          avatar: f.avatar,
-          nickname: f.login,
-          GameStatus: 'Available',
-          ...f,
-        }));
-        setFriends(formatted);
+        
+        if (data.friends && Array.isArray(data.friends)) {
+          const formatted = data.friends.map(f => ({
+            name: f.username,
+            avatar: f.avatar,
+            nickname: f.login,
+            GameStatus: 'Available',
+            ...f,
+          }));
+          setFriends(formatted);
+        } else {
+          setFriends([]);
+        }
       } catch (err) {
-        console.error('Error fetching friends:', err);
         setFriends([]);
+        // Don't show alert to user, just log the error
       }
     }
     fetchFriends();
@@ -332,7 +531,6 @@ export default function OnlineMatch() {
     }
     
     setIsInviting(true);
-    console.log('Inviting player:', player);
     setInvitedPlayer(player);
     setIsWaitingForResponse(true);
     setGameAccepted(false);
@@ -361,6 +559,8 @@ export default function OnlineMatch() {
           if (prev <= 1) {
             clearInterval(countdownIntervalRef.current);
             countdownIntervalRef.current = null;
+            // If time runs out, cancel the invite automatically
+            handleCancelInvite();
             return 0;
           }
           return prev - 1;
@@ -375,20 +575,22 @@ export default function OnlineMatch() {
     }
   };
 
- const handleCancelInvite = () => {
-  if (socket && gameId && user?.email) {
-    socket.emit('CancelGameInvite', { 
-      gameId,
-      hostEmail: user.email  // Add the hostEmail
-    });
-  }
+  const handleCancelInvite = () => {
+    if (socket && gameId && user?.email) {
+      socket.emit('CancelGameInvite', { 
+        gameId,
+        hostEmail: user.email
+      });
+    }
     resetGameState();
   };
 
-
+  // FIXED: Simplified start game logic
   const handleStartGame = () => {
     if (socket && gameId) {
       socket.emit('StartGame', { gameId });
+    } else {
+      alert('Cannot start game - missing connection or game ID');
     }
   };
 
@@ -412,6 +614,7 @@ export default function OnlineMatch() {
         onStartGame={handleStartGame}
         onCancelGame={handleCancelGame}
         isHost={isHost}
+        gameId={gameId}
       />
     );
   }
@@ -446,6 +649,21 @@ export default function OnlineMatch() {
                 <div className="mb-8">
                   <h2 className="text-2xl font-semibold text-white mb-6">Online Players</h2>
                   
+                  {!backendAvailable && (
+                    <div className="text-center py-8 mb-6 bg-red-900/20 border border-red-500/30 rounded-lg">
+                      <p className="text-red-400 text-lg mb-2">Backend server is not available</p>
+                      <p className="text-gray-400 text-sm mb-4">
+                        Please make sure the backend server is running on port 5005
+                      </p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     {filteredPlayers.length > 0 ? (
                       filteredPlayers.map((player, index) => (
@@ -458,9 +676,22 @@ export default function OnlineMatch() {
                       ))
                     ) : (
                       <div className="text-center py-12">
-                        <p className="text-gray-400 text-lg">
+                        <p className="text-gray-400 text-lg mb-4">
                           {searchQuery ? 'No players found matching your search.' : 'No friends online right now.'}
                         </p>
+                        {!searchQuery && backendAvailable && (
+                          <div className="space-y-2">
+                            <p className="text-gray-500 text-sm">
+                              Make sure you have friends added to your account.
+                            </p>
+                            <button
+                              onClick={() => window.location.reload()}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                            >
+                              Refresh
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -474,7 +705,18 @@ export default function OnlineMatch() {
                 onCancel={handleCancelInvite}
               />
             )
-          ) : null}
+          ) : (
+            // Game Component for Host
+            <PingPongGame
+              player1={user}
+              player2={invitedPlayer}
+              onExit={handleGameEnd}
+              gameId={gameId}
+              socket={socket}
+              isHost={isHost}
+              opponent={invitedPlayer}
+            />
+          )}
         </div>
       </div>
     </div>

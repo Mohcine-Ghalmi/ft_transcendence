@@ -1,8 +1,8 @@
 "use client"
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { io } from "socket.io-client";
-import CryptoJS from "crypto-js";
-import { useAuthStore } from "@/(zustand)/useAuthStore";
+import { useAuthStore, getSocketInstance } from "@/(zustand)/useAuthStore";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 const GameInviteContext = createContext(null);
 
@@ -12,28 +12,29 @@ export function useGameInvite() {
 
 export function GameInviteProvider({ children }) {
   const { user } = useAuthStore();
-  const [socket, setSocket] = useState(null);
+  const socket = getSocketInstance();
   const [receivedInvite, setReceivedInvite] = useState(null);
+  const router = useRouter();
 
   useEffect(() => {
-    if (!user?.email) return;
-    const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
-    if (!encryptionKey) return;
+    if (!socket || !user?.email) return;
 
-    const cryptedMail = CryptoJS.AES.encrypt(user.email, encryptionKey).toString();
-    const newSocket = io("http://localhost:5005", { query: { cryptedMail } });
-    setSocket(newSocket);
-
-    newSocket.on("GameInviteReceived", (data) => setReceivedInvite(data));
-    newSocket.on("GameInviteCanceled", () => {
+    // Socket event listeners for game invites
+    const handleGameInviteReceived = (data) => setReceivedInvite(data);
+    const handleGameInviteCanceled = () => {
       setReceivedInvite(null);
-      console.log('Game invite was canceled, clearing invite state');
-    });
-
-    return () => {
-      newSocket.disconnect();
     };
-  }, [user]);
+
+    // Add event listeners
+    socket.on("GameInviteReceived", handleGameInviteReceived);
+    socket.on("GameInviteCanceled", handleGameInviteCanceled);
+
+    // Cleanup event listeners on unmount
+    return () => {
+      socket.off("GameInviteReceived", handleGameInviteReceived);
+      socket.off("GameInviteCanceled", handleGameInviteCanceled);
+    };
+  }, [socket, user?.email]);
 
   const acceptInvite = () => {
     if (receivedInvite && socket) {
@@ -42,8 +43,7 @@ export function GameInviteProvider({ children }) {
         guestEmail: user.email,
       });
       setReceivedInvite(null);
-      // Navigate to game page immediately
-      window.location.href = `/play/game/${receivedInvite.gameId}`;
+      router.push(`/play/game/${receivedInvite.gameId}`);
     }
   };
 
@@ -69,14 +69,16 @@ export function GameInviteProvider({ children }) {
           <div className="bg-[#2a2f3a] p-6 rounded-lg max-w-md w-full mx-4">
             <h3 className="text-white text-xl font-semibold mb-4">Game Invitation</h3>
             <div className="flex items-center space-x-4 mb-4">
-              <img
-                src={receivedInvite.hostData.avatar}
-                alt={receivedInvite.hostData.username}
-                className="w-12 h-12 rounded-full object-cover"
+              <Image
+              src={receivedInvite.hostData.avatar}
+              alt={receivedInvite.hostData.username}
+              width={48}
+              height={48}
+              className="w-12 h-12 rounded-full object-cover"
               />
               <div>
-                <p className="text-white font-medium">{receivedInvite.hostData.username}</p>
-                <p className="text-gray-400 text-sm">Level {receivedInvite.hostData.level}</p>
+              <p className="text-white font-medium">{receivedInvite.hostData.username}</p>
+              <p className="text-gray-400 text-sm">Level {receivedInvite.hostData.level}</p>
               </div>
             </div>
             <p className="text-gray-300 mb-6">{receivedInvite.message}</p>
