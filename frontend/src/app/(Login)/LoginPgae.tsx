@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import SignInWithOthers from './SignInWithOthers'
+import ResetPassword from './ResetPassword/resetPassword'
 
 export default function LoginPage() {
   const [email, setemail] = useState('')
@@ -75,8 +76,14 @@ export default function LoginPage() {
     // Add your login logic here
   }
 
+  //
+  const [showRestpassword, setShowRestpassword] = useState(false)
+
   return (
-    <div className="min-h-screen  flex flex-col">
+    <div className="min-h-screen  flex flex-col relative">
+      {showRestpassword && (
+        <ResetPassword setShowRestpassword={setShowRestpassword} />
+      )}
       {/* Header */}
       <header className="flex items-center bg-[#121417] justify-between px-6 py-4 border-b border-gray-700">
         <Link href="/">
@@ -152,14 +159,13 @@ export default function LoginPage() {
 
             {/* Forgot Password */}
             <div className="text-left">
-              <Link href="/ResetPassword" passHref>
-                <button
-                  type="button"
-                  className="text-gray-400 text-sm hover:text-gray-300 transition-colors"
-                >
-                  Forgot Password?
-                </button>
-              </Link>
+              <button
+                type="button"
+                onClick={() => setShowRestpassword(true)}
+                className="text-gray-400 text-sm hover:text-gray-300 transition-colors"
+              >
+                Forgot Password?
+              </button>
             </div>
 
             {/* Login Button */}

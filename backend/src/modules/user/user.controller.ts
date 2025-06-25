@@ -9,6 +9,7 @@ import {
   CreateUserInput,
   type LoginInput,
   type loginResponse,
+  createUserResponseSchema,
 } from './user.schema'
 import { hashPassword, verifyPassword } from '../../utils/hash'
 import { db, server } from '../../app'
@@ -157,9 +158,15 @@ export async function sendResetOtp(
   try {
     const otp = String(Math.floor(100000 + Math.random() * 900000))
     const optExpireAt = String(Date.now() + 15 * 60 * 1000)
-    const tmp = await getUserByEmail(email)
+    const tmp: any = await getUserByEmail(email)
 
     if (!tmp) return rep.send({ status: false, message: 'User Not Found' })
+
+    if (tmp.type !== 0 && tmp.type !== null)
+      return rep.code(200).send({
+        status: false,
+        message: 'This Email is signed in with another method',
+      })
 
     const sql = db.prepare(
       `UPDATE User SET resetOtp = :resetOtp, resetOtpExpireAt = :optExpireAt WHERE email = :email`

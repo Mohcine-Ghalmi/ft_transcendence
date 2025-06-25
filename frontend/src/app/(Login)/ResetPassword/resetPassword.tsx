@@ -1,79 +1,90 @@
-"use client"
-import { useState } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
+'use client'
+import { useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import VerifyOtp from './VerifyOtp'
+import { axiosInstance } from '@/(zustand)/useAuthStore'
+import { toast } from 'react-toastify'
+import { useRouter } from 'next/navigation'
 
-export default function ResetPassword() {
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [error, setError] = useState('');
+export default function ResetPassword({ setShowRestpassword }) {
+  const [email, setEmail] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const router = useRouter()
 
   const handleemailChange = (e: any) => {
-    const newEmail = e.target.value;
-    setEmail(newEmail);
-    
+    const newEmail = e.target.value
+    setEmail(newEmail)
+
     // Clear error first
-    setError('');
-    
+    setError('')
+
     if (newEmail.trim()) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
-        setError('Please enter a valid email address');
+        setError('Please enter a valid email address')
       }
     }
-  };
+  }
 
-  const handleSubmit = async (e : any) => {
-    e.preventDefault();
-    
+  const handleSubmit = async (e: any) => {
+    e.preventDefault()
+
     if (!email.trim()) {
-      setError('Email is required');
-      return;
+      setError('Email is required')
+      return
     }
-    
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address');
-      return;
+      setError('Please enter a valid email address')
+      return
     }
-    
-    setIsLoading(true);
-    
+
+    setIsLoading(true)
+
     // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSubmitted(true);
-      console.log('Reset link sent to:', email);
-    }, 1500);
+    setTimeout(async () => {
+      try {
+        const res = await axiosInstance.post('/api/users/password-reset-otp', {
+          email,
+        })
+        if (res.data.status) {
+          setIsSubmitted(true)
+        } else {
+          toast.warning(res.data.message)
+        }
+      } catch (err) {
+        router.push('/')
+      } finally {
+        setIsLoading(false)
+      }
+    }, 100)
   }
 
   return (
-    <div className="w-full text-white">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-700">
-        <Link href="/">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Image src="/vector---0.svg" alt="Logo" width={32} height={32} className="w-6 h-6 sm:w-8 sm:h-8" />
-            <h1 className="text-white font-semibold text-base sm:text-lg">PingPong</h1>
-          </div>
-        </Link>
-        <Link href="/" passHref>
-          <button className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
-            LogIn
-          </button>
-        </Link>
-      </header>
-
+    <div className="w-full text-white absolute top-0 left-0 backdrop-blur-xl">
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-80px)] px-4 sm:px-6 py-8">
-        <div className="w-full max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+        <div className="relative bg-black/20 backdrop-blur-3xl rounded-2xl p-4 w-full max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+          <div className="absolute top-3 right-4 cursor-pointer">
+            <Image
+              src="/X.svg"
+              alt="X"
+              width={100}
+              height={100}
+              className="w-8 h-6"
+            />
+          </div>
           {!isSubmitted ? (
             <>
               <h1 className="text-xl sm:text-2xl md:text-3xl xl:text-4xl font-bold text-center mb-3">
                 Forgot your password?
               </h1>
-              
+
               <p className="text-gray-400 text-center mb-6 sm:mb-8 text-sm md:text-base xl:text-lg leading-relaxed px-2">
-                Enter the email address associated with your account and we'll send you a link to reset your password.
+                Enter the email address associated with your account and we'll
+                send you a link to reset your password.
               </p>
 
               <div className="space-y-4 sm:space-y-6">
@@ -90,8 +101,10 @@ export default function ResetPassword() {
                         : 'border-gray-700 focus:border-blue-500'
                     }`}
                   />
-                  { error && (
-                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">{error}</p>
+                  {error && (
+                    <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
+                      {error}
+                    </p>
                   )}
                 </div>
 
@@ -119,36 +132,11 @@ export default function ResetPassword() {
             </>
           ) : (
             <>
-              <h1 className="text-xl sm:text-2xl md:text-3xl xl:text-4xl font-bold text-center mb-3">
-                Check your email
-              </h1>
-              
-              <p className="text-gray-400 text-center mb-6 sm:mb-8 text-sm md:text-base xl:text-lg leading-relaxed px-2">
-                We've sent a password reset link to <span className="text-white break-all">{email}</span>
-              </p>
-
-              <div className="space-y-3 sm:space-y-4">
-                <button
-                  onClick={() => {
-                    setIsSubmitted(false);
-                    setEmail('');
-                    setError('');
-                  }}
-                  className="w-full py-2.5 sm:py-3 md:py-4 xl:py-6 bg-gray-700 hover:bg-gray-600 rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-sm sm:text-base md:text-lg xl:text-2xl"
-                >
-                  Try another email
-                </button>
-                
-                <Link href="/">
-                  <button className="w-full py-2.5 sm:py-3 md:py-4 xl:py-6 bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-sm sm:text-base md:text-lg xl:text-2xl">
-                    Back to Login
-                  </button>
-                </Link>
-              </div>
+              <VerifyOtp email={email} />
             </>
           )}
         </div>
       </div>
     </div>
-  );
+  )
 }
