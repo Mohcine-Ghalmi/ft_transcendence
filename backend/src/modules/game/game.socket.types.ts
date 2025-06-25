@@ -52,6 +52,7 @@ export interface User {
 }
 
 export interface PlayerData {
+  id: number
   username: string
   login: string
   avatar: string
@@ -69,8 +70,9 @@ export const gameRooms = new Map<string, GameRoomData>()
 export const matchmakingQueue: MatchmakingPlayer[] = []
 
 // Helper functions
-export function getPlayerData(user: User): PlayerData {
+export function getPlayerData(user: any): PlayerData {
   return {
+    id: user.id,
     username: user.username,
     login: user.login,
     avatar: user.avatar

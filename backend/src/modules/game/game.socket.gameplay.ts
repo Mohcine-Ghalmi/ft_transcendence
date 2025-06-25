@@ -10,6 +10,8 @@ import {
   GameSocketHandler 
 } from './game.socket.types'
 import { emitToUsers } from './game.socket.utils'
+import { getUserByEmail } from '../user/user.service'
+import { getPlayerData } from './game.socket.types'
 
 export const handleGameplay: GameSocketHandler = (socket: Socket, io: Server) => {
   
@@ -80,6 +82,14 @@ export const handleGameplay: GameSocketHandler = (socket: Socket, io: Server) =>
       const hostSocketIds = await getSocketIds(gameRoom.hostEmail, 'sockets') || []
       const guestSocketIds = await getSocketIds(gameRoom.guestEmail, 'sockets') || []
 
+      // Fetch user data for both players
+      const [hostUser, guestUser] = await Promise.all([
+        getUserByEmail(gameRoom.hostEmail),
+        getUserByEmail(gameRoom.guestEmail)
+      ])
+      const hostData = getPlayerData(hostUser)
+      const guestData = getPlayerData(guestUser)
+
       const gameStartData = {
         gameId,
         status: 'game_started',
@@ -87,6 +97,8 @@ export const handleGameplay: GameSocketHandler = (socket: Socket, io: Server) =>
           host: gameRoom.hostEmail,
           guest: gameRoom.guestEmail
         },
+        hostData,
+        guestData,
         startedAt: gameRoom.startedAt,
         gameState
       }

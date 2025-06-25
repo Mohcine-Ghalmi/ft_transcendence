@@ -15,7 +15,7 @@ function LossPageContent() {
     <div className="fixed inset-0 flex items-center justify-center">
       <div className="text-center max-w-2xl mx-auto px-6">
         <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">
-          Better luck next time, Sleeps!
+          Better luck next time!
         </h1>
         
         <p className="text-xl text-gray-300 mb-12 leading-relaxed">

@@ -133,22 +133,6 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
   );
 };
 
-// Notification component
-const Notification = ({ message, type, onClose }) => {
-  if (!message) return null;
-
-  const bgColor = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600';
-  
-  return (
-    <div className={`fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-3`}>
-      <span>{message}</span>
-      <button onClick={onClose} className="text-white hover:text-gray-200">
-        ✕
-      </button>
-    </div>
-  );
-};
-
 export default function OnlineMatch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
@@ -221,9 +205,6 @@ export default function OnlineMatch() {
         setIsWaitingForResponse(false);
         clearCountdown();
 
-        // CRITICAL FIX: Determine host/guest based on current game state
-        // If we were already waiting for response (host sent invite), we are the host
-        // If we received an invite through context, we are the guest
         if (gameState === 'waiting_response') {
           // We are the host
           setIsHost(true);

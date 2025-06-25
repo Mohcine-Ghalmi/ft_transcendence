@@ -8,10 +8,12 @@ import {
   removeFromQueueByEmail,
   isInQueue,
   MatchmakingPlayer,
-  GameSocketHandler 
+  GameSocketHandler,
+  getPlayerData
 } from './game.socket.types'
 import { createMatchHistory } from './game.service'
 import { v4 as uuidv4 } from 'uuid'
+import { getUserByEmail } from '../user/user.service'
 
 // Function to clean up user's game data
 async function cleanupUserGameData(email: string): Promise<{ cleanedCount: number, details: any[] }> {
@@ -306,6 +308,14 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       return
     }
 
+    // Fetch user data for both players
+    const [player1User, player2User] = await Promise.all([
+      getUserByEmail(player1.email),
+      getUserByEmail(player2.email)
+    ])
+    const player1Data = getPlayerData(player1User)
+    const player2Data = getPlayerData(player2User)
+
     // Create a new game room
     const gameId = uuidv4()
     const gameRoom: GameRoomData = {
@@ -328,6 +338,8 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       gameId,
       hostEmail: player1.email,
       guestEmail: player2.email,
+      hostData: player1Data,
+      guestData: player2Data,
       status: 'match_found',
       message: 'Match found! Game will start shortly.'
     }
@@ -346,6 +358,8 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         gameId,
         hostEmail: player1.email,
         guestEmail: player2.email,
+        hostData: player1Data,
+        guestData: player2Data,
         startedAt: gameRoom.startedAt
       })
     }, 3000) // 3 second delay before starting
