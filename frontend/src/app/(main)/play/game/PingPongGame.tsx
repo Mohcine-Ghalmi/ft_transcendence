@@ -130,19 +130,19 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   // Validate players have required properties
   const safePlayer1 = {
-    id: user?.id || 1000,
+    id: user?.id || crypto.randomUUID(),
     name: user?.username,
     avatar: user?.avatar || '/mghalmi.jpg',
     nickname: user?.login || 'Player 1'
   };
 
   const safePlayer2 = isRemoteGame ? {
-    id: opponent?.id || 1000,
+    id: opponent?.id || crypto.randomUUID(),
     name: opponent?.username || opponent?.name,
     avatar: opponent?.avatar || '/mghalmi.jpg',
     nickname: opponent?.login || opponent?.nickname || 'Player 2'
   } : {
-    id: player2?.id || 1000,
+    id: player2?.id || crypto.randomUUID(),
     name: player2?.username || player2?.name,
     avatar: player2?.avatar || '/mghalmi.jpg',
     nickname: player2?.login || player2?.nickname || 'Player 2'
@@ -292,13 +292,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       ctx.shadowColor = "#20242a";
       ctx.shadowBlur = 7;
       ctx.fillRect(
-        0, 
+        10, 
         paddle1Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
       );
       ctx.fillRect(
-        canvasDims.width - PADDLE_WIDTH * scaleX, 
+        canvasDims.width - PADDLE_WIDTH * scaleX - 10, 
         paddle2Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
