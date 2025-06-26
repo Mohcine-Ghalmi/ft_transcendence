@@ -4,6 +4,7 @@ import {
   getUserByEmail,
   isBlockedStatus,
   listMyFriends,
+  selectRandomFriends,
 } from './user.service'
 import {
   CreateUserInput,
@@ -339,6 +340,23 @@ export async function getUser(
     rep.code(200).send({ ...user, isBlockedByMe, isBlockedByHim })
   } catch (err) {
     console.log(err)
+  }
+}
+
+export async function getRandomFriends(
+  req: FastifyRequest<{ Body: { email: string } }>,
+  rep: FastifyReply
+) {
+  try {
+    const { email } = req.body
+    return rep
+      .code(200)
+      .send({ status: true, friends: selectRandomFriends(email) })
+  } catch (err) {
+    console.log(err)
+    return rep
+      .code(500)
+      .send({ status: false, message: 'Internal Server Error' })
   }
 }
 

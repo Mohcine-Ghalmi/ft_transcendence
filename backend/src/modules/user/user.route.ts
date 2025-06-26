@@ -11,8 +11,10 @@ import {
   getAllUsersData,
   getUser,
   listMyFriendsHandler,
+  getRandomFriends,
 } from './user.controller'
 import { $ref } from './user.schema'
+
 
 async function userRoutes(server: FastifyInstance) {
   server.post(
@@ -20,7 +22,11 @@ async function userRoutes(server: FastifyInstance) {
     { schema: { body: $ref('resetPasswordSchema') } },
     resetPassword
   )
-
+  server.post(
+    '/getRandomFriends',
+    { preHandler: [server.authenticate] },
+    getRandomFriends
+  )
   server.post('/verify-otp', { schema: { body: $ref('OtpSchema') } }, verifyOtp)
   server.post(
     '/password-reset-otp',
