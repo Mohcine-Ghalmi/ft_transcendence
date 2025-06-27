@@ -43,5 +43,17 @@ const nextConfig: NextConfig = {
     ],
   },
 }
+// next.config.js
+module.exports = {
+  async rewrites() {
+    return [
+      {
+        source: '/images/:path*',
+        destination: 'http://localhost:5000/images/:path*',
+      },
+    ];
+  },
+};
+
 
 export default nextConfig

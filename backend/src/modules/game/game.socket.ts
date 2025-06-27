@@ -6,6 +6,7 @@ import { handleGameplay } from './game.socket.gameplay'
 import { handleGameManagement } from './game.socket.management'
 import { handleGameDisconnect } from './game.socket.disconnect'
 import { handleMatchmaking } from './game.socket.matchmaking'
+import { handleTournament } from './game.socket.tournament'
 
 export function handleGameSocket(socket: Socket, io: Server) {
   // Register all game socket handlers
@@ -15,4 +16,5 @@ export function handleGameSocket(socket: Socket, io: Server) {
   handleGameManagement(socket, io)
   handleGameDisconnect(socket, io)
   handleMatchmaking(socket, io)
+  handleTournament(socket, io)
 }

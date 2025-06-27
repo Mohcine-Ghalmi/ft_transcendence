@@ -94,4 +94,36 @@ export function isInQueue(email: string): boolean {
 }
 
 // Socket handler type
-export type GameSocketHandler = (socket: Socket, io: Server) => void 
+export type GameSocketHandler = (socket: Socket, io: Server) => void
+
+// Tournament types
+export interface Tournament {
+  tournamentId: string;
+  name: string;
+  hostEmail: string;
+  size: number;
+  participants: TournamentParticipant[];
+  matches: TournamentMatch[];
+  status: 'setup' | 'lobby' | 'in_progress' | 'completed' | 'canceled';
+  createdAt: number;
+  startedAt?: number;
+  endedAt?: number;
+}
+
+export interface TournamentParticipant {
+  email: string;
+  nickname: string;
+  avatar: string;
+  isHost: boolean;
+  status: 'invited' | 'accepted' | 'declined' | 'playing' | 'eliminated' | 'winner';
+}
+
+export interface TournamentMatch {
+  id: string;
+  round: number;
+  matchIndex: number;
+  player1?: TournamentParticipant;
+  player2?: TournamentParticipant;
+  state: 'waiting' | 'in_progress' | 'player1_win' | 'player2_win' | 'completed';
+  winner?: TournamentParticipant;
+} 

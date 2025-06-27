@@ -8,7 +8,7 @@ import { useGameInvite } from './GameInviteProvider';
 import { PingPongGame } from '../game/PingPongGame';
 import CryptoJS from 'crypto-js';
 
-const PlayerListItem = ({ player, onInvite, isInviting }) => {
+export const PlayerListItem = ({ player, onInvite, isInviting }) => {
   const isAvailable = player.GameStatus === 'Available';
 
   return (
