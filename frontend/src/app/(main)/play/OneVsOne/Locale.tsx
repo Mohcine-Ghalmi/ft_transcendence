@@ -7,11 +7,11 @@ import { PingPongGame } from '../game/PingPongGame'
 const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
   const [login, setLogin] = useState('')
   const [username, setusername] = useState('')
-  const [errors, setErrors] = useState<{ [key: string]: string }>({})
+  const [errors, setErrors] = useState<any>({})
   const [avatar, setAvatar] = useState(null)
 
   const handleSubmit = () => {
-    const newErrors: { [key: string]: string } = {}
+    const newErrors: any = {}
 
     if (!login.trim()) {
       newErrors.login = 'Userusername is required'
@@ -170,11 +170,7 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
 }
 
 // Player Card Component
-export const PlayerCard = ({ player, playerNumber, onAddPlayer }: {
-  player: any
-  playerNumber: any
-  onAddPlayer?: any
-}) => {
+export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
   if (!player) {
     return (
       <div className="text-center">
@@ -212,6 +208,9 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer }: {
             src={player.avatar}
             alt={player.login}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
+            onError={(e: any) => {
+              e.target.src = '/mghalmi.jpg'
+            }}
           />
         </div>
         <h4 className="text-white font-semibold text-2xl md:text-3xl">
@@ -228,7 +227,7 @@ export default function Local1v1() {
   const [player2, setPlayer2] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showGame, setShowGame] = useState(false)
-  const {user} = useAuthStore();
+  const { user } = useAuthStore()
 
   const handleAddPlayer = (playerData) => {
     setPlayer2(playerData)

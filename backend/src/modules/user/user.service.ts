@@ -177,6 +177,42 @@ export async function getFriend(
   }
 }
 
+export function selectRandomFriends(email: string) {
+  try {
+    const sql = db.prepare(`
+      SELECT
+        UA.id as userA_id,
+        UA.email AS userA_email,
+        UA.username AS userA_username,
+        UA.login AS userA_login,
+        UA.avatar AS userA_avatar
+      FROM User UA ORDER BY RANDOM() LIMIT 5
+    `)
+    const data = sql.all()
+    return data.map((row: any) => {
+      const isMeA = row.fromEmail === email
+      const friend = isMeA
+        ? {
+            id: row.userA_id,
+            email: row.userB_email,
+            username: row.userB_username,
+            login: row.userB_login,
+            avatar: row.userB_avatar,
+          }
+        : {
+            id: row.userA_id,
+            email: row.userA_email,
+            username: row.userA_username,
+            login: row.userA_login,
+            avatar: row.userA_avatar,
+          }
+      return friend
+    })
+  } catch (err) {
+    console.log(err)
+  }
+}
+
 export async function listMyFriends(email: string) {
   const sql = db.prepare(`
     SELECT
