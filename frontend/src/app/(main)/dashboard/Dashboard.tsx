@@ -21,11 +21,7 @@ export default function PingPongDashboard() {
   return (
     <div className="h-full text-white">
       {/* Main Dashboard Content */}
-<<<<<<< HEAD
-        <div className="flex items-center justify-center px-4 py-20">
-=======
       <div className="flex items-center justify-center px-4 py-4">
->>>>>>> origin/chat
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 w-full">
           {/* Left Section */}
           <div className="xl:col-span-2 space-y-4 sm:space-y-6">
@@ -54,9 +50,5 @@ export default function PingPongDashboard() {
         </div>
       </div>
     </div>
-<<<<<<< HEAD
-  );
-=======
   )
->>>>>>> origin/chat
 }

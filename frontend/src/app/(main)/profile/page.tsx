@@ -136,39 +136,6 @@ const Level = ({ user }) => {
   )
 }
 
-<<<<<<< HEAD
-const Profile = ({ user }) => {
-  const [isSelected, setIsSelected] = useState(false)
-  return (
-    <div className="w-[80%] h-[90vh] mt-15">
-      <TopProfile user={user} />
-      <Level user={user} />
-      {/* select */}
-      <div className="mt-10 flex items-center gap-6 my-4">
-        <button
-          onClick={() => setIsSelected(false)}
-          className={`${
-            !isSelected && 'border-white'
-          } border-b border-transparent text-xl p-6 duration-75`}
-        >
-          State
-        </button>
-        <button
-          onClick={() => setIsSelected(true)}
-          className={`${
-            isSelected && 'border-white'
-          } border-b border-transparent text-xl p-6 duration-75`}
-        >
-          Match History
-        </button>
-      </div>
-      <div className=" flex flex-col items-center justify-center w-full">
-        {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
-      </div>
-    </div>
-  )
-}
-=======
 // export const Profile = ({ user }) => {
 //   const [isSelected, setIsSelected] = useState(false)
 //   return (
@@ -200,7 +167,6 @@ const Profile = ({ user }) => {
 //     </div>
 //   )
 // }
->>>>>>> origin/chat
 
 export default function Page() {
   const { user: me } = useAuthStore()
