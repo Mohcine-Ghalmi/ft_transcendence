@@ -32,9 +32,11 @@ async function cleanupUserGameData(email: string): Promise<{ cleanedCount: numbe
           const gameAge = Date.now() - gameRoom.createdAt
           const ageMinutes = Math.round(gameAge / 1000 / 60)
           
-          // Clean up if game is completed, canceled, or older than 5 minutes
+          // Clean up if game is completed, canceled, waiting, accepted, or older than 5 minutes
           if (gameRoom.status === 'completed' || 
               gameRoom.status === 'canceled' || 
+              gameRoom.status === 'waiting' ||
+              gameRoom.status === 'accepted' ||
               gameAge > 300000) { // 5 minutes in milliseconds
             
             await redis.del(roomKey)
@@ -44,7 +46,9 @@ async function cleanupUserGameData(email: string): Promise<{ cleanedCount: numbe
               status: 'cleaned',
               age: ageMinutes,
               reason: gameRoom.status === 'completed' ? 'completed' : 
-                     gameRoom.status === 'canceled' ? 'canceled' : 'stale'
+                     gameRoom.status === 'canceled' ? 'canceled' : 
+                     gameRoom.status === 'waiting' ? 'waiting' :
+                     gameRoom.status === 'accepted' ? 'accepted' : 'stale'
             })
           }
         }

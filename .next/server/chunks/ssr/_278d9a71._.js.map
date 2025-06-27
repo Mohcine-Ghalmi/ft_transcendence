@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 6, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"","debugId":null}},
+    {"offset": {"line": 24, "column": 0}, "map": {"version":3,"sources":["file:///home/sleeps/ft_transcendence0/src/app/page.tsx"],"sourcesContent":["import { redirect } from \"next/navigation\";\n\nexport default function Home() {\n    \n  redirect(\"/\");\n//   redirect(\"/dashboard\");\n  return null;\n}\n"],"names":[],"mappings":";;;AAAA;AAAA;;AAEe,SAAS;IAEtB,CAAA,GAAA,qLAAA,CAAA,WAAQ,AAAD,EAAE;IACX,4BAA4B;IAC1B,OAAO;AACT","debugId":null}}]
+}

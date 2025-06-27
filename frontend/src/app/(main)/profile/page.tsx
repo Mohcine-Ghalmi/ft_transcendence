@@ -136,7 +136,7 @@ const Level = ({ user }) => {
   )
 }
 
-export const Profile = ({ user }) => {
+const Profile = ({ user }) => {
   const [isSelected, setIsSelected] = useState(false)
   return (
     <div className="w-[80%] h-[90vh] mt-15">

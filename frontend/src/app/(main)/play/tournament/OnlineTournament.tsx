@@ -582,6 +582,7 @@ export default function OnlineTournament() {
                 matches={matches}
                 currentRound={currentRound}
                 onMatchUpdate={handleMatchUpdate}
+                onPlayMatch={() => {}}
               />
               
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
@@ -641,13 +642,13 @@ export default function OnlineTournament() {
                   )}
                 </div>
               </div>
-              
               <TournamentBracket
                 participants={participants}
                 tournamentSize={tournamentSize}
                 matches={matches}
                 currentRound={currentRound}
                 onMatchUpdate={() => {}} // No more updates allowed
+                onPlayMatch={() => {}}
               />
               
               <div className="flex justify-center space-x-4">
