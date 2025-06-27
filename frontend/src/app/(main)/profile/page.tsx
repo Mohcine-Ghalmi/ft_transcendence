@@ -136,48 +136,77 @@ const Level = ({ user }) => {
   )
 }
 
-export const Profile = ({ user }) => {
-  const [isSelected, setIsSelected] = useState(false)
-  return (
-    <div className="w-[80%] h-[90vh] mt-15">
-      <TopProfile user={user} />
-      <Level user={user} />
-      {/* select */}
-      <div className="mt-10 flex items-center gap-6 my-4">
-        <button
-          onClick={() => setIsSelected(false)}
-          className={`${
-            !isSelected && 'border-white'
-          } border-b border-transparent text-xl p-6 duration-75`}
-        >
-          State
-        </button>
-        <button
-          onClick={() => setIsSelected(true)}
-          className={`${
-            isSelected && 'border-white'
-          } border-b border-transparent text-xl p-6 duration-75`}
-        >
-          Match History
-        </button>
-      </div>
-      <div className=" flex flex-col items-center justify-center w-full">
-        {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
-      </div>
-    </div>
-  )
-}
+// export const Profile = ({ user }) => {
+//   const [isSelected, setIsSelected] = useState(false)
+//   return (
+//     <div className="w-[80%] h-[90vh] mt-15">
+//       <TopProfile user={user} />
+//       <Level user={user} />
+//       {/* select */}
+//       <div className="mt-10 flex items-center gap-6 my-4">
+//         <button
+//           onClick={() => setIsSelected(false)}
+//           className={`${
+//             !isSelected && 'border-white'
+//           } border-b border-transparent text-xl p-6 duration-75`}
+//         >
+//           State
+//         </button>
+//         <button
+//           onClick={() => setIsSelected(true)}
+//           className={`${
+//             isSelected && 'border-white'
+//           } border-b border-transparent text-xl p-6 duration-75`}
+//         >
+//           Match History
+//         </button>
+//       </div>
+//       <div className=" flex flex-col items-center justify-center w-full">
+//         {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
+//       </div>
+//     </div>
+//   )
+// }
 
 export default function Page() {
-  const { user } = useAuthStore()
+  const { user: me } = useAuthStore()
   const { userProfile, setUserProfile } = useSearchStore()
   const pathname = usePathname()
+  const [isSelected, setIsSelected] = useState(false)
+  const [user, setUser] = useState()
+
   useEffect(() => {
+    setUser(userProfile ? userProfile : me)
     setUserProfile(null)
   }, [pathname])
   return (
     <div className="flex items-center justify-center text-white">
-      <Profile user={userProfile ? userProfile : user} />
+      <div className="w-[80%] h-[90vh] mt-15">
+        <TopProfile user={user} />
+        <Level user={user} />
+        {/* select */}
+        <div className="mt-10 flex items-center gap-6 my-4">
+          <button
+            onClick={() => setIsSelected(false)}
+            className={`${
+              !isSelected && 'border-white'
+            } border-b border-transparent text-xl p-6 duration-75`}
+          >
+            State
+          </button>
+          <button
+            onClick={() => setIsSelected(true)}
+            className={`${
+              isSelected && 'border-white'
+            } border-b border-transparent text-xl p-6 duration-75`}
+          >
+            Match History
+          </button>
+        </div>
+        <div className=" flex flex-col items-center justify-center w-full">
+          {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
+        </div>
+      </div>
     </div>
   )
 }
