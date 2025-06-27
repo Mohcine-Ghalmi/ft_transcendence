@@ -7,7 +7,7 @@ export const NotificationItem = ({
   notification,
   onAction,
 }: {
-  notification: AppNotification
+  notification: AppNotification | any
   onAction: (id: string | number, action: string) => void
 }) => {
   const getNotificationIcon = (type: string) => {
@@ -118,7 +118,7 @@ export const NotificationDropdown = ({
   notifications,
   className = '',
 }: {
-  notifications: AppNotification[]
+  notifications: AppNotification[] | any
   className: string
 }) => {
   const [showNotifications, setShowNotifications] = useState(false)

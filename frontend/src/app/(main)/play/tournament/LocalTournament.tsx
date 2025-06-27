@@ -579,6 +579,7 @@ const LocalTournamentMode = () => {
                 matches={matches}
                 currentRound={currentRound}
                 onMatchUpdate={() => {}} // No more updates allowed
+                onPlayMatch={() => {}} // No more matches to play
               />
               
               <div className="flex justify-center space-x-4">

@@ -50,7 +50,9 @@ const MatchFoundModal = ({
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          onGameStart();
+          setTimeout(() => {
+            onGameStart();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -205,6 +207,20 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       }
     };
 
+    // Listen for game ended due to opponent leaving before game start
+    socket.on('GameEndedByOpponentLeave', (data: any) => {
+      if (data.winner === user.email) {
+        setErrorMessage('You win! Opponent left before the game started.');
+      } else if (data.leaver === user.email) {
+        setErrorMessage('You are already in an active game. Please finish or leave your current game first.');
+      }
+      setMatchmakingStatus('idle');
+      setGameId(null);
+      setMatchData(null);
+      setOpponent(null);
+      setIsHost(false);
+    });
+
     // Add event listeners
     socket.on('MatchmakingResponse', handleMatchmakingResponse);
     socket.on('QueueStatusResponse', handleQueueStatusResponse);
@@ -212,6 +228,15 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     socket.on('GameStarting', handleGameStarting);
     socket.on('GameEnded', handleGameEnded);
     socket.on('CleanupResponse', handleCleanupResponse);
+    // Listen for player leaving during countdown
+    socket.on('MatchmakingPlayerLeft', (data: any) => {
+      setMatchmakingStatus('idle');
+      setGameId(null);
+      setMatchData(null);
+      setOpponent(null);
+      setIsHost(false);
+      setErrorMessage('The other player left before the game started.');
+    });
 
     // Join matchmaking on mount
     joinMatchmaking();
@@ -224,6 +249,8 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       socket.off('GameStarting', handleGameStarting);
       socket.off('GameEnded', handleGameEnded);
       socket.off('CleanupResponse', handleCleanupResponse);
+      socket.off('MatchmakingPlayerLeft');
+      socket.off('GameEndedByOpponentLeave');
       
       // Leave matchmaking when component unmounts
       if (socket && user?.email) {
@@ -233,7 +260,10 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   }, [socket, user?.email]);
 
   const handleLeaveMatchmaking = () => {
-    if (socket && user?.email) {
+    if (socket && user?.email && matchmakingStatus === 'found' && gameId) {
+      // Notify backend that player left before game started
+      socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+    } else if (socket && user?.email) {
       socket.emit('LeaveMatchmaking', { email: user.email });
     }
     setMatchmakingStatus('idle');

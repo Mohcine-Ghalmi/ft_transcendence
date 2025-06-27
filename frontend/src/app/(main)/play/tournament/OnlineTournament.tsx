@@ -820,13 +820,12 @@ export default function OnlineTournament() {
                   )}
                 </div>
               </div>
-              
               <TournamentBracket
                 participants={participants}
                 tournamentSize={tournamentSize}
                 matches={matches}
                 currentRound={currentRound}
-                onMatchUpdate={() => {}}
+                onMatchUpdate={() => {}} // No more updates allowed
                 onPlayMatch={() => {}}
               />
               

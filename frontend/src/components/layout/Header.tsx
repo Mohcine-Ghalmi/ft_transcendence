@@ -197,7 +197,7 @@ export const Header = () => {
           {/* Search Bar */}
           <SearchBar />
 
-          <NotificationDropdown notifications={notifications} />
+          <NotificationDropdown notifications={notifications} className="" />
 
           {/* Profile Avatar */}
           <Link href="/profile">
