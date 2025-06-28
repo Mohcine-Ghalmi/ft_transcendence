@@ -110,7 +110,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         // Add 1-second delay before game is ready to play
         setTimeout(() => {
           setGameReady(true);
-        }, 1000);
+        }, 0);
       }
     };
 
@@ -177,7 +177,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         const minutes = Math.floor((elapsed % 3600) / 60);
         const seconds = elapsed % 60;
         setGameTime({ hours, minutes, seconds });
-      }, 1000); // Update every second instead of 0
+      }, 0); // Update every second instead of 0
     }
 
     return () => {
@@ -607,9 +607,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         
         // Check if current user won (assuming player1 is always the user in 1v1 mode)
         if (scores.p1 >= 7) {
-            router.push(`/play/result/win`);
+          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         } else {
-            router.push(`/play/result/loss`);
+          router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         }
       }
     }
@@ -770,7 +770,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       // Add 1-second delay before game is ready to play
       setTimeout(() => {
         setGameReady(true);
-      }, 1000);
+      }, 0);
     }
   };
 

@@ -75,14 +75,28 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     const now = Date.now()
     const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000) // 2 minutes
     
-    for (const player of stalePlayers) {
-      removeFromQueueByEmail(player.email)
-      console.log(`Removed stale player ${player.email} from matchmaking queue during periodic cleanup`)
+    if (stalePlayers.length > 0) {
+      console.log(`Cleaning up ${stalePlayers.length} stale players from matchmaking queue`)
+      
+      for (const player of stalePlayers) {
+        removeFromQueueByEmail(player.email)
+        console.log(`Removed stale player ${player.email} from matchmaking queue during periodic cleanup`)
+      }
+      
+      console.log(`Matchmaking queue size after cleanup: ${matchmakingQueue.length}`)
     }
   }
 
   // Run cleanup every 30 seconds
   const cleanupInterval = setInterval(cleanupStaleQueueEntries, 30000)
+  
+  // Periodic matchmaking attempts every 10 seconds
+  const matchmakingInterval = setInterval(() => {
+    if (matchmakingQueue.length >= 2) {
+      console.log(`Periodic matchmaking attempt with ${matchmakingQueue.length} players in queue`)
+      tryMatchPlayers(io)
+    }
+  }, 10000)
   
   // Handle socket disconnect - clean up user data
   socket.on('disconnect', async () => {
@@ -111,6 +125,10 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       
     } catch (error) {
       console.error('Error cleaning up on disconnect:', error)
+    } finally {
+      // Clean up intervals
+      clearInterval(cleanupInterval)
+      clearInterval(matchmakingInterval)
     }
   })
 
@@ -123,14 +141,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         return socket.emit('MatchmakingResponse', {
           status: 'error',
           message: 'Email is required.'
-        })
-      }
-
-      // Check if user is already in queue
-      if (isInQueue(email)) {
-        return socket.emit('MatchmakingResponse', {
-          status: 'error',
-          message: 'You are already in the matchmaking queue.'
         })
       }
 
@@ -149,13 +159,8 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         console.log(`Removed stale player ${player.email} from matchmaking queue when joining`)
       }
 
-      // Double-check that user is not in queue after cleanup
-      if (isInQueue(email)) {
-        return socket.emit('MatchmakingResponse', {
-          status: 'error',
-          message: 'You are already in the matchmaking queue.'
-        })
-      }
+      // Remove user from queue if they're already there (clean slate approach)
+      removeFromQueueByEmail(email)
 
       // Check if user is still in an active game after cleanup
       const redisGameRooms = await redis.keys('game_room:*')
@@ -276,11 +281,21 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       const queuePosition = inQueue ? matchmakingQueue.findIndex(p => p.email === email) + 1 : 0
       const totalInQueue = matchmakingQueue.length
 
+      // Add debug information
+      const queueInfo = matchmakingQueue.map((player, index) => ({
+        position: index + 1,
+        email: player.email,
+        joinedAt: new Date(player.joinedAt).toISOString(),
+        waitTime: Math.round((Date.now() - player.joinedAt) / 1000)
+      }))
+
       socket.emit('QueueStatusResponse', {
         status: 'success',
         inQueue,
         queuePosition,
-        totalInQueue
+        totalInQueue,
+        queueInfo, // Debug information
+        timestamp: Date.now()
       })
 
     } catch (error) {
@@ -373,83 +388,218 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     }
   })
 
-  // Function to try matching players in the queue
-  async function tryMatchPlayers(io: Server) {
-    if (matchmakingQueue.length < 2) {
-      return // Need at least 2 players to match
-    }
+  // Handle player leaving during matchmaking game (same as OneVsOne)
+  socket.on('LeaveMatchmakingGame', async (data: { gameId: string; playerEmail: string }) => {
+    try {
+      const { gameId, playerEmail } = data
+      
+      if (!gameId || !playerEmail) {
+        return
+      }
 
-    // Get first two players from queue
-    const player1 = matchmakingQueue.shift()!
-    const player2 = matchmakingQueue.shift()!
+      // Get game room data
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        return
+      }
 
-    if (!player1 || !player2) {
-      return
-    }
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Determine winner (the player who didn't leave)
+      const winner = gameRoom.hostEmail === playerEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+      const loser = playerEmail
 
-    // Prevent matching a user with themselves
-    if (player1.email === player2.email) {
-      console.log(`Preventing self-match for user: ${player1.email}`)
-      // Put both players back in queue
-      matchmakingQueue.unshift(player2)
-      matchmakingQueue.unshift(player1)
-      return
-    }
-
-    // Fetch user data for both players
-    const [player1User, player2User] = await Promise.all([
-      getUserByEmail(player1.email),
-      getUserByEmail(player2.email)
-    ])
-    const player1Data = getPlayerData(player1User)
-    const player2Data = getPlayerData(player2User)
-
-    // Create a new game room
-    const gameId = uuidv4()
-    const gameRoom: GameRoomData = {
-      gameId,
-      hostEmail: player1.email,
-      guestEmail: player2.email,
-      status: 'accepted',
-      createdAt: Date.now()
-    }
-
-    // Save game room to Redis
-    await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
-
-    // Get socket IDs for both players
-    const player1SocketIds = await getSocketIds(player1.email, 'sockets') || []
-    const player2SocketIds = await getSocketIds(player2.email, 'sockets') || []
-
-    // Notify both players about the match
-    const matchData = {
-      gameId,
-      hostEmail: player1.email,
-      guestEmail: player2.email,
-      hostData: player1Data,
-      guestData: player2Data,
-      status: 'match_found',
-      message: 'Match found! Game will start shortly.'
-    }
-
-    io.to([...player1SocketIds, ...player2SocketIds]).emit('MatchFound', matchData)
-
-    // Wait a moment for players to prepare, then start the game
-    setTimeout(async () => {
-      // Update game status to in_progress
-      gameRoom.status = 'in_progress'
-      gameRoom.startedAt = Date.now()
+      // Update game status
+      gameRoom.status = 'ended'
+      gameRoom.endedAt = Date.now()
+      gameRoom.winner = winner
+      gameRoom.leaver = loser
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
 
-      // Notify players that game is starting
-      io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
+      // Get socket IDs for both players
+      const [hostSocketIds, guestSocketIds] = await Promise.all([
+        getSocketIds(gameRoom.hostEmail, 'sockets') || [],
+        getSocketIds(gameRoom.guestEmail, 'sockets') || []
+      ])
+
+      // Notify both players about the game ending
+      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameEnded', {
+        gameId,
+        winner,
+        loser,
+        message: 'Game ended due to player leaving.',
+        reason: 'player_left'
+      })
+
+      // Clean up the game room immediately
+      await redis.del(`game_room:${gameId}`)
+      
+      // Import gameRooms to remove from map
+      const { gameRooms } = await import('./game.socket.types')
+      gameRooms.delete(gameId)
+
+    } catch (error) {
+      console.error('Error handling player leaving matchmaking game:', error)
+    }
+  })
+
+  // Manual trigger for matchmaking (for testing/debugging)
+  socket.on('TriggerMatchmaking', async () => {
+    try {
+      console.log(`Manual matchmaking trigger requested. Queue size: ${matchmakingQueue.length}`)
+      
+      if (matchmakingQueue.length >= 2) {
+        await tryMatchPlayers(io)
+        socket.emit('MatchmakingResponse', {
+          status: 'success',
+          message: `Manual matchmaking triggered. Attempted to match ${matchmakingQueue.length} players.`
+        })
+      } else {
+        socket.emit('MatchmakingResponse', {
+          status: 'info',
+          message: `Not enough players for matchmaking. Queue size: ${matchmakingQueue.length}`
+        })
+      }
+    } catch (error) {
+      console.error('Error in manual matchmaking trigger:', error)
+      socket.emit('MatchmakingResponse', {
+        status: 'error',
+        message: 'Failed to trigger matchmaking.'
+      })
+    }
+  })
+
+  // Function to try matching players in the queue
+  async function tryMatchPlayers(io: Server) {
+    try {
+      if (matchmakingQueue.length < 2) {
+        return // Need at least 2 players to match
+      }
+
+      // Get first two players from queue
+      const player1 = matchmakingQueue.shift()!
+      const player2 = matchmakingQueue.shift()!
+
+      if (!player1 || !player2) {
+        return
+      }
+
+      // Prevent matching a user with themselves
+      if (player1.email === player2.email) {
+        console.log(`Preventing self-match for user: ${player1.email}`)
+        // Put the player back in queue and try again
+        matchmakingQueue.unshift(player1)
+        // Recursively try to match again
+        setTimeout(() => tryMatchPlayers(io), 1000)
+        return
+      }
+
+      // Verify both players are still connected
+      const player1Socket = io.sockets.sockets.get(player1.socketId)
+      const player2Socket = io.sockets.sockets.get(player2.socketId)
+
+      if (!player1Socket || !player2Socket) {
+        console.log(`One or both players disconnected during matchmaking: ${player1.email}, ${player2.email}`)
+        // Put the connected player back in queue if they exist
+        if (player1Socket) {
+          matchmakingQueue.unshift(player1)
+        }
+        if (player2Socket) {
+          matchmakingQueue.unshift(player2)
+        }
+        return
+      }
+
+      // Fetch user data for both players
+      const [player1User, player2User] = await Promise.all([
+        getUserByEmail(player1.email),
+        getUserByEmail(player2.email)
+      ])
+
+      if (!player1User || !player2User) {
+        console.log(`Failed to fetch user data for matchmaking: ${player1.email}, ${player2.email}`)
+        // Put players back in queue
+        matchmakingQueue.unshift(player1, player2)
+        return
+      }
+
+      const player1Data = getPlayerData(player1User)
+      const player2Data = getPlayerData(player2User)
+
+      // Create a new game room using the same system as OneVsOne
+      const gameId = uuidv4()
+      const gameRoom: GameRoomData = {
+        gameId,
+        hostEmail: player1.email, // Use player1 as host for consistency with OneVsOne
+        guestEmail: player2.email,
+        status: 'accepted', // Start with 'accepted' status like OneVsOne
+        createdAt: Date.now()
+      }
+
+      // Save game room to Redis and add to gameRooms map
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+      
+      // Import gameRooms from types to add the room
+      const { gameRooms } = await import('./game.socket.types')
+      gameRooms.set(gameId, gameRoom)
+
+      // Get socket IDs for both players
+      const player1SocketIds = await getSocketIds(player1.email, 'sockets') || []
+      const player2SocketIds = await getSocketIds(player2.email, 'sockets') || []
+
+      // Notify both players about the match - use the same format as OneVsOne
+      const matchData = {
         gameId,
         hostEmail: player1.email,
         guestEmail: player2.email,
         hostData: player1Data,
         guestData: player2Data,
-        startedAt: gameRoom.startedAt
-      })
-    }, 3000) // 3 second delay before starting
+        status: 'match_found',
+        message: 'Match found! Game will start shortly.'
+      }
+
+      io.to([...player1SocketIds, ...player2SocketIds]).emit('MatchFound', matchData)
+
+      console.log(`Match created: ${player1.email} vs ${player2.email} (Game ID: ${gameId})`)
+
+      // Wait a moment for players to prepare, then start the game
+      setTimeout(async () => {
+        try {
+          // Verify game room still exists
+          const currentGameRoomData = await redis.get(`game_room:${gameId}`)
+          if (!currentGameRoomData) {
+            console.log(`Game room ${gameId} no longer exists, skipping game start`)
+            return
+          }
+
+          // Update game status to in_progress
+          gameRoom.status = 'in_progress'
+          gameRoom.startedAt = Date.now()
+          await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+          gameRooms.set(gameId, gameRoom)
+
+          // Notify players that game is starting
+          io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
+            gameId,
+            hostEmail: player1.email,
+            guestEmail: player2.email,
+            hostData: player1Data,
+            guestData: player2Data,
+            startedAt: gameRoom.startedAt
+          })
+
+          console.log(`Game ${gameId} started successfully`)
+        } catch (error) {
+          console.error(`Error starting game ${gameId}:`, error)
+        }
+      }, 3000) // 3 second delay before starting
+
+    } catch (error) {
+      console.error('Error in tryMatchPlayers:', error)
+      // If there was an error, try to put players back in queue
+      if (matchmakingQueue.length >= 0) {
+        setTimeout(() => tryMatchPlayers(io), 2000) // Retry after 2 seconds
+      }
+    }
   }
 } 

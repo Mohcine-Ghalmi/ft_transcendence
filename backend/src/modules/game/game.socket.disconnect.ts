@@ -51,12 +51,11 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
                 gameRoom.endedAt = Date.now()
                 gameRoom.winner = winner
                 gameRoom.leaver = loser
-                await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
                 
                 // Save match history
                 await saveMatchHistory(gameId, gameRoom, winner, loser, finalScore, 'player_left')
                 
-                // Clean up game
+                // Clean up game immediately
                 await cleanupGame(gameId, 'player_left')
                 
                 // Emit game end event to remaining player
@@ -82,9 +81,8 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
                 gameRoom.status = 'canceled'
                 gameRoom.endedAt = Date.now()
                 gameRoom.leaver = userEmail
-                await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
                 
-                // Clean up game
+                // Clean up game immediately
                 await cleanupGame(gameId, 'timeout')
                 
                 // Notify other player

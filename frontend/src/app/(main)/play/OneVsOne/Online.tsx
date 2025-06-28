@@ -286,13 +286,20 @@ export default function OnlineMatch() {
       setWaitTime(0);
       clearCountdown();
       
-      showNotification('Player left the game.', 'error');
+      showNotification('Opponent left the game. You win!', 'success');
       
-      // Reset game state and redirect back to play page
+      // Reset game state
       resetGameState();
       
-      // Navigate back to the main play page using React router
-      router.push('/play');
+      // Clean up any stale game data
+      if (socket && user?.email) {
+        socket.emit('CleanupGameData', { email: user.email });
+      }
+      
+      // Redirect to win page since the current user wins when opponent leaves
+      const winnerName = user?.username || user?.name || 'You';
+      const loserName = data.playerWhoLeft || 'Opponent';
+      router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
     };
 
     const handleGameEnded = (data) => {
@@ -302,13 +309,27 @@ export default function OnlineMatch() {
       setWaitTime(0);
       clearCountdown();
       
-      showNotification('Game ended.', 'info');
+      // Determine if current user won
+      const isWinner = data.winner === user?.email;
+      const winnerName = isWinner ? (user?.username || user?.name || 'You') : (data.winner || 'Opponent');
+      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.name || 'You');
       
-      // Reset game state and redirect back to play page
+      showNotification(data.message || 'Game ended.', 'info');
+      
+      // Reset game state
       resetGameState();
       
-      // Navigate back to the main play page using React router
-      router.push('/play');
+      // Clean up any stale game data
+      if (socket && user?.email) {
+        socket.emit('CleanupGameData', { email: user.email });
+      }
+      
+      // Redirect to appropriate result page based on whether user won or lost
+      if (isWinner) {
+        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      } else {
+        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      }
     };
 
     const handleGameCanceled = (data) => {
@@ -437,14 +458,6 @@ export default function OnlineMatch() {
       if (!user?.email) return;
       
       try {
-        // First check if backend is running
-        const healthRes = await fetch('http://localhost:5005/healthcheck');
-        if (!healthRes.ok) {
-          setBackendAvailable(false);
-          setFriends([]);
-          return;
-        }
-        
         setBackendAvailable(true);
         const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
         

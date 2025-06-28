@@ -4,31 +4,62 @@ import { MatchHistory, GameState, GameResult } from './game.schema'
 export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promise<MatchHistory> {
   const db = getDatabase()
   
-  const stmt = db.prepare(`
-    INSERT INTO match_history (
-      game_id, player1_email, player2_email, player1_score, player2_score,
-      winner, loser, game_duration, started_at, ended_at, game_mode, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  
-  const result = stmt.run(
-    match.gameId,
-    match.player1Email,
-    match.player2Email,
-    match.player1Score,
-    match.player2Score,
-    match.winner,
-    match.loser,
-    match.gameDuration,
-    match.startedAt,
-    match.endedAt,
-    match.gameMode,
-    match.status
-  )
-  
-  return {
-    id: result.lastInsertRowid as number,
-    ...match
+  try {
+    // First check if a match with this game_id already exists
+    const existingStmt = db.prepare('SELECT id FROM match_history WHERE game_id = ?')
+    const existing = existingStmt.get(match.gameId) as { id: number } | undefined
+    
+    if (existing) {
+      console.log(`Match history already exists for game ${match.gameId}, skipping duplicate entry`)
+      return {
+        id: existing.id,
+        ...match
+      }
+    }
+    
+    const stmt = db.prepare(`
+      INSERT INTO match_history (
+        game_id, player1_email, player2_email, player1_score, player2_score,
+        winner, loser, game_duration, started_at, ended_at, game_mode, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    
+    const result = stmt.run(
+      match.gameId,
+      match.player1Email,
+      match.player2Email,
+      match.player1Score,
+      match.player2Score,
+      match.winner,
+      match.loser,
+      match.gameDuration,
+      match.startedAt,
+      match.endedAt,
+      match.gameMode,
+      match.status
+    )
+    
+    return {
+      id: result.lastInsertRowid as number,
+      ...match
+    }
+  } catch (error) {
+    console.error(`Error creating match history for game ${match.gameId}:`, error)
+    
+    // If it's a UNIQUE constraint error, try to get the existing record
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      console.log(`UNIQUE constraint error for game ${match.gameId}, attempting to retrieve existing record`)
+      const existingStmt = db.prepare('SELECT * FROM match_history WHERE game_id = ?')
+      const existing = existingStmt.get(match.gameId) as MatchHistory | undefined
+      
+      if (existing) {
+        console.log(`Found existing match history for game ${match.gameId}`)
+        return existing
+      }
+    }
+    
+    // Re-throw the error if we can't handle it
+    throw error
   }
 }
 

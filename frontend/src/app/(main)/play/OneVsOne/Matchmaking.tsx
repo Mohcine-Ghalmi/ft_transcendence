@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore, getSocketInstance } from '@/(zustand)/useAuthStore';
 import { PingPongGame } from '../game/PingPongGame';
+import { useRouter } from 'next/navigation';
 
 interface MatchmakingProps {
   onBack: () => void;
@@ -44,6 +45,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   
   const { user } = useAuthStore();
   const socket = getSocketInstance();
+  const router = useRouter();
 
   useEffect(() => {
     if (!socket || !user?.email) return;
@@ -74,7 +76,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
             if (socket && user?.email) {
               socket.emit('CleanupGameData', { email: user.email });
             }
-          }, 1000);
+          }, 0);
         }
       }
     };
@@ -119,6 +121,11 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       setOpponent(null);
       setIsHost(false);
       
+      // Determine if current user won
+      const isWinner = data.winner === user?.email;
+      const winnerName = isWinner ? (user?.username || user?.name || 'You') : (data.winner || 'Opponent');
+      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.name || 'You');
+      
       // Show game result message
       if (data.message) {
         setErrorMessage(data.message);
@@ -126,6 +133,13 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         setTimeout(() => {
           setErrorMessage('');
         }, 5000);
+      }
+      
+      // Redirect to appropriate result page based on whether user won or lost
+      if (isWinner) {
+        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      } else {
+        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
       }
     };
 
@@ -203,7 +217,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         socket.emit('LeaveMatchmaking', { email: user.email });
       }
     };
-  }, [socket, user?.email]);
+  }, [socket, user?.email, router]);
 
   // Handle page refresh and disconnection
   useEffect(() => {
@@ -305,7 +319,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     setMatchData(null);
     setOpponent(null);
     setIsHost(false);
-    onBack();
+    // Don't call onBack() here - let the socket events handle redirects to win/loss pages
   };
 
   const handleCleanupGameData = () => {
@@ -362,7 +376,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
             </>
           )}
           
-          {matchmakingStatus === 'idle' && (
+          {/* {matchmakingStatus === 'idle' && (
             <div className="text-center flex flex-col items-center justify-center w-full">
               {errorMessage && (
                 <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg w-full max-w-lg mx-auto">
@@ -381,9 +395,9 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
                     </div>
                   )}
                 </div>
-              )}
+              )} */}
               
-              <p className="text-gray-400 text-lg mb-8">
+              {/* <p className="text-gray-400 text-lg mb-8">
                 Click the button below to start searching for a random opponent.
               </p>
               <button
@@ -396,9 +410,9 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
                 className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl text-xl font-semibold transition-colors"
               >
                 Start Matchmaking
-              </button>
-            </div>
-          )}
+              </button> */}
+            {/* </div> */}
+          {/* )} */}
         </div>
       </div>
     </div>
