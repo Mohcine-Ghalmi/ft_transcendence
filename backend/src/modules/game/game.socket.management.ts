@@ -22,7 +22,13 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
     try {
       const { gameId, finalScore, reason = 'normal_end' } = data
       const gameRoom = gameRooms.get(gameId);
-      if (!gameRoom) return;
+      if (!gameRoom) {
+        console.log(`Game room not found for game ${gameId}`)
+        return
+      }
+      
+      console.log(`Game ${gameId} ending with reason: ${reason}`)
+      
       // Determine winner and loser based on score
       let winner, loser;
       if (finalScore.p1 > finalScore.p2) {
@@ -36,8 +42,20 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         winner = data.winner || gameRoom.hostEmail;
         loser = data.loser || gameRoom.guestEmail;
       }
+      
+      // Update game room with end time
+      gameRoom.status = 'completed';
+      gameRoom.endedAt = Date.now();
+      gameRoom.winner = winner;
+      gameRoom.loser = loser;
+      
+      // Save match history
       await saveMatchHistory(gameId, gameRoom, winner, loser, finalScore, reason);
+      
+      // Clean up game
       await cleanupGame(gameId, reason);
+      
+      // Emit game end event to both players
       await emitToUsers(io, [gameRoom.hostEmail, gameRoom.guestEmail], 'GameEnded', {
         gameId,
         winner,
@@ -46,10 +64,14 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         gameDuration: gameRoom.startedAt && gameRoom.endedAt 
           ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
           : 0,
-        reason
+        reason,
+        message: reason === 'normal_end' ? 'Game completed!' : 'Game ended due to player leaving.'
       })
+      
+      console.log(`Game ${gameId} ended successfully. Winner: ${winner}, Loser: ${loser}`)
+      
     } catch (error) {
-      // Error handling for GameEnd
+      console.error('Error in GameEnd handler:', error)
     }
   })
 
@@ -63,6 +85,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
           message: 'Missing required information.',
         })
       }
+      
       const gameRoom = gameRooms.get(gameId);
       if (!gameRoom) {
         return socket.emit('GameResponse', {
@@ -70,25 +93,31 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
           message: 'Game room not found.',
         })
       }
+      
+      console.log(`Player ${playerEmail} leaving game ${gameId}`)
+      
       // Get current game state for final score
       const currentGameState = activeGames.get(gameId)
       const finalScore = currentGameState?.scores || { p1: 0, p2: 0 }
-      // Determine winner and loser based on score
-      let winner, loser;
-      if (finalScore.p1 > finalScore.p2) {
-        winner = gameRoom.hostEmail;
-        loser = gameRoom.guestEmail;
-      } else if (finalScore.p2 > finalScore.p1) {
-        winner = gameRoom.guestEmail;
-        loser = gameRoom.hostEmail;
-      } else {
-        // If tie, the player who did not leave is the winner
-        const otherPlayerEmail = gameRoom.hostEmail === playerEmail ? gameRoom.guestEmail : gameRoom.hostEmail;
-        winner = otherPlayerEmail;
-        loser = playerEmail;
-      }
+      
+      // Determine winner and loser
+      const otherPlayerEmail = gameRoom.hostEmail === playerEmail ? gameRoom.guestEmail : gameRoom.hostEmail;
+      const winner = otherPlayerEmail;
+      const loser = playerEmail;
+      
+      // Update game room with end time
+      gameRoom.status = 'completed';
+      gameRoom.endedAt = Date.now();
+      gameRoom.winner = winner;
+      gameRoom.leaver = loser;
+      
+      // Save match history
       await saveMatchHistory(gameId, gameRoom, winner, loser, finalScore, 'player_left');
+      
+      // Clean up game
       await cleanupGame(gameId, 'player_left');
+      
+      // Emit game end event to both players
       await emitToUsers(io, [gameRoom.hostEmail, gameRoom.guestEmail], 'GameEnded', {
         gameId,
         winner,
@@ -97,20 +126,27 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         gameDuration: gameRoom.startedAt && gameRoom.endedAt 
           ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
           : 0,
-        reason: 'player_left'
+        reason: 'player_left',
+        message: 'Opponent left the game. You win!'
       })
-      const otherPlayerEmail = gameRoom.hostEmail === playerEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+      
+      // Notify the other player specifically
       const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
       io.to(otherPlayerSocketIds).emit('PlayerLeft', {
         gameId,
         playerWhoLeft: playerEmail,
         reason: 'player_left'
       })
+      
       socket.emit('GameResponse', {
         status: 'success',
         message: 'Left game successfully.',
       })
+      
+      console.log(`Player ${playerEmail} left game ${gameId}. Winner: ${winner}`)
+      
     } catch (error) {
+      console.error('Error in LeaveGame handler:', error)
       socket.emit('GameResponse', {
         status: 'error',
         message: 'Failed to leave game.',

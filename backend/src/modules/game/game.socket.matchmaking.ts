@@ -70,6 +70,20 @@ async function cleanupUserGameData(email: string): Promise<{ cleanedCount: numbe
 
 export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server) => {
   
+  // Periodic cleanup of stale queue entries
+  const cleanupStaleQueueEntries = () => {
+    const now = Date.now()
+    const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000) // 2 minutes
+    
+    for (const player of stalePlayers) {
+      removeFromQueueByEmail(player.email)
+      console.log(`Removed stale player ${player.email} from matchmaking queue during periodic cleanup`)
+    }
+  }
+
+  // Run cleanup every 30 seconds
+  const cleanupInterval = setInterval(cleanupStaleQueueEntries, 30000)
+  
   // Handle socket disconnect - clean up user data
   socket.on('disconnect', async () => {
     try {
@@ -135,6 +149,14 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         console.log(`Removed stale player ${player.email} from matchmaking queue when joining`)
       }
 
+      // Double-check that user is not in queue after cleanup
+      if (isInQueue(email)) {
+        return socket.emit('MatchmakingResponse', {
+          status: 'error',
+          message: 'You are already in the matchmaking queue.'
+        })
+      }
+
       // Check if user is still in an active game after cleanup
       const redisGameRooms = await redis.keys('game_room:*')
       let hasActiveGame = false
@@ -173,6 +195,8 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         joinedAt: Date.now()
       }
       matchmakingQueue.push(player)
+
+      console.log(`User ${email} joined matchmaking queue. Queue size: ${matchmakingQueue.length}`)
 
       socket.emit('MatchmakingResponse', {
         status: 'success',
@@ -298,6 +322,57 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     }
   })
 
+  // Handle player leaving before game starts
+  socket.on('PlayerLeftBeforeGameStart', async (data: { gameId: string; leaver: string }) => {
+    try {
+      const { gameId, leaver } = data
+      
+      if (!gameId || !leaver) {
+        return
+      }
+
+      // Get game room data
+      const gameRoomData = await redis.get(`game_room:${gameId}`)
+      if (!gameRoomData) {
+        return
+      }
+
+      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
+      
+      // Only handle if game hasn't started yet
+      if (gameRoom.status !== 'accepted') {
+        return
+      }
+
+      // Determine winner (the player who didn't leave)
+      const winner = gameRoom.hostEmail === leaver ? gameRoom.guestEmail : gameRoom.hostEmail
+
+      // Update game status
+      gameRoom.status = 'ended'
+      gameRoom.endedAt = Date.now()
+      gameRoom.winner = winner
+      gameRoom.leaver = leaver
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+
+      // Get socket IDs for both players
+      const [hostSocketIds, guestSocketIds] = await Promise.all([
+        getSocketIds(gameRoom.hostEmail, 'sockets') || [],
+        getSocketIds(gameRoom.guestEmail, 'sockets') || []
+      ])
+
+      // Notify both players
+      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameEndedByOpponentLeave', {
+        gameId,
+        winner,
+        leaver,
+        message: 'Opponent left before the game started.'
+      })
+
+    } catch (error) {
+      console.error('Error handling player leaving before game start:', error)
+    }
+  })
+
   // Function to try matching players in the queue
   async function tryMatchPlayers(io: Server) {
     if (matchmakingQueue.length < 2) {
@@ -309,6 +384,15 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     const player2 = matchmakingQueue.shift()!
 
     if (!player1 || !player2) {
+      return
+    }
+
+    // Prevent matching a user with themselves
+    if (player1.email === player2.email) {
+      console.log(`Preventing self-match for user: ${player1.email}`)
+      // Put both players back in queue
+      matchmakingQueue.unshift(player2)
+      matchmakingQueue.unshift(player1)
       return
     }
 

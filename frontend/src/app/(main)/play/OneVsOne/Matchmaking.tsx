@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore, getSocketInstance } from '@/(zustand)/useAuthStore';
 import { PingPongGame } from '../game/PingPongGame';
-import { PlayerCard } from './Locale';
 
 interface MatchmakingProps {
   onBack: () => void;
@@ -28,80 +27,8 @@ const MatchmakingStatus = ({ status, queuePosition, totalInQueue }: {
   );
 };
 
-const MatchFoundModal = ({ 
-  gameId, 
-  hostEmail, 
-  guestEmail, 
-  currentUserEmail, 
-  onGameStart 
-}: { 
-  gameId: string; 
-  hostEmail: string; 
-  guestEmail: string; 
-  currentUserEmail: string; 
-  onGameStart: () => void; 
-}) => {
-  const [countdown, setCountdown] = useState(3);
-  const isHost = hostEmail === currentUserEmail;
-  const opponentEmail = isHost ? guestEmail : hostEmail;
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          setTimeout(() => {
-            onGameStart();
-          }, 0);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [onGameStart]);
-
-  return (
-  <div className="h-full text-white flex items-center justify-center min-h-[calc(100vh-80px)]">
-    {/* Main Content */}
-    <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl flex flex-col items-center">
-      <h1 className="text-4xl md:text-5xl font-bold mb-8 text-white text-center">Match Found!</h1>
-      
-      <div className="mb-8 text-center">
-        <p className="text-xl text-green-400 mb-4">🎮 Opponent found!</p>
-        <p className="text-gray-300 mb-6">
-          Game starting in {countdown} seconds...
-        </p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12">
-        <PlayerCard 
-          player={{
-            name: isHost ? 'You (Host)' : 'You',
-            avatar: '/avatar/Default.svg',
-            GameStatus: 'Ready'
-          }} 
-          playerNumber={1} 
-          onAddPlayer={() => {}} 
-        />
-        <PlayerCard 
-          player={{
-            name: `Opponent (${isHost ? 'Guest' : 'Host'})`,
-            avatar: '/avatar/Default.svg',
-            GameStatus: 'Ready'
-          }} 
-          playerNumber={2} 
-          onAddPlayer={() => {}} 
-        />
-      </div>
-    </div>
-  </div>
-  );
-};
-
 export default function Matchmaking({ onBack }: MatchmakingProps) {
-  const [matchmakingStatus, setMatchmakingStatus] = useState<'idle' | 'searching' | 'found' | 'in_game'>('idle');
+  const [matchmakingStatus, setMatchmakingStatus] = useState<'idle' | 'searching' | 'in_game'>('idle');
   const [queuePosition, setQueuePosition] = useState(0);
   const [totalInQueue, setTotalInQueue] = useState(0);
   const [gameId, setGameId] = useState<string | null>(null);
@@ -160,6 +87,14 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     };
 
     const handleMatchFound = (data: any) => {
+      // Check if user is being matched with themselves
+      if (data.hostEmail === data.guestEmail) {
+        console.error('Self-match detected:', data);
+        setErrorMessage('Matchmaking error: Cannot match with yourself. Please try again.');
+        setMatchmakingStatus('idle');
+        return;
+      }
+
       setMatchData(data);
       setGameId(data.gameId);
       setIsHost(data.hostEmail === user.email);
@@ -168,7 +103,9 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         email: data.hostEmail === user.email ? data.guestEmail : data.hostEmail,
         avatar: '/avatar/Default.svg'
       });
-      setMatchmakingStatus('found');
+      
+      // Directly go to game without showing modal
+      setMatchmakingStatus('in_game');
     };
 
     const handleGameStarting = (data: any) => {
@@ -181,6 +118,15 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       setMatchData(null);
       setOpponent(null);
       setIsHost(false);
+      
+      // Show game result message
+      if (data.message) {
+        setErrorMessage(data.message);
+        // Clear message after 5 seconds
+        setTimeout(() => {
+          setErrorMessage('');
+        }, 5000);
+      }
     };
 
     const handleCleanupResponse = (data: any) => {
@@ -259,8 +205,91 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     };
   }, [socket, user?.email]);
 
+  // Handle page refresh and disconnection
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // If we're in a game, notify the server that we're leaving
+      if (socket && gameId && user?.email && matchmakingStatus === 'in_game') {
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email 
+        });
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // If page becomes hidden (user switches tabs or minimizes), don't leave game immediately
+      // Only leave if the page is being unloaded
+      if (document.visibilityState === 'hidden') {
+        // Don't automatically leave - let the user decide
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [socket, gameId, user?.email, matchmakingStatus]);
+
+  // Handle automatic retry for matchmaking
+  useEffect(() => {
+    if (!socket || !user?.email) return;
+
+    // Check if user was previously in matchmaking (from localStorage or session)
+    const wasInMatchmaking = sessionStorage.getItem('wasInMatchmaking') === 'true';
+    const lastMatchmakingTime = sessionStorage.getItem('lastMatchmakingTime');
+    
+    if (wasInMatchmaking && lastMatchmakingTime) {
+      const timeSinceLastMatchmaking = Date.now() - parseInt(lastMatchmakingTime);
+      
+      // If it's been less than 5 minutes, automatically retry
+      if (timeSinceLastMatchmaking < 5 * 60 * 1000) {
+        console.log('User was previously in matchmaking, automatically retrying...');
+        setMatchmakingStatus('searching');
+        socket.emit('JoinMatchmaking', { email: user.email });
+      } else {
+        // Clear old session data
+        sessionStorage.removeItem('wasInMatchmaking');
+        sessionStorage.removeItem('lastMatchmakingTime');
+      }
+    }
+
+    // Store matchmaking state when component mounts
+    sessionStorage.setItem('wasInMatchmaking', 'true');
+    sessionStorage.setItem('lastMatchmakingTime', Date.now().toString());
+
+    return () => {
+      // Clear session data when component unmounts
+      sessionStorage.removeItem('wasInMatchmaking');
+      sessionStorage.removeItem('lastMatchmakingTime');
+    };
+  }, [socket, user?.email]);
+
+  // Handle socket reconnection
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleConnect = () => {
+      console.log('Socket reconnected, checking matchmaking status...');
+      
+      // If user was in matchmaking, retry joining
+      if (user?.email && matchmakingStatus === 'searching') {
+        socket.emit('JoinMatchmaking', { email: user.email });
+      }
+    };
+
+    socket.on('connect', handleConnect);
+
+    return () => {
+      socket.off('connect', handleConnect);
+    };
+  }, [socket, user?.email, matchmakingStatus]);
+
   const handleLeaveMatchmaking = () => {
-    if (socket && user?.email && matchmakingStatus === 'found' && gameId) {
+    if (socket && user?.email && matchmakingStatus === 'in_game' && gameId) {
       // Notify backend that player left before game started
       socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
     } else if (socket && user?.email) {
@@ -268,10 +297,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     }
     setMatchmakingStatus('idle');
     onBack();
-  };
-
-  const handleGameStart = () => {
-    setMatchmakingStatus('in_game');
   };
 
   const handleGameEnd = () => {
@@ -308,19 +333,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         </div>
         </div>
         </div>
-    );
-  }
-
-  // If match found, show countdown
-  if (matchmakingStatus === 'found' && matchData) {
-    return (
-      <MatchFoundModal
-        gameId={matchData.gameId}
-        hostEmail={matchData.hostEmail}
-        guestEmail={matchData.guestEmail}
-        currentUserEmail={user?.email || ''}
-        onGameStart={handleGameStart}
-      />
     );
   }
 

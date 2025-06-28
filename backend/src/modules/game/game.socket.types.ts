@@ -18,10 +18,13 @@ export interface GameRoomData {
   gameId: string
   hostEmail: string
   guestEmail: string
-  status: 'waiting' | 'accepted' | 'in_progress' | 'completed' | 'canceled'
+  status: 'waiting' | 'accepted' | 'in_progress' | 'completed' | 'canceled' | 'ended'
   createdAt: number
   startedAt?: number
   endedAt?: number
+  winner?: string
+  loser?: string
+  leaver?: string
 }
 
 export interface GameState {

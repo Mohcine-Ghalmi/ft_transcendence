@@ -42,6 +42,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
+  const [gameReady, setGameReady] = useState(false);
   const [mobile, setMobile] = useState(isMobile());
   const [gameTime, setGameTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
   const gameStartTime = useRef<number | null>(null);
@@ -105,6 +106,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           currentScores.current = { p1: 0, p2: 0 };
           setScores({ p1: 0, p2: 0 });
         }
+        
+        // Add 1-second delay before game is ready to play
+        setTimeout(() => {
+          setGameReady(true);
+        }, 1000);
       }
     };
 
@@ -130,19 +136,19 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   // Validate players have required properties
   const safePlayer1 = {
-    id: user?.id,
+    id: user?.id || crypto.randomUUID(),
     name: user?.username,
     avatar: user?.avatar || '/mghalmi.jpg',
     nickname: user?.login || 'Player 1'
   };
 
   const safePlayer2 = isRemoteGame ? {
-    id: opponent?.id,
+    id: opponent?.id || crypto.randomUUID(),
     name: opponent?.username || opponent?.name,
     avatar: opponent?.avatar || '/mghalmi.jpg',
     nickname: opponent?.login || opponent?.nickname || 'Player 2'
   } : {
-    id: player2?.id,
+    id: player2?.id || crypto.randomUUID(),
     name: player2?.username || player2?.name,
     avatar: player2?.avatar || '/mghalmi.jpg',
     nickname: player2?.login || player2?.nickname || 'Player 2'
@@ -544,7 +550,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
 
     const loop = () => {
-      if (!paused) update();
+      if (!paused && gameReady) update(); // Only update when game is ready
       draw();
       // Use throttled animation frame for better performance
       animationRef.current = requestAnimationFrame(loop);
@@ -564,7 +570,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         animationRef.current = null;
       }
     };
-  }, [gameStarted, paused]);
+  }, [gameStarted, paused, gameReady]); // Add gameReady to dependencies
 
   // Win condition - Updated for tournament mode with better winner object
   useEffect(() => {
@@ -674,10 +680,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   const handleGameEnded = useCallback((data: any) => {
     if (data.gameId === gameId) {
+      console.log('Game ended:', data);
+      
+      // Set game state to ended
       setGameStarted(false);
       setPaused(true);
       
-      // Determine winner and loser
+      // Determine winner and loser based on server data
       const isWinner = data.winner === user?.email;
       const winnerName = isWinner ? safePlayer1.name : safePlayer2.name;
       const loserName = isWinner ? safePlayer2.name : safePlayer1.name;
@@ -689,14 +698,25 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
       }
     }
-  }, [gameId, user?.email, safePlayer1.name, safePlayer2.name]);
+  }, [gameId, user?.email, safePlayer1.name, safePlayer2.name, router]);
 
   const handlePlayerLeft = useCallback((data: any) => {
     if (data.gameId === gameId) {
-      // Other player left, current player wins
-      handleGameEnd(safePlayer1);
+      console.log('Opponent left:', data);
+      
+      // Set game state to ended
+      setGameStarted(false);
+      setPaused(true);
+      
+      // Current player wins when opponent leaves
+      const isWinner = true; // Current player is always the winner when opponent leaves
+      const winnerName = safePlayer1.name;
+      const loserName = safePlayer2.name;
+      
+      // Navigate to winner page
+      router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
     }
-  }, [gameId, safePlayer1, handleGameEnd]);
+  }, [gameId, safePlayer1.name, safePlayer2.name, router]);
 
   // Socket event listeners for remote game
   useEffect(() => {
@@ -734,7 +754,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       // For remote games, emit start game event to server
       socket.emit('StartGame', { gameId });
     } else {
-      // For local games, start immediately
+      // For local games, start immediately but add 1-second delay before ready
       currentScores.current = { p1: 0, p2: 0 };
       setScores({ p1: 0, p2: 0 });
       paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
@@ -746,6 +766,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       setGameStarted(true);
       setPaused(false);
       gameStartTime.current = Date.now();
+      
+      // Add 1-second delay before game is ready to play
+      setTimeout(() => {
+        setGameReady(true);
+      }, 1000);
     }
   };
 

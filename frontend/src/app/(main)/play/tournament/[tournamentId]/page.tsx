@@ -257,11 +257,12 @@ export default function TournamentGamePage() {
     return (
       <div className="h-screen bg-[#0f1419]">
         <PingPongGame
+          player1={user}
+          player2={opponent}
           gameId={`${tournamentId}-${currentMatch.id}`}
           isHost={currentMatch.player1?.email === user?.email}
           opponent={opponent}
-          onGameEnd={handleGameEnd}
-          gameType="tournament"
+          onExit={handleGameEnd}
         />
       </div>
     )
