@@ -35,18 +35,36 @@ export function TournamentInviteProvider({ children }) {
       setReceivedInvite(null);
     };
 
+    const handleTournamentInviteAccepted = (data) => {
+      console.log('Tournament invite accepted:', data);
+      setReceivedInvite(null);
+      // Only navigate if this is the invited player (not the host)
+      if (data.inviteeEmail === user.email) {
+        router.push(`/play/tournament/${data.tournamentId}`);
+      }
+    };
+
+    const handleTournamentInviteDeclined = (data) => {
+      console.log('Tournament invite declined:', data);
+      setReceivedInvite(null);
+    };
+
     // Add event listeners
     socket.on("TournamentInviteReceived", handleTournamentInviteReceived);
     socket.on("TournamentInviteCanceled", handleTournamentInviteCanceled);
     socket.on("TournamentInviteTimeout", handleTournamentInviteTimeout);
+    socket.on("TournamentInviteAccepted", handleTournamentInviteAccepted);
+    socket.on("TournamentInviteDeclined", handleTournamentInviteDeclined);
 
     // Cleanup event listeners on unmount
     return () => {
       socket.off("TournamentInviteReceived", handleTournamentInviteReceived);
       socket.off("TournamentInviteCanceled", handleTournamentInviteCanceled);
       socket.off("TournamentInviteTimeout", handleTournamentInviteTimeout);
+      socket.off("TournamentInviteAccepted", handleTournamentInviteAccepted);
+      socket.off("TournamentInviteDeclined", handleTournamentInviteDeclined);
     };
-  }, [socket, user?.email]);
+  }, [socket, user?.email, router]);
 
   const acceptInvite = () => {
     if (receivedInvite && socket) {
@@ -55,8 +73,7 @@ export function TournamentInviteProvider({ children }) {
         inviteeEmail: user.email,
       });
       setReceivedInvite(null);
-      // Navigate to the specific tournament page
-      router.push(`/play/tournament/${receivedInvite.tournamentId}`);
+      // Don't navigate here - let the socket event handle it
     }
   };
 

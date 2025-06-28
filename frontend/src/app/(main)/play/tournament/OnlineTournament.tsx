@@ -32,7 +32,7 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, 
     player.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
   return (
-    <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+    <div className="bg-[#0f1419] rounded-lg p-6 border border-[#2a2f3a]">
       <h3 className="text-white text-xl font-semibold mb-4">Invite Players</h3>
       {/* Search Bar */}
       <div className="relative mb-6">
@@ -44,7 +44,7 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, 
           placeholder="Search for players..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-3 bg-[#2a2f3a] text-white rounded-lg border border-gray-600 outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+          className="w-full pl-12 pr-4 py-3 bg-[#1a1d23] text-white rounded-lg border border-[#2a2f3a] outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
         />
       </div>
       {/* Online Players List */}
@@ -67,7 +67,7 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, 
         {filteredPlayers.length > 0 ? (
           filteredPlayers.map((player: Player, index: number) => (
             <PlayerListItem
-              key={player.email || player.nickname || `friend-${index}`}
+              key={`${player.email}-${player.nickname}-${index}`}
               player={player}
               onInvite={onInvitePlayer}
               isInviting={false} // You can enhance this to match invite state
@@ -104,8 +104,8 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
   isHost: boolean;
 }) => {
   return (
-    <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-gray-700/50">
-      <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-gray-600">
+    <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
+      <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
         <Image 
           src={"/" + player.avatar} 
           alt={player.login || "zahay"} 
@@ -144,7 +144,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
   canAdvance: boolean;
 }) => {
   return (
-    <div className="flex items-center justify-center mb-6 bg-[#1a1d23] rounded-lg p-4 border border-gray-700/50">
+    <div className="flex items-center justify-center mb-6 bg-[#1a1d23] rounded-lg p-4 border border-[#2a2f3a]">
       <div className="flex items-center space-x-3">
         <span className="text-white text-lg">Round:</span>
         <span className="text-blue-400 font-bold text-xl">{currentRound + 1}/{totalRounds}</span>
@@ -156,7 +156,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
         className={`ml-6 px-6 py-2 rounded-lg text-white font-medium transition-colors ${
           canAdvance
             ? 'bg-blue-600 hover:bg-blue-700'
-            : 'bg-gray-600 cursor-not-allowed opacity-50'
+            : 'bg-[#2a2f3a] cursor-not-allowed opacity-50 border border-[#3a3f4a]'
         }`}
       >
         {currentRound + 1 === totalRounds ? "End Tournament" : "Next Round"}
@@ -590,24 +590,91 @@ export default function OnlineTournament() {
       console.log('Tournament created:', tournament);
       setTournamentId(tournament.tournamentId);
       setTournamentState('lobby');
+      setParticipants(tournament.participants.map((p: any) => ({
+        id: p.email,
+        login: p.nickname,
+        avatar: p.avatar,
+        nickname: p.nickname,
+        isHost: p.isHost
+      })));
     };
     
     const handleTournamentError = (error: any) => {
       console.error('Tournament creation error:', error);
       alert(error.message || 'Failed to create tournament');
     };
+
+    const handleTournamentUpdated = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setParticipants(data.tournament.participants.map((p: any) => ({
+          id: p.email,
+          login: p.nickname,
+          avatar: p.avatar,
+          nickname: p.nickname,
+          isHost: p.isHost
+        })));
+      }
+    };
+
+    const handleTournamentReady = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setParticipants(data.tournament.participants.map((p: any) => ({
+          id: p.email,
+          login: p.nickname,
+          avatar: p.avatar,
+          nickname: p.nickname,
+          isHost: p.isHost
+        })));
+        // Tournament is full and ready to start
+        if (data.tournament.hostEmail === user?.email) {
+          // Host can start the tournament
+          alert('Tournament is full! You can now start the tournament.');
+        }
+      }
+    };
+
+    const handleTournamentStarted = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentState('in_progress');
+        setMatches(data.tournament.matches);
+        // Navigate to tournament game page
+        window.location.href = `/play/tournament/${tournamentId}`;
+      }
+    };
+
+    const handleTournamentParticipantLeft = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setParticipants(data.tournament.participants.map((p: any) => ({
+          id: p.email,
+          login: p.nickname,
+          avatar: p.avatar,
+          nickname: p.nickname,
+          isHost: p.isHost
+        })));
+        const leftPlayerName = data.leftPlayer?.nickname || data.leftPlayer?.email || 'Unknown';
+        alert(`${leftPlayerName} left the tournament`);
+      }
+    };
     
     socket.on('TournamentCreated', handleTournamentCreated);
     socket.on('TournamentError', handleTournamentError);
+    socket.on('TournamentUpdated', handleTournamentUpdated);
+    socket.on('TournamentReady', handleTournamentReady);
+    socket.on('TournamentStarted', handleTournamentStarted);
+    socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
     
     return () => {
       socket.off('TournamentCreated', handleTournamentCreated);
       socket.off('TournamentError', handleTournamentError);
+      socket.off('TournamentUpdated', handleTournamentUpdated);
+      socket.off('TournamentReady', handleTournamentReady);
+      socket.off('TournamentStarted', handleTournamentStarted);
+      socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
     };
-  }, []);
+  }, [tournamentId, user?.email]);
 
   return (
-    <div className="h-full w-full text-white">
+    <div className="h-full w-full text-white bg-[#0f1419]">
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl">
           <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
@@ -618,7 +685,7 @@ export default function OnlineTournament() {
           {tournamentState === 'setup' && (
             <div className="space-y-6">
               {/* Tournament Settings */}
-              <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+              <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <h2 className="text-2xl font-semibold mb-6">Tournament Setup</h2>
                 
                 <div className="mb-6">
@@ -627,7 +694,7 @@ export default function OnlineTournament() {
                     type="text"
                     value={tournamentName}
                     onChange={(e) => setTournamentName(e.target.value)}
-                    className="bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 text-lg"
+                    className="bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 focus:ring-blue-500 border border-[#3a3f4a] text-lg"
                     placeholder="Enter tournament name"
                     required
                   />
@@ -641,7 +708,7 @@ export default function OnlineTournament() {
                         key={size} 
                         className={`py-3 px-4 rounded-lg font-medium transition-colors ${tournamentSize === size ? 
                           'bg-blue-600 text-white' : 
-                          'bg-[#2a2f3a] text-gray-300 hover:bg-[#3a3f4a] border border-gray-600'}`}
+                          'bg-[#2a2f3a] text-gray-300 hover:bg-[#3a3f4a] border border-[#3a3f4a]'}`}
                         onClick={() => setTournamentSize(size)}
                       >
                         {size} Players
@@ -659,7 +726,7 @@ export default function OnlineTournament() {
                   className={`w-full max-w-md text-white font-semibold rounded-lg py-4 text-xl transition-all ${
                     tournamentName && tournamentName.trim().length !== 0
                       ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-[#2a2f3a] cursor-not-allowed border border-[#3a3f4a]'
                   }`}
                 >
                   Create Tournament
@@ -672,7 +739,7 @@ export default function OnlineTournament() {
           {tournamentState === 'lobby' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Tournament Info and Participants */}
-              <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+              <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-2xl font-semibold text-white">Tournament Lobby</h3>
                   <div className="flex items-center space-x-4">
@@ -699,7 +766,7 @@ export default function OnlineTournament() {
                     
                     {/* Empty slots */}
                     {Array.from({ length: tournamentSize - participants.length }).map((_, index) => (
-                      <div key={`empty-slot-${index}`} className="flex items-center justify-center bg-[#1a1d23] rounded-lg p-3 border border-gray-700/50 border-dashed min-h-[58px]">
+                      <div key={`empty-slot-${index}`} className="flex items-center justify-center bg-[#1a1d23] rounded-lg p-3 border border-[#2a2f3a] border-dashed min-h-[58px]">
                         <div className="text-gray-400">Waiting for player...</div>
                       </div>
                     ))}
@@ -725,7 +792,7 @@ export default function OnlineTournament() {
                     className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
                       participants.length >= tournamentSize
                         ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-gray-600 cursor-not-allowed text-gray-400'
+                        : 'bg-[#2a2f3a] cursor-not-allowed text-gray-400 border border-[#3a3f4a]'
                     }`}
                   >
                     Start Tournament
@@ -763,11 +830,11 @@ export default function OnlineTournament() {
                 onPlayMatch={() => {}}
               />
               
-              <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+              <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <h3 className="text-xl font-semibold text-white mb-4">Active Players</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                   {getActivePlayers().map((player, index) => (
-                    <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-gray-600">
+                    <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                         <Image 
                           src={player.avatar} 
@@ -780,61 +847,29 @@ export default function OnlineTournament() {
                       <div className="text-green-400 text-sm mt-2 truncate max-w-full font-medium">
                         {getDisplayName(player)}
                       </div>
-                      {player.nickname && player.nickname !== player.login && (
-                        <div className="text-gray-400 text-xs truncate max-w-full">
-                          ({player.login})
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           )}
-
-          {/* Tournament Complete View */}
+          
+          {/* Tournament Complete Section */}
           {tournamentComplete && (
             <div className="text-center space-y-6">
-              <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50">
-                <div className="flex flex-col items-center">
-                  <div className="bg-gradient-to-b from-yellow-400 to-yellow-600 p-2 rounded-full mb-6">
-                    <div className="w-32 h-32 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-yellow-500">
-                      <Image 
-                        src={champion?.avatar || '/mghalmi.jpg'} 
-                        alt={champion?.login || 'Champion'} 
-                        width={128} 
-                        height={128}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]">
+                <h2 className="text-3xl font-bold text-white mb-4">Tournament Complete!</h2>
+                {champion && (
+                  <div className="mb-6">
+                    <div className="text-2xl text-yellow-400 mb-2">🏆 Champion</div>
+                    <div className="text-xl text-white">{getDisplayName(champion)}</div>
                   </div>
-                  
-                  <h2 className="text-3xl font-bold text-white mb-2">🏆 Tournament Champion</h2>
-                  <div className="text-yellow-400 text-4xl font-bold mb-2">
-                    {champion ? getDisplayName(champion) : 'Unknown'}
-                  </div>
-                  {champion?.nickname && champion.nickname !== champion.login && (
-                    <div className="text-yellow-300 text-xl mb-6">
-                      ({champion.login})
-                    </div>
-                  )}
-                </div>
-              </div>
-              <TournamentBracket
-                participants={participants}
-                tournamentSize={tournamentSize}
-                matches={matches}
-                currentRound={currentRound}
-                onMatchUpdate={() => {}} // No more updates allowed
-                onPlayMatch={() => {}}
-              />
-              
-              <div className="flex justify-center space-x-4">
+                )}
                 <button
                   onClick={resetTournament}
-                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-lg transition-colors"
+                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                 >
-                  New Tournament
+                  Create New Tournament
                 </button>
               </div>
             </div>

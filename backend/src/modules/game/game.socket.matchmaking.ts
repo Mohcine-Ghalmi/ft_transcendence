@@ -15,57 +15,105 @@ import { createMatchHistory } from './game.service'
 import { v4 as uuidv4 } from 'uuid'
 import { getUserByEmail } from '../user/user.service'
 
+// Key prefix for matchmaking sessions in Redis
+const MATCHMAKING_SESSION_PREFIX = 'matchmaking_session:';
+
+// Track active matchmaking sessions
+interface MatchmakingSession {
+  sessionId: string;
+  players: MatchmakingPlayer[];
+  status: 'waiting' | 'matched' | 'in_progress' | 'completed';
+  createdAt: number;
+  maxPlayers: number;
+}
+
+const activeMatchmakingSessions = new Map<string, MatchmakingSession>();
+
 // Function to clean up user's game data
 async function cleanupUserGameData(email: string): Promise<{ cleanedCount: number, details: any[] }> {
-  const redisGameRooms = await redis.keys('game_room:*')
-  let cleanedCount = 0
-  let details = []
-  
-  for (const roomKey of redisGameRooms) {
-    const gameRoomData = await redis.get(roomKey)
-    if (gameRoomData) {
-      try {
-        const gameRoom: GameRoomData = JSON.parse(gameRoomData)
-        
-        // Check if user is in this game
-        if (gameRoom.hostEmail === email || gameRoom.guestEmail === email) {
-          const gameAge = Date.now() - gameRoom.createdAt
-          const ageMinutes = Math.round(gameAge / 1000 / 60)
+  try {
+    const redisGameRooms = await redis.keys('game_room:*')
+    let cleanedCount = 0
+    const details: any[] = []
+    
+    for (const roomKey of redisGameRooms) {
+      const gameRoomData = await redis.get(roomKey)
+      if (gameRoomData) {
+        try {
+          const gameRoom: GameRoomData = JSON.parse(gameRoomData)
           
-          // Clean up if game is completed, canceled, waiting, accepted, or older than 5 minutes
-          if (gameRoom.status === 'completed' || 
-              gameRoom.status === 'canceled' || 
-              gameRoom.status === 'waiting' ||
-              gameRoom.status === 'accepted' ||
-              gameAge > 300000) { // 5 minutes in milliseconds
-            
-            await redis.del(roomKey)
-            cleanedCount++
-            details.push({
-              roomKey,
-              status: 'cleaned',
-              age: ageMinutes,
-              reason: gameRoom.status === 'completed' ? 'completed' : 
-                     gameRoom.status === 'canceled' ? 'canceled' : 
-                     gameRoom.status === 'waiting' ? 'waiting' :
-                     gameRoom.status === 'accepted' ? 'accepted' : 'stale'
-            })
+          // Check if user is in this game
+          if (gameRoom.hostEmail === email || gameRoom.guestEmail === email) {
+            // If game is still active, clean it up
+            if (gameRoom.status === 'waiting' || gameRoom.status === 'accepted' || gameRoom.status === 'in_progress') {
+              await redis.del(roomKey)
+              cleanedCount++
+              details.push({
+                roomKey,
+                status: 'cleaned',
+                age: Math.round((Date.now() - gameRoom.createdAt) / 60000)
+              })
+            }
           }
+        } catch (parseError) {
+          // If parsing fails, clean up the corrupted data
+          await redis.del(roomKey)
+          cleanedCount++
+          details.push({
+            roomKey,
+            status: 'corrupted_data',
+            error: 'Parse error'
+          })
         }
-      } catch (parseError) {
-        // If we can't parse the game room data, it's corrupted, so delete it
-        await redis.del(roomKey)
-        cleanedCount++
-        details.push({
-          roomKey,
-          status: 'corrupted',
-          error: 'Failed to parse game room data'
-        })
       }
+    }
+    
+    return { cleanedCount, details }
+  } catch (error) {
+    console.error('Error cleaning up user game data:', error)
+    return { cleanedCount: 0, details: [] }
+  }
+}
+
+// Function to create a new matchmaking session
+function createMatchmakingSession(): string {
+  const sessionId = uuidv4()
+  const session: MatchmakingSession = {
+    sessionId,
+    players: [],
+    status: 'waiting',
+    createdAt: Date.now(),
+    maxPlayers: 2 // Each session is for 2 players
+  }
+  activeMatchmakingSessions.set(sessionId, session)
+  
+  // Also store in Redis for persistence
+  redis.setex(`${MATCHMAKING_SESSION_PREFIX}${sessionId}`, 3600, JSON.stringify(session))
+  
+  return sessionId
+}
+
+// Function to get or create a matchmaking session
+function getOrCreateMatchmakingSession(): string {
+  // Look for an existing session with available space
+  for (const [sessionId, session] of activeMatchmakingSessions.entries()) {
+    if (session.status === 'waiting' && session.players.length < session.maxPlayers) {
+      return sessionId
     }
   }
   
-  return { cleanedCount, details }
+  // Create a new session if none available
+  return createMatchmakingSession()
+}
+
+// Function to update session status
+function updateSessionStatus(sessionId: string, status: MatchmakingSession['status']) {
+  const session = activeMatchmakingSessions.get(sessionId)
+  if (session) {
+    session.status = status
+    // Update in Redis
+    redis.setex(`${MATCHMAKING_SESSION_PREFIX}${sessionId}`, 3600, JSON.stringify(session))
+  }
 }
 
 export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server) => {
@@ -193,24 +241,52 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         })
       }
 
-      // Add to matchmaking queue
+      // Get or create a matchmaking session
+      const sessionId = getOrCreateMatchmakingSession()
+      const session = activeMatchmakingSessions.get(sessionId)
+      
+      if (!session) {
+        return socket.emit('MatchmakingResponse', {
+          status: 'error',
+          message: 'Failed to create matchmaking session.'
+        })
+      }
+
+      // Check if session is full
+      if (session.players.length >= session.maxPlayers) {
+        return socket.emit('MatchmakingResponse', {
+          status: 'error',
+          message: 'Matchmaking session is full. Please wait for a new session.',
+          sessionFull: true,
+          sessionId: sessionId
+        })
+      }
+
+      // Add player to session
       const player: MatchmakingPlayer = {
         socketId: socket.id,
         email: email,
         joinedAt: Date.now()
       }
+      session.players.push(player)
+      
+      // Also add to global queue for backward compatibility
       matchmakingQueue.push(player)
 
-      console.log(`User ${email} joined matchmaking queue. Queue size: ${matchmakingQueue.length}`)
+      console.log(`User ${email} joined matchmaking session ${sessionId}. Session players: ${session.players.length}/${session.maxPlayers}`)
 
       socket.emit('MatchmakingResponse', {
         status: 'success',
-        message: 'Joined matchmaking queue. Waiting for opponent...',
-        queuePosition: matchmakingQueue.length
+        message: 'Joined matchmaking session. Waiting for opponent...',
+        sessionId: sessionId,
+        sessionPlayers: session.players.length,
+        maxPlayers: session.maxPlayers
       })
 
-      // Try to find a match
-      await tryMatchPlayers(io)
+      // Try to find a match if session is full
+      if (session.players.length >= session.maxPlayers) {
+        await tryMatchPlayersInSession(io, sessionId)
+      }
 
     } catch (error) {
       console.error('Error joining matchmaking:', error)
@@ -599,6 +675,142 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       // If there was an error, try to put players back in queue
       if (matchmakingQueue.length >= 0) {
         setTimeout(() => tryMatchPlayers(io), 2000) // Retry after 2 seconds
+      }
+    }
+  }
+
+  // Function to try matching players in a specific session
+  async function tryMatchPlayersInSession(io: Server, sessionId: string) {
+    try {
+      const session = activeMatchmakingSessions.get(sessionId)
+      if (!session || session.players.length < 2) {
+        return // Need at least 2 players in the session to match
+      }
+
+      // Get players from the session
+      const player1 = session.players.shift()!
+      const player2 = session.players.shift()!
+
+      if (!player1 || !player2) {
+        return
+      }
+
+      // Prevent matching a user with themselves
+      if (player1.email === player2.email) {
+        console.log(`Preventing self-match for user: ${player1.email}`)
+        // Put the players back in session and try again
+        session.players.push(player1, player2)
+        // Recursively try to match again
+        setTimeout(() => tryMatchPlayersInSession(io, sessionId), 1000)
+        return
+      }
+
+      // Verify both players are still connected
+      const player1Socket = io.sockets.sockets.get(player1.socketId)
+      const player2Socket = io.sockets.sockets.get(player2.socketId)
+
+      if (!player1Socket || !player2Socket) {
+        console.log(`One or both players disconnected during matchmaking: ${player1.email}, ${player2.email}`)
+        // Put the connected players back in session if they exist
+        if (player1Socket) {
+          session.players.push(player1)
+        }
+        if (player2Socket) {
+          session.players.push(player2)
+        }
+        return
+      }
+
+      // Fetch user data for both players
+      const [player1User, player2User] = await Promise.all([
+        getUserByEmail(player1.email),
+        getUserByEmail(player2.email)
+      ])
+
+      if (!player1User || !player2User) {
+        console.log(`Failed to fetch user data for matchmaking: ${player1.email}, ${player2.email}`)
+        // Put players back in session
+        session.players.push(player1, player2)
+        return
+      }
+
+      const player1Data = getPlayerData(player1User)
+      const player2Data = getPlayerData(player2User)
+
+      // Create a new game room using the same system as OneVsOne
+      const gameId = uuidv4()
+      const gameRoom: GameRoomData = {
+        gameId,
+        hostEmail: player1.email, // Use player1 as host for consistency with OneVsOne
+        guestEmail: player2.email,
+        status: 'accepted', // Start with 'accepted' status like OneVsOne
+        createdAt: Date.now()
+      }
+
+      // Save game room to Redis and add to gameRooms map
+      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+      
+      // Import gameRooms from types to add the room
+      const { gameRooms } = await import('./game.socket.types')
+      gameRooms.set(gameId, gameRoom)
+
+      // Get socket IDs for both players
+      const player1SocketIds = await getSocketIds(player1.email, 'sockets') || []
+      const player2SocketIds = await getSocketIds(player2.email, 'sockets') || []
+
+      // Notify both players about the match - use the same format as OneVsOne
+      const matchData = {
+        gameId,
+        hostEmail: player1.email,
+        guestEmail: player2.email,
+        hostData: player1Data,
+        guestData: player2Data,
+        status: 'match_found',
+        message: 'Match found! Game will start shortly.'
+      }
+
+      io.to([...player1SocketIds, ...player2SocketIds]).emit('MatchFound', matchData)
+
+      console.log(`Match created: ${player1.email} vs ${player2.email} (Game ID: ${gameId})`)
+
+      // Wait a moment for players to prepare, then start the game
+      setTimeout(async () => {
+        try {
+          // Verify game room still exists
+          const currentGameRoomData = await redis.get(`game_room:${gameId}`)
+          if (!currentGameRoomData) {
+            console.log(`Game room ${gameId} no longer exists, skipping game start`)
+            return
+          }
+
+          // Update game status to in_progress
+          gameRoom.status = 'in_progress'
+          gameRoom.startedAt = Date.now()
+          await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+          gameRooms.set(gameId, gameRoom)
+
+          // Notify players that game is starting
+          io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
+            gameId,
+            hostEmail: player1.email,
+            guestEmail: player2.email,
+            hostData: player1Data,
+            guestData: player2Data,
+            startedAt: gameRoom.startedAt
+          })
+
+          console.log(`Game ${gameId} started successfully`)
+        } catch (error) {
+          console.error(`Error starting game ${gameId}:`, error)
+        }
+      }, 3000) // 3 second delay before starting
+
+    } catch (error) {
+      console.error('Error in tryMatchPlayersInSession:', error)
+      // If there was an error, try to put players back in session
+      const currentSession = activeMatchmakingSessions.get(sessionId)
+      if (currentSession && currentSession.players.length >= 2) {
+        setTimeout(() => tryMatchPlayersInSession(io, sessionId), 2000) // Retry after 2 seconds
       }
     }
   }

@@ -131,14 +131,14 @@ export default function TournamentGamePage() {
       }
     }
 
-    const handleMatchReady = (data: any) => {
+    const handleTournamentMatchStarted = (data: any) => {
       if (data.tournamentId === tournamentId && data.matchId === currentMatch?.id) {
         setWaitingForOpponent(false)
         setGameStarted(true)
       }
     }
 
-    const handleGameEnd = (data: any) => {
+    const handleTournamentMatchCompleted = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setGameStarted(false)
         setCurrentMatch(null)
@@ -168,13 +168,50 @@ export default function TournamentGamePage() {
       }
     }
 
-    const handleTournamentEnded = (data: any) => {
+    const handleTournamentRoundAdvanced = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentData(data.tournament)
+        setNotification({ message: `Round ${data.nextRound} has started!`, type: 'info' })
+        setTimeout(() => setNotification(null), 3000)
+        
+        // Check if current user is in the next round
+        const nextMatch = data.tournament.matches.find((m: any) => 
+          (m.player1?.email === user?.email || m.player2?.email === user?.email) && 
+          m.state === 'waiting'
+        )
+        
+        if (nextMatch) {
+          setCurrentMatch(nextMatch)
+          const otherPlayer = nextMatch.player1?.email === user?.email ? 
+            nextMatch.player2 : nextMatch.player1
+          if (otherPlayer) {
+            setOpponent(otherPlayer)
+            setWaitingForOpponent(true)
+          }
+        }
+      }
+    }
+
+    const handleTournamentCompleted = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         setGameStarted(false)
         setCurrentMatch(null)
         setOpponent(null)
         setWaitingForOpponent(false)
+        
+        const winnerName = data.winner?.nickname || data.winner?.email || 'Unknown'
+        setNotification({ message: `Tournament completed! Winner: ${winnerName}`, type: 'success' })
+        setTimeout(() => setNotification(null), 5000)
+      }
+    }
+
+    const handleTournamentParticipantLeft = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentData(data.tournament)
+        const leftPlayerName = data.leftPlayer?.nickname || data.leftPlayer?.email || 'Unknown'
+        setNotification({ message: `${leftPlayerName} left the tournament`, type: 'info' })
+        setTimeout(() => setNotification(null), 3000)
       }
     }
 
@@ -183,9 +220,11 @@ export default function TournamentGamePage() {
     socket.on('TournamentUpdated', handleTournamentUpdated)
     socket.on('TournamentReady', handleTournamentReady)
     socket.on('TournamentStarted', handleTournamentStarted)
-    socket.on('MatchReady', handleMatchReady)
-    socket.on('GameEnd', handleGameEnd)
-    socket.on('TournamentEnded', handleTournamentEnded)
+    socket.on('TournamentMatchStarted', handleTournamentMatchStarted)
+    socket.on('TournamentMatchCompleted', handleTournamentMatchCompleted)
+    socket.on('TournamentRoundAdvanced', handleTournamentRoundAdvanced)
+    socket.on('TournamentCompleted', handleTournamentCompleted)
+    socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft)
     socket.on('TournamentInviteAccepted', handleTournamentInviteAccepted)
 
     // Cleanup event listeners
@@ -194,9 +233,11 @@ export default function TournamentGamePage() {
       socket.off('TournamentUpdated', handleTournamentUpdated)
       socket.off('TournamentReady', handleTournamentReady)
       socket.off('TournamentStarted', handleTournamentStarted)
-      socket.off('MatchReady', handleMatchReady)
-      socket.off('GameEnd', handleGameEnd)
-      socket.off('TournamentEnded', handleTournamentEnded)
+      socket.off('TournamentMatchStarted', handleTournamentMatchStarted)
+      socket.off('TournamentMatchCompleted', handleTournamentMatchCompleted)
+      socket.off('TournamentRoundAdvanced', handleTournamentRoundAdvanced)
+      socket.off('TournamentCompleted', handleTournamentCompleted)
+      socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft)
       socket.off('TournamentInviteAccepted', handleTournamentInviteAccepted)
     }
   }, [socket, tournamentId, user?.email, router, currentMatch])
@@ -216,10 +257,28 @@ export default function TournamentGamePage() {
     router.push('/play/tournament')
   }
 
-  const handleGameEnd = () => {
+  const handleStartMatch = () => {
     if (!socket || !tournamentId || !currentMatch) return
 
-    // This will be handled by the game component
+    socket.emit('StartTournamentMatch', { 
+      tournamentId, 
+      matchId: currentMatch.id, 
+      playerEmail: user?.email 
+    })
+  }
+
+  const handleGameEnd = (winner: any, loser: any) => {
+    if (!socket || !tournamentId || !currentMatch) return
+
+    // Report match result to tournament system
+    socket.emit('TournamentMatchResult', {
+      tournamentId,
+      matchId: currentMatch.id,
+      winnerEmail: winner.email,
+      loserEmail: loser.email,
+      playerEmail: user?.email
+    })
+
     setGameStarted(false)
   }
 
@@ -262,7 +321,7 @@ export default function TournamentGamePage() {
           gameId={`${tournamentId}-${currentMatch.id}`}
           isHost={currentMatch.player1?.email === user?.email}
           opponent={opponent}
-          onExit={handleGameEnd}
+          onExit={() => handleGameEnd(user, opponent)}
         />
       </div>
     )

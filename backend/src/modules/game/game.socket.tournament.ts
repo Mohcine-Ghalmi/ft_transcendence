@@ -205,6 +205,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         }
       }, 30000);
     } catch (error) {
+      console.error('[Tournament Invite] Error:', error);
       socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Failed to send tournament invite.' });
     }
   });
@@ -458,27 +459,241 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       socket.emit('TournamentJoinResponse', { status: 'error', message: 'Failed to join tournament.' });
     }
   });
+
+  // Start a tournament match
+  socket.on('StartTournamentMatch', async (data: { tournamentId: string; matchId: string; playerEmail: string }) => {
+    try {
+      const { tournamentId, matchId, playerEmail } = data;
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      if (!tournamentData) return socket.emit('TournamentMatchResponse', { status: 'error', message: 'Tournament not found.' });
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      
+      // Find the match
+      const match = tournament.matches.find(m => m.id === matchId);
+      if (!match) return socket.emit('TournamentMatchResponse', { status: 'error', message: 'Match not found.' });
+      
+      // Check if player is in this match
+      if (match.player1?.email !== playerEmail && match.player2?.email !== playerEmail) {
+        return socket.emit('TournamentMatchResponse', { status: 'error', message: 'You are not in this match.' });
+      }
+      
+      // Update match state
+      match.state = 'in_progress';
+      
+      // Update tournament in Redis
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      
+      // Notify both players
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      io.to(allSocketIds).emit('TournamentMatchStarted', {
+        tournamentId,
+        matchId,
+        match,
+        tournament
+      });
+      
+      socket.emit('TournamentMatchResponse', { status: 'success', message: 'Match started.' });
+      
+    } catch (error) {
+      socket.emit('TournamentMatchResponse', { status: 'error', message: 'Failed to start match.' });
+    }
+  });
+
+  // Report tournament match result
+  socket.on('TournamentMatchResult', async (data: { 
+    tournamentId: string; 
+    matchId: string; 
+    winnerEmail: string; 
+    loserEmail: string;
+    playerEmail: string;
+  }) => {
+    try {
+      const { tournamentId, matchId, winnerEmail, loserEmail, playerEmail } = data;
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      if (!tournamentData) return socket.emit('TournamentMatchResponse', { status: 'error', message: 'Tournament not found.' });
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      
+      // Find the match
+      const match = tournament.matches.find(m => m.id === matchId);
+      if (!match) return socket.emit('TournamentMatchResponse', { status: 'error', message: 'Match not found.' });
+      
+      // Check if player is in this match
+      if (match.player1?.email !== playerEmail && match.player2?.email !== playerEmail) {
+        return socket.emit('TournamentMatchResponse', { status: 'error', message: 'You are not in this match.' });
+      }
+      
+      // Update match result
+      if (match.player1?.email === winnerEmail) {
+        match.state = 'player1_win';
+        match.winner = match.player1;
+      } else if (match.player2?.email === winnerEmail) {
+        match.state = 'player2_win';
+        match.winner = match.player2;
+      } else {
+        return socket.emit('TournamentMatchResponse', { status: 'error', message: 'Invalid winner.' });
+      }
+      
+      // Update loser status
+      const loserParticipant = tournament.participants.find(p => p.email === loserEmail);
+      if (loserParticipant) {
+        loserParticipant.status = 'eliminated';
+      }
+      
+      // Check if all matches in current round are complete
+      const currentRound = match.round;
+      const roundMatches = tournament.matches.filter(m => m.round === currentRound);
+      const allRoundComplete = roundMatches.every(m => m.state !== 'waiting' && m.state !== 'in_progress');
+      
+      if (allRoundComplete) {
+        // Advance to next round
+        const updatedTournament = advanceTournamentRound(tournament);
+        
+        // Update tournament in Redis
+        await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(updatedTournament));
+        
+        // Notify all participants
+        const allParticipantEmails = updatedTournament.participants.map(p => p.email);
+        const allSocketIds = [];
+        
+        for (const email of allParticipantEmails) {
+          const socketIds = await getSocketIds(email, 'sockets') || [];
+          allSocketIds.push(...socketIds);
+        }
+        
+        if (updatedTournament.status === 'completed') {
+          // Tournament is complete
+          io.to(allSocketIds).emit('TournamentCompleted', {
+            tournamentId,
+            tournament: updatedTournament,
+            winner: updatedTournament.participants.find(p => p.status === 'winner')
+          });
+        } else {
+          // Next round started
+          io.to(allSocketIds).emit('TournamentRoundAdvanced', {
+            tournamentId,
+            tournament: updatedTournament,
+            nextRound: currentRound + 1
+          });
+        }
+      } else {
+        // Just update the current match
+        await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      }
+      
+      // Notify all participants about match result
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      io.to(allSocketIds).emit('TournamentMatchCompleted', {
+        tournamentId,
+        matchId,
+        match,
+        tournament,
+        winnerEmail,
+        loserEmail
+      });
+      
+      socket.emit('TournamentMatchResponse', { status: 'success', message: 'Match result recorded.' });
+      
+    } catch (error) {
+      socket.emit('TournamentMatchResponse', { status: 'error', message: 'Failed to record match result.' });
+    }
+  });
+
+  // Leave tournament
+  socket.on('LeaveTournament', async (data: { tournamentId: string; playerEmail: string }) => {
+    try {
+      const { tournamentId, playerEmail } = data;
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      if (!tournamentData) return socket.emit('TournamentLeaveResponse', { status: 'error', message: 'Tournament not found.' });
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      
+      // Check if player is a participant
+      const participant = tournament.participants.find(p => p.email === playerEmail);
+      if (!participant) {
+        return socket.emit('TournamentLeaveResponse', { status: 'error', message: 'You are not a participant in this tournament.' });
+      }
+      
+      // Remove participant from tournament
+      tournament.participants = tournament.participants.filter(p => p.email !== playerEmail);
+      
+      // If host leaves, cancel tournament
+      if (playerEmail === tournament.hostEmail) {
+        tournament.status = 'canceled';
+        tournament.endedAt = Date.now();
+      }
+      
+      // Update tournament in Redis
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      
+      // Notify remaining participants
+      const remainingParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of remainingParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      io.to(allSocketIds).emit('TournamentParticipantLeft', {
+        tournamentId,
+        tournament,
+        leftPlayer: participant
+      });
+      
+      socket.emit('TournamentLeaveResponse', { status: 'success', message: 'Left tournament successfully.' });
+      
+    } catch (error) {
+      socket.emit('TournamentLeaveResponse', { status: 'error', message: 'Failed to leave tournament.' });
+    }
+  });
 };
 
 // Helper function to create tournament bracket
 function createTournamentBracket(participants: TournamentParticipant[], size: number): TournamentMatch[] {
   const matches: TournamentMatch[] = [];
   const totalRounds = Math.log2(size);
+  
   // Shuffle participants for random seeding
   const shuffledParticipants = [...participants].sort(() => Math.random() - 0.5);
+  
   // Create first round matches
   for (let i = 0; i < size / 2; i++) {
     const player1 = shuffledParticipants[i * 2] || undefined;
     const player2 = shuffledParticipants[i * 2 + 1] || undefined;
     let state: TournamentMatch['state'] = 'waiting';
     let winner: TournamentParticipant | undefined = undefined;
+    
+    // Handle byes (when there's no opponent)
     if (player1 && !player2) {
-      state = 'completed';
+      state = 'player1_win';
       winner = player1;
     } else if (!player1 && player2) {
-      state = 'completed';
+      state = 'player2_win';
       winner = player2;
     }
+    
     matches.push({
       id: `match-${Date.now()}-${i}`,
       round: 0,
@@ -489,6 +704,7 @@ function createTournamentBracket(participants: TournamentParticipant[], size: nu
       winner
     });
   }
+  
   // Create placeholder matches for future rounds
   for (let round = 1; round < totalRounds; round++) {
     const matchesInRound = size / Math.pow(2, round + 1);
@@ -503,5 +719,60 @@ function createTournamentBracket(participants: TournamentParticipant[], size: nu
       });
     }
   }
+  
   return matches;
+}
+
+// Helper function to advance tournament to next round
+function advanceTournamentRound(tournament: Tournament): Tournament {
+  const currentRound = Math.max(...tournament.matches.map(m => m.round));
+  const nextRound = currentRound + 1;
+  const totalRounds = Math.log2(tournament.size);
+  
+  if (nextRound >= totalRounds) {
+    // Tournament is complete
+    tournament.status = 'completed';
+    tournament.endedAt = Date.now();
+    
+    // Find the winner (last remaining player)
+    const finalMatch = tournament.matches.find(m => m.round === currentRound && m.state !== 'waiting');
+    if (finalMatch && finalMatch.winner) {
+      // Update winner status
+      const winnerParticipant = tournament.participants.find(p => p.email === finalMatch.winner!.email);
+      if (winnerParticipant) {
+        winnerParticipant.status = 'winner';
+      }
+    }
+    
+    return tournament;
+  }
+  
+  // Get completed matches from current round
+  const completedMatches = tournament.matches.filter(m => m.round === currentRound && m.state !== 'waiting');
+  
+  // Create next round matches
+  const nextRoundMatches = [];
+  for (let i = 0; i < completedMatches.length; i += 2) {
+    const match1 = completedMatches[i];
+    const match2 = completedMatches[i + 1];
+    
+    if (match1 && match2) {
+      const player1 = match1.winner;
+      const player2 = match2.winner;
+      
+      nextRoundMatches.push({
+        id: `match-${Date.now()}-${nextRound}-${i/2}`,
+        round: nextRound,
+        matchIndex: i / 2,
+        player1,
+        player2,
+        state: 'waiting' as const
+      });
+    }
+  }
+  
+  // Add new matches to tournament
+  tournament.matches.push(...nextRoundMatches);
+  
+  return tournament;
 } 
