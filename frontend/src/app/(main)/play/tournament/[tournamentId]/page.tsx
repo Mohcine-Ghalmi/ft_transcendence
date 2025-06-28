@@ -209,9 +209,41 @@ export default function TournamentGamePage() {
     const handleTournamentParticipantLeft = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
-        const leftPlayerName = data.leftPlayer?.nickname || data.leftPlayer?.email || 'Unknown'
-        setNotification({ message: `${leftPlayerName} left the tournament`, type: 'info' })
+        setNotification({ 
+          message: `${data.leftPlayer?.nickname || 'A player'} left the tournament.`, 
+          type: 'info' 
+        })
         setTimeout(() => setNotification(null), 3000)
+      }
+    }
+
+    const handleTournamentCanceled = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentData(data.tournament)
+        setNotification({ 
+          message: data.reason || 'Tournament was canceled.', 
+          type: 'info' 
+        })
+        setTimeout(() => setNotification(null), 3000)
+      }
+    }
+
+    const handleRedirectToPlay = (data: any) => {
+      setNotification({ 
+        message: data.message || 'Redirecting to play page...', 
+        type: 'info' 
+      })
+      setTimeout(() => {
+        router.push('/play')
+      }, 2000)
+    }
+
+    const handleTournamentMatchGameStarted = (data: any) => {
+      if (data.tournamentId === tournamentId && data.matchId === currentMatch?.id) {
+        setWaitingForOpponent(false)
+        setGameStarted(true)
+        // Store the game data for the PingPongGame component
+        setCurrentMatch({ ...currentMatch, gameId: data.gameId })
       }
     }
 
@@ -226,6 +258,9 @@ export default function TournamentGamePage() {
     socket.on('TournamentCompleted', handleTournamentCompleted)
     socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft)
     socket.on('TournamentInviteAccepted', handleTournamentInviteAccepted)
+    socket.on('TournamentCanceled', handleTournamentCanceled)
+    socket.on('RedirectToPlay', handleRedirectToPlay)
+    socket.on('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
 
     // Cleanup event listeners
     return () => {
@@ -239,6 +274,9 @@ export default function TournamentGamePage() {
       socket.off('TournamentCompleted', handleTournamentCompleted)
       socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft)
       socket.off('TournamentInviteAccepted', handleTournamentInviteAccepted)
+      socket.off('TournamentCanceled', handleTournamentCanceled)
+      socket.off('RedirectToPlay', handleRedirectToPlay)
+      socket.off('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
     }
   }, [socket, tournamentId, user?.email, router, currentMatch])
 
@@ -258,29 +296,37 @@ export default function TournamentGamePage() {
   }
 
   const handleStartMatch = () => {
-    if (!socket || !tournamentId || !currentMatch) return
-
-    socket.emit('StartTournamentMatch', { 
-      tournamentId, 
-      matchId: currentMatch.id, 
-      playerEmail: user?.email 
-    })
-  }
+    if (socket && currentMatch && user?.email) {
+      socket.emit('StartTournamentMatchGame', {
+        tournamentId,
+        matchId: currentMatch.id,
+        playerEmail: user.email
+      });
+    }
+  };
 
   const handleGameEnd = (winner: any, loser: any) => {
-    if (!socket || !tournamentId || !currentMatch) return
-
-    // Report match result to tournament system
-    socket.emit('TournamentMatchResult', {
-      tournamentId,
-      matchId: currentMatch.id,
-      winnerEmail: winner.email,
-      loserEmail: loser.email,
-      playerEmail: user?.email
-    })
-
-    setGameStarted(false)
-  }
+    if (socket && currentMatch && user?.email) {
+      // Determine winner and loser emails
+      const winnerEmail = winner?.email || winner;
+      const loserEmail = loser?.email || loser;
+      
+      // Report the tournament match result
+      socket.emit('TournamentMatchResult', {
+        tournamentId,
+        matchId: currentMatch.id,
+        winnerEmail,
+        loserEmail,
+        playerEmail: user.email
+      });
+      
+      // Reset game state
+      setGameStarted(false);
+      setCurrentMatch(null);
+      setOpponent(null);
+      setWaitingForOpponent(false);
+    }
+  };
 
   // Loading state
   if (!authorizationChecked) {
@@ -311,20 +357,26 @@ export default function TournamentGamePage() {
     )
   }
 
-  // Game started - show the actual game
+  // If in game, show the game component
   if (gameStarted && currentMatch && opponent) {
     return (
-      <div className="h-screen bg-[#0f1419]">
-        <PingPongGame
-          player1={user}
-          player2={opponent}
-          gameId={`${tournamentId}-${currentMatch.id}`}
-          isHost={currentMatch.player1?.email === user?.email}
-          opponent={opponent}
-          onExit={() => handleGameEnd(user, opponent)}
-        />
+      <div className="h-full text-white">
+        {/* Main Content */}
+        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+          <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+            <PingPongGame
+              player1={user}
+              player2={opponent}
+              onExit={(winner) => handleGameEnd(winner, opponent)}
+              gameId={currentMatch.gameId}
+              socket={socket}
+              isHost={currentMatch.player1?.email === user?.email}
+              opponent={opponent}
+            />
+          </div>
+        </div>
       </div>
-    )
+    );
   }
 
   // Waiting for opponent in current match
@@ -362,7 +414,7 @@ export default function TournamentGamePage() {
                 />
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">Opponent</h3>
-              <p className="text-green-400 text-lg">{opponent?.nickname || 'Waiting...'}</p>
+              <p className="text-green-400 text-lg">{opponent?.nickname || opponent?.login || 'Waiting...'}</p>
             </div>
           </div>
           
@@ -388,8 +440,8 @@ export default function TournamentGamePage() {
 
   // Tournament lobby or bracket view
   return (
-    <div className="min-h-screen bg-[#0f1419] p-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+        <div className="w-full max-w-7xl text-center">
         {/* Notification */}
         {notification && (
           <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
@@ -528,7 +580,7 @@ export default function TournamentGamePage() {
 
         {/* Tournament Complete */}
         {tournamentData?.status === 'completed' && (
-          <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50 text-center">
+          <div className="rounded-lg p-6 border border-gray-700/50 text-center">
             <h2 className="text-2xl font-semibold text-white mb-4">Tournament Complete!</h2>
             <p className="text-gray-300 mb-6">The tournament has finished.</p>
             <button

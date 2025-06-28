@@ -116,7 +116,7 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
       </div>
       <div className="flex-grow">
         <div className="text-white font-medium">{player.login}</div>
-        {player.nickname && (
+        {player.nickname && player.nickname !== player.login && (
           <div className="text-gray-400 text-sm">{player.nickname}</div>
         )}
         {player.isHost && (
@@ -125,7 +125,7 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
       </div>
       {!player.isHost && isHost && (
         <button 
-          onClick={() => removeParticipant(player.nickname)}
+          onClick={() => removeParticipant(player.login)}
           className="ml-2 text-red-400 hover:text-red-300 transition-colors p-1 rounded-lg hover:bg-red-400/10"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -575,7 +575,7 @@ export default function OnlineTournament() {
     socket.emit('CreateTournament', {
       name: tournamentName,
       hostEmail: user.email,
-      hostNickname: user.nickname,
+      hostNickname: user.login || user.name,
       hostAvatar: user.avatar,
       size: tournamentSize,
     });
@@ -837,7 +837,7 @@ export default function OnlineTournament() {
                     <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                         <Image 
-                          src={player.avatar} 
+                          src={"/" + player.avatar} 
                           alt={player.login} 
                           width={48} 
                           height={48}
