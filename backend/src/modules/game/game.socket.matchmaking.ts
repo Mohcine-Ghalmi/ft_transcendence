@@ -562,7 +562,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       // Prevent matching a user with themselves
       if (player1.email === player2.email) {
-        console.log(`Preventing self-match for user: ${player1.email}`)
         // Put the player back in queue and try again
         matchmakingQueue.unshift(player1)
         // Recursively try to match again
@@ -697,7 +696,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       // Prevent matching a user with themselves
       if (player1.email === player2.email) {
-        console.log(`Preventing self-match for user: ${player1.email}`)
         // Put the players back in session and try again
         session.players.push(player1, player2)
         // Recursively try to match again
