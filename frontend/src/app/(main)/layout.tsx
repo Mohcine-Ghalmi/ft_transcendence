@@ -25,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClientLayout>
-      <main className="sm:pt-18">{children}</main>
+      <main className="">{children}</main>
     </ClientLayout>
   )
 }

@@ -187,7 +187,7 @@ const Settings = () => {
       console.log('Form has errors:', newErrors)
       return
     }
-    console.log(formData)
+    console.log({ ...formData, type: user.type })
   }
 
   const validateField = (name: string, value: string | File | null) => {

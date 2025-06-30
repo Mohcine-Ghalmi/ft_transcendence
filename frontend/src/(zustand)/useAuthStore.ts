@@ -93,25 +93,30 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
   checkAuth: async (accessToken) => {
     set({ isLoading: true })
-    try {
-      if (accessToken) {
-        const user: any = jwtDecode(accessToken)
 
-        if (user?.exp < (new Date().getTime() + 1) / 1000) {
-          localStorage.removeItem('accessToken')
-          return false
-        }
-        const res = await axiosInstance.get(`/api/users/getMe`)
-        const { accessTokenNew, ...me } = res.data
-        // localStorage.removeItem('accessToken')
-        // localStorage.setItem('accessToken', accessTokenNew)
-        set({ user: me, isAuthenticated: true })
-        get().connectSocket()
-        return true
-      } else {
+    try {
+      if (!accessToken) return false
+
+      const userData: any = jwtDecode(accessToken)
+      const isExpired = userData?.exp < Date.now() / 1000
+
+      if (isExpired) {
+        localStorage.removeItem('accessToken')
         return false
       }
+
+      const res = await axiosInstance.get('/api/users/getMe')
+      const { accessTokenNew, ...me } = res.data
+
+      if (accessTokenNew) {
+        localStorage.setItem('accessToken', accessTokenNew)
+      }
+
+      set({ user: me, isAuthenticated: true })
+      get().connectSocket()
+      return true
     } catch (err) {
+      console.error('Auth check failed:', err)
       return false
     } finally {
       set({ isLoading: false })

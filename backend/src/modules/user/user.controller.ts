@@ -480,3 +480,51 @@ export async function listMyFriendsHandler(
       .send({ status: false, message: 'Internal Server Error' })
   }
 }
+
+export async function updateUserData(
+  req: FastifyRequest<{
+    Body: {
+      login: string
+      email: string
+      username: string
+      avatar: string
+      type: number
+    }
+  }>,
+  rep: FastifyReply
+) {
+  try {
+    const { email }: any = req.user
+    const { login, email: newEmail, username, avatar, type } = req.body
+
+    if (!login || !username)
+      return rep.code(400).send({ status: false, message: 'Invalid Data' })
+
+    switch (type) {
+      case 0:
+        const sql1 = db.prepare(
+          `UPDATE User SET login = ?, username = ?, avatar = ? , email = ? WHERE email = ?`
+        )
+        sql1.run(login, username, avatar, newEmail, email)
+        break
+      case 1 | 2:
+        const sql2 = db.prepare(
+          `UPDATE User SET username = ?, avatar = ? WHERE email = ?`
+        )
+        sql2.run(username, avatar, email)
+    }
+
+    const user: any = await getUserByEmail(newEmail)
+    if (!user)
+      return rep.code(404).send({ status: false, message: 'User Not Found' })
+    const { password, salt, ...rest } = user
+    return rep
+      .code(200)
+      .send({ status: true, message: 'User Updated', user: { ...rest } })
+  } catch (err) {
+    console.log(err)
+    return rep
+      .code(500)
+      .send({ status: false, message: 'Internal Server Error' })
+  }
+}
