@@ -133,6 +133,12 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
   );
 };
 
+function handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user }) {
+  if (isHost && gameId && gameState === 'waiting_to_start' && socket && user?.email) {
+    socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+  }
+}
+
 export default function OnlineMatch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
@@ -169,31 +175,31 @@ export default function OnlineMatch() {
 
     const handleRouteChange = () => {
       const newPath = window.location.pathname;
-      // If the path has changed and we're in a game, trigger exit
+      // If the path has changed and we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
+      handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
+      // Existing logic for in_game exit
       if (currentPath && newPath !== currentPath && gameState === 'in_game' && gameId) {
-        console.log('Route change detected, leaving game...');
         handleGameExit();
       }
       setTimeout(() => setCurrentPath(newPath), 0);
     };
 
     const handleBeforeUnload = (e) => {
-      // If we're in a game, trigger exit
+      // If we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
+      handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
+      // Existing logic for in_game exit
       if (gameState === 'in_game' && gameId) {
         handleGameExit();
       }
     };
 
     const handlePopState = () => {
-      // Handle browser back/forward buttons
       handleRouteChange();
     };
 
-    // Listen for route changes
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Also listen for pushState and replaceState (for programmatic navigation)
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
 
@@ -210,11 +216,10 @@ export default function OnlineMatch() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Restore original methods
       history.pushState = originalPushState;
       history.replaceState = originalReplaceState;
     };
-  }, [currentPath, gameState, gameId]);
+  }, [currentPath, gameState, gameId, isHost, socket, user]);
 
   // Helper function to show notifications
   const showNotification = (message, type = 'info') => {
@@ -438,6 +443,18 @@ export default function OnlineMatch() {
       }
     };
 
+    // Handler for guest leaving before game starts
+    const handleGameEndedByOpponentLeave = (data) => {
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      showNotification('Opponent left the game.', 'error');
+      resetGameState();
+      router.push('/play');
+    };
+
     // Add event listeners
     socket.on('InviteToGameResponse', handleInviteResponse);
     socket.on('GameInviteAccepted', handleGameInviteAccepted);
@@ -449,6 +466,7 @@ export default function OnlineMatch() {
     socket.on('GameCanceled', handleGameCanceled);
     socket.on('GameStartResponse', handleGameStartResponse);
     socket.on('GameStarted', handleGameStarted);
+    socket.on('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave);
 
     return () => {
       socket.off('InviteToGameResponse', handleInviteResponse);
@@ -461,6 +479,7 @@ export default function OnlineMatch() {
       socket.off('GameCanceled', handleGameCanceled);
       socket.off('GameStartResponse', handleGameStartResponse);
       socket.off('GameStarted', handleGameStarted);
+      socket.off('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave);
     };
   }, [socket, gameId, clearInvite, user?.email, gameState, isHost, receivedInvite]);
 

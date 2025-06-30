@@ -29,7 +29,7 @@ const MatchmakingStatus = ({ status, queuePosition, totalInQueue }: {
 };
 
 export default function Matchmaking({ onBack }: MatchmakingProps) {
-  const [matchmakingStatus, setMatchmakingStatus] = useState<'idle' | 'searching' | 'in_game'>('idle');
+  const [matchmakingStatus, setMatchmakingStatus] = useState<'idle' | 'searching' | 'in_game' | 'waiting_to_start'>('idle');
   const [queuePosition, setQueuePosition] = useState(0);
   const [totalInQueue, setTotalInQueue] = useState(0);
   const [gameId, setGameId] = useState<string | null>(null);
@@ -63,23 +63,30 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
 
     const handleRouteChange = () => {
       const newPath = window.location.pathname;
-      // If the path has changed and we're in a game, trigger exit
+      // If the path has changed and we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
+      handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user });
+      // Existing logic for in_game exit
       if (currentPath && newPath !== currentPath && matchmakingStatus === 'in_game' && gameId) {
-        console.log('Route change detected, leaving game...');
         handleGameExit();
+        handleLeaveMatchmaking();
+        handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user });
+
       }
       setTimeout(() => setCurrentPath(newPath), 0);
     };
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // If we're in a game, trigger exit
+      // If we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
+      handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user });
+      // Existing logic for in_game exit
       if (matchmakingStatus === 'in_game' && gameId) {
         handleGameExit();
+        handleLeaveMatchmaking();
+        handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user });
       }
     };
 
     const handlePopState = () => {
-      // Handle browser back/forward buttons
       handleRouteChange();
     };
 
@@ -109,7 +116,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       history.pushState = originalPushState;
       history.replaceState = originalReplaceState;
     };
-  }, [currentPath, matchmakingStatus, gameId]);
+  }, [currentPath, matchmakingStatus, gameId, isHost, socket, user]);
 
   // Function to handle game exit (triggered by route change or manual exit)
   const handleGameExit = () => {
@@ -410,7 +417,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     } else if (socket && user?.email) {
       socket.emit('LeaveMatchmaking', { email: user.email });
     }
-    setMatchmakingStatus('idle');
+    // setMatchmakingStatus('idle');
     onBack();
   };
 
@@ -480,4 +487,12 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       </div>
     </div>
   );
+}
+
+// Add this helper function near the top-level of the component
+function handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user }) {
+  // 'waiting_to_start' is the state after match found, before game starts
+  if (isHost && gameId && matchmakingStatus === 'waiting_to_start' && socket && user?.email) {
+    socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+  }
 }

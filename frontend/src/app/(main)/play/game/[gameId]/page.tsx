@@ -57,7 +57,7 @@ export default function GamePage() {
         setAuthorizationChecked(true)
         window.location.href = '/play'
       }
-    }, 3000) // 3 second timeout
+    }, 1000) // 3 second timeout
 
     return () => {
       clearTimeout(authTimeout)
@@ -155,19 +155,11 @@ export default function GamePage() {
 
     // Add listener for GameStartResponse to debug
     const handleGameStartResponse = (data: any) => {
-      if (data.status === 'success') {
-        // Don't redirect or change state here - let the GameStarted event handle the transition
-        // The GameStartResponse just confirms the server received the start request
-        // CRITICAL: Don't redirect the host - they should stay on this page
-      } else {
-        // Show error to user but don't redirect
-        // alert(`Failed to start game: ${data.message}`)
-        // Clear the timeout since start failed
+      if (data.status !== 'success') {
         if (startGameTimeout) {
           clearTimeout(startGameTimeout)
           setStartGameTimeout(null)
         }
-        // Clear the starting game flag
         setIsStartingGame(false)
       }
     }
@@ -340,7 +332,7 @@ export default function GamePage() {
           setIsStartingGame(false) // Clear the flag
         }
         setStartGameTimeout(null)
-      }, 5000) // 5 second timeout
+      }, 1000) // 5 second timeout
       
       setStartGameTimeout(timeout)
     }

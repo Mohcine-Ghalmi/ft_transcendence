@@ -128,7 +128,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         if (!gameStarted && socket && gameId) {
           socket.emit('StartGame', { gameId });
         }
-      }, 2000); // 2 second delay
+      }, 1000); // 2 second delay
 
       return () => clearTimeout(autoStartTimer);
     }
