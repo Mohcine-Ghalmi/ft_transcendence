@@ -35,7 +35,7 @@ const userCore = {
     .refine((value) => !/\s/.test(value), {
       message: 'No whitespace allowed',
     }),
-  avatar: z.string().default('/avatar/Default.png'),
+  avatar: z.string().default('/avatar/Default.avif'),
   type: z.number().default(1),
   level: z.number().default(1),
   xp: z.number().default(0),

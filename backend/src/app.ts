@@ -30,6 +30,7 @@ const fastifyMailer = require('fastify-mailer')
 
 import { cleanupStaleSocketsOnStartup, setupSocketIO } from './socket'
 import { initializeDatabase } from './database/connection'
+import { twoFARoutes } from './modules/user/user.2fa'
 
 dotenv.config()
 
@@ -173,11 +174,14 @@ server.decorate(
       req.headers['authorization'] = `Bearer ${token}`
 
       const user: any = await req.jwtVerify()
-      const dbUser = await getUserByEmail(user.email)
+      const dbUser: any = await getUserByEmail(user.email)
 
       if (!dbUser) {
         return rep.code(401).send({ message: 'User Not Found', status: false })
       }
+
+      const { password, hash, ...userWithoutPassword } = dbUser
+      req.user = userWithoutPassword
 
       if (user?.exp < (new Date().getTime() + 1) / 1000) {
         return rep.code(401).send({ message: 'Invalid or expired token' })
@@ -222,6 +226,7 @@ async function registerRoutes() {
   server.register(userRoutes, { prefix: 'api/users' })
   server.register(mailRoutes, { prefix: 'api/mail' })
   server.register(chatRoutes, { prefix: 'api/chat' })
+  server.register(twoFARoutes, { prefix: 'api/2fa' })
   server.register(gameRoute)
 }
 
@@ -244,6 +249,7 @@ async function startServer() {
     setupSocketIO(server)
   } catch (error) {
     server.log.error(error)
+    console.error('Failed to start server:', error)
     process.exit(1)
   }
 }

@@ -38,7 +38,7 @@ export async function registerUserHandler(
         .code(404)
         .send({ status: false, message: 'User Already exists' })
 
-    if (!body.avatar) body.avatar = '/avatar/Default.svg'
+    if (!body.avatar) body.avatar = '/avatar/Default.avif'
     const user = await createUser(body)
     const { password, salt, ...tmp } = user as any
     const accessToken = server.jwt.sign(tmp, { expiresIn: '1d' })
@@ -74,7 +74,7 @@ export async function googleRegister(
 
     if (!newUser) {
       const create = { ...user, password: 'RS:2L~H*jfMWpP0' }
-      const createUserResponse: any = createUser(create)
+      await createUser(create)
     } else {
       if (newUser.type !== 1 && newUser.type !== 2)
         return rep.code(200).send({
@@ -100,6 +100,26 @@ export async function googleRegister(
   }
 }
 
+export async function hasTwoFA(
+  req: FastifyRequest<{ Body: { email: string } }>,
+  rep: FastifyReply
+) {
+  try {
+    const { email } = req.body
+    const sql = db.prepare('SELECT isTwoFAVerified FROM User WHERE email = ?')
+    const user: any = await sql.get(email)
+
+    if (!user) {
+      return rep.code(404).send({ message: 'User not found' })
+    }
+
+    return rep.code(200).send({ isTwoFAVerified: user.isTwoFAVerified })
+  } catch (err) {
+    console.error(err)
+    return rep.code(500).send({ message: 'Internal Server Error' })
+  }
+}
+
 export async function loginUserHandler(
   req: FastifyRequest<{ Body: LoginInput }>,
   rep: FastifyReply
@@ -121,6 +141,23 @@ export async function loginUserHandler(
     user.password
   )
 
+  if (user.isTwoFAVerified) {
+    // check the two-factor authentication toke
+    // if (!body.twoFAToken) {
+    //   return rep.code(401).send({
+    //     message: 'Two-Factor Authentication is enabled, please provide the token',
+    //   })
+    // }
+    // // verify the two-factor authentication token
+    // const verified = server.twoFA.verify({
+    //   secret: user.twoFASecret,
+    //   encoding: 'base32',
+    //   token: body.twoFAToken,
+    //   window: 2,
+    // })
+    // if (!verified) {
+    //   return rep.code(401).send({ message: 'Invalid Two-Factor Authentication token' })
+  }
   if (correctPassword) {
     const { password, salt, ...rest } = user
 
@@ -320,6 +357,43 @@ export async function resetPassword(
   }
 }
 
+export async function changePassword(
+  req: FastifyRequest<{ Body: { oldPassword: string; newPassword: string } }>,
+  rep: FastifyReply
+) {
+  const { oldPassword, newPassword } = req.body
+  const { email }: any = req.user
+  try {
+    const user: any = await getUserByEmail(email)
+    if (!user) {
+      return rep.code(404).send({ status: false, message: 'User Not Found' })
+    }
+
+    const correctPassword = verifyPassword(
+      oldPassword,
+      user.salt,
+      user.password
+    )
+
+    if (!correctPassword) {
+      return rep.code(401).send({ status: false, message: 'Invalid Password' })
+    }
+
+    const { hash, salt } = hashPassword(newPassword)
+    const sql = db.prepare(
+      `UPDATE User SET salt = ?, password = ? WHERE email = ?`
+    )
+    sql.run(salt, hash, email)
+
+    return rep.code(200).send({ status: true, message: 'Password Changed' })
+  } catch (err) {
+    console.log(err)
+    return rep
+      .code(500)
+      .send({ status: false, message: 'Internal Server Error' })
+  }
+}
+
 export async function getUser(
   req: FastifyRequest<{ Body: any }>,
   rep: FastifyReply
@@ -340,6 +414,25 @@ export async function getUser(
     rep.code(200).send({ ...user, isBlockedByMe, isBlockedByHim })
   } catch (err) {
     console.log(err)
+  }
+}
+
+export async function getMe(
+  req: FastifyRequest<{ Body: any }>,
+  rep: FastifyReply
+) {
+  try {
+    const { email }: any = req.user
+
+    const user: any = await getUserByEmail(email)
+
+    const { password, salt, ...rest } = user
+
+    const accessToken = server.jwt.sign(rest, { expiresIn: '1d' })
+    return rep.code(200).send({ ...rest, accessToken })
+  } catch (err) {
+    console.log(err)
+    rep.code(500).send({ status: false, message: 'Internal Server Error' })
   }
 }
 

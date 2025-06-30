@@ -54,11 +54,11 @@ export async function createUser(input: CreateUserInput) {
   const sql = db.prepare(`
     INSERT INTO User (
       email, username, login,
-      password, level, salt, avatar,
+      password, salt, avatar,
       type, resetOtp, resetOtpExpireAt
     ) VALUES (
       :email, :username, :login,
-      :password, :level, :salt, :avatar,
+      :password, :salt, :avatar,
       :type, :resetOtp, :resetOtpExpireAt
     )
   `)
@@ -67,7 +67,6 @@ export async function createUser(input: CreateUserInput) {
     username: rest.username,
     login: login || characterName,
     password: hash,
-    level: rest.level || null,
     salt: salt,
     avatar: rest.avatar || null,
     type: rest.type || 0,

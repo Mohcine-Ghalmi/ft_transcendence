@@ -66,6 +66,11 @@ interface UserState {
   setNotifations: () => void
   seachedUsers: any
   setIsLoading: (data: boolean) => void
+  setUser: (user: any) => void
+  changePassword: (data: {
+    oldPassword: string
+    newPassword: string
+  }) => Promise<boolean>
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -77,6 +82,9 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   notifications: null,
   seachedUsers: [],
 
+  setUser: (user) => {
+    set({ user })
+  },
   setNotifations: () => {
     set({ notifications: null })
   },
@@ -93,7 +101,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
           localStorage.removeItem('accessToken')
           return false
         }
-        set({ user, isAuthenticated: true })
+        const res = await axiosInstance.get(`/api/users/getMe`)
+        const { accessTokenNew, ...me } = res.data
+        // localStorage.removeItem('accessToken')
+        // localStorage.setItem('accessToken', accessTokenNew)
+        set({ user: me, isAuthenticated: true })
         get().connectSocket()
         return true
       } else {
@@ -163,6 +175,30 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
   },
 
+  changePassword: async (data: {
+    oldPassword: string
+    newPassword: string
+  }) => {
+    set({ isLoading: true })
+    try {
+      const res = await axiosInstance.post(`/api/users/changePassword`, data)
+      if (res?.status === 200) {
+        toast.success('Password changed successfully!')
+        return true
+      } else {
+        toast.warning(res.data?.message || 'Password change failed')
+        return false
+      }
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || err.message || 'Password change failed'
+      toast.error(errorMessage)
+      return false
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
   login: async (data: any) => {
     set({ isLoading: true })
     try {
@@ -170,6 +206,16 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
+      // const hasTwoFAres = await axiosInstance.post(
+      //   `/api/users/verify-hasTwoFA`,
+      //   data.email
+      // )
+      // if (hasTwoFAres?.data?.isTwoFAVerified) {
+      //   toast.warning(
+      //     'You have two-factor authentication enabled. Please verify your OTP.'
+      //   )
+      //   return false
+      // }
       const res = await axiosInstance.post(`/api/users/login`, data)
       if (!res.data) {
         toast.warning('Login failed')

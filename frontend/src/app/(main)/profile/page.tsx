@@ -43,7 +43,7 @@ const TopProfile = ({ user }) => {
     })
   }
 
-  useEffect(() => {}, [user.isBlockedByMe])
+  // useEffect(() => {}, [user.isBlockedByMe])
 
   return (
     <div className="w-full flex items-center justify-center flex-col">
@@ -182,8 +182,8 @@ export default function Page() {
   return (
     <div className="flex items-center justify-center text-white">
       <div className="w-[80%] h-[90vh] mt-15">
-        <TopProfile user={user} />
-        <Level user={user} />
+        <TopProfile user={userProfile ? userProfile : me} />
+        <Level user={userProfile ? userProfile : me} />
         {/* select */}
         <div className="mt-10 flex items-center gap-6 my-4">
           <button

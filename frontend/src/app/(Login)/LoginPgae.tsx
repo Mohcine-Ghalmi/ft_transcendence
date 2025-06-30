@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import SignInWithOthers from './SignInWithOthers'
 import ResetPassword from './ResetPassword/resetPassword'
+import { CustomError } from './SignUp/SingUpPage'
 
 export default function LoginPage() {
   const [email, setemail] = useState('')
@@ -128,13 +129,7 @@ export default function LoginPage() {
                     : 'border-gray-600 focus:ring-blue-500'
                 }`}
               />
-              <div className="min-h-[60px]">
-                {errors.email && (
-                  <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
-                    {errors.email}
-                  </p>
-                )}
-              </div>
+              <CustomError message={errors.email} isTouched={1} />
             </div>
 
             {/* Password Input */}
@@ -150,11 +145,7 @@ export default function LoginPage() {
                     : 'border-gray-600 focus:ring-blue-500'
                 }`}
               />
-              {errors.password && (
-                <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
-                  {errors.password}
-                </p>
-              )}
+              <CustomError message={errors.password} isTouched={1} />
             </div>
 
             {/* Forgot Password */}
