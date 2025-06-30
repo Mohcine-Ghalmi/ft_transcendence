@@ -153,6 +153,68 @@ export default function OnlineMatch() {
   const router = useRouter();
   
   const countdownIntervalRef = useRef(null);
+  // Track current pathname to detect route changes
+  const [currentPath, setCurrentPath] = useState('');
+
+  useEffect(() => {
+    // Set initial path
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname);
+    }
+  }, []);
+
+  // Handle route changes and page navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleRouteChange = () => {
+      const newPath = window.location.pathname;
+      // If the path has changed and we're in a game, trigger exit
+      if (currentPath && newPath !== currentPath && gameState === 'in_game' && gameId) {
+        console.log('Route change detected, leaving game...');
+        handleGameExit();
+      }
+      setTimeout(() => setCurrentPath(newPath), 0);
+    };
+
+    const handleBeforeUnload = (e) => {
+      // If we're in a game, trigger exit
+      if (gameState === 'in_game' && gameId) {
+        handleGameExit();
+      }
+    };
+
+    const handlePopState = () => {
+      // Handle browser back/forward buttons
+      handleRouteChange();
+    };
+
+    // Listen for route changes
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Also listen for pushState and replaceState (for programmatic navigation)
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+      originalPushState.apply(history, args);
+      handleRouteChange();
+    };
+
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(history, args);
+      handleRouteChange();
+    };
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Restore original methods
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, [currentPath, gameState, gameId]);
 
   // Helper function to show notifications
   const showNotification = (message, type = 'info') => {
@@ -612,6 +674,17 @@ export default function OnlineMatch() {
       />
     );
   }
+
+  // Function to handle game exit (triggered by route change or manual exit)
+  // This will run for both host and guest (any player in the game)
+  const handleGameExit = () => {
+    if (socket && gameId && user?.email && gameState === 'in_game') {
+      socket.emit('LeaveGame', {
+        gameId,
+        playerEmail: user.email,
+      });
+    }
+  };
 
   return (
     <div className="h-full w-full text-white">
