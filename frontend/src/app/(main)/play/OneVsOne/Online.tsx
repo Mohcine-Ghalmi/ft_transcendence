@@ -322,7 +322,7 @@ export default function OnlineMatch() {
       resetGameState();
       
       // Navigate back to the main play page using React router
-      router.push('/play');
+      // router.push('/play');
     };
 
     const handleGameInviteCanceled = (data) => {
@@ -338,7 +338,7 @@ export default function OnlineMatch() {
       resetGameState();
       
       // Navigate back to the main play page using React router
-      router.push('/play');
+      // router.push('/play');
     };
 
     const handlePlayerLeft = (data) => {

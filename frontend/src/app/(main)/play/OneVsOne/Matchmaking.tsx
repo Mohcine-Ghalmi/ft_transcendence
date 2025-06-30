@@ -124,7 +124,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         socket.emit('LeaveMatchmaking', { email: user.email });
       }
     }
-    
     // Reset state
     // setMatchmakingStatus('idle');
     // setGameId(null);
@@ -132,6 +131,36 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     // setOpponent(null);
     // setIsHost(false);
   };
+
+   useEffect(() => {
+      const handleBeforeUnload = () => {
+        // If we're in a game, notify the server that we're leaving
+        if (socket && gameId && user?.email) {
+          socket.emit('LeaveGame', { 
+            gameId, 
+            playerEmail: user.email 
+          });
+        }
+      };
+  
+      const handleVisibilityChange = () => {
+        // If page becomes hidden (user switches tabs or minimizes), treat as leaving
+        if (document.hidden && socket && gameId && user?.email) {
+          socket.emit('LeaveGame', { 
+            gameId, 
+            playerEmail: user.email 
+          });
+        }
+      };
+  
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }, [socket, gameId, user?.email]);
 
   useEffect(() => {
     if (!socket || !user?.email) return;
