@@ -47,6 +47,92 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   const socket = getSocketInstance();
   const router = useRouter();
 
+  // Track current pathname to detect route changes
+  const [currentPath, setCurrentPath] = useState('');
+
+  useEffect(() => {
+    // Set initial path
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname);
+    }
+  }, []);
+
+  // Handle route changes and page navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleRouteChange = () => {
+      const newPath = window.location.pathname;
+      // If the path has changed and we're in a game, trigger exit
+      if (currentPath && newPath !== currentPath && matchmakingStatus === 'in_game' && gameId) {
+        console.log('Route change detected, leaving game...');
+        handleGameExit();
+      }
+      setTimeout(() => setCurrentPath(newPath), 0);
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // If we're in a game, trigger exit
+      if (matchmakingStatus === 'in_game' && gameId) {
+        handleGameExit();
+      }
+    };
+
+    const handlePopState = () => {
+      // Handle browser back/forward buttons
+      handleRouteChange();
+    };
+
+    // Listen for route changes
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Also listen for pushState and replaceState (for programmatic navigation)
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+      originalPushState.apply(history, args);
+      handleRouteChange();
+    };
+
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(history, args);
+      handleRouteChange();
+    };
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // Restore original methods
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, [currentPath, matchmakingStatus, gameId]);
+
+  // Function to handle game exit (triggered by route change or manual exit)
+  const handleGameExit = () => {
+    if (socket && gameId && user?.email) {
+      // If in game, notify server that player left
+      if (matchmakingStatus === 'in_game') {
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email 
+        });
+      } else if (matchmakingStatus === 'searching') {
+        socket.emit('LeaveMatchmaking', { email: user.email });
+      }
+    }
+    
+    // Reset state
+    // setMatchmakingStatus('idle');
+    // setGameId(null);
+    // setMatchData(null);
+    // setOpponent(null);
+    // setIsHost(false);
+  };
+
   useEffect(() => {
     if (!socket || !user?.email) return;
 
@@ -212,25 +298,13 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       socket.off('MatchmakingPlayerLeft');
       socket.off('GameEndedByOpponentLeave');
       
-      // Leave matchmaking when component unmounts
-      if (socket && user?.email) {
-        socket.emit('LeaveMatchmaking', { email: user.email });
-      }
+      // Use the centralized exit function
+      handleGameExit();
     };
   }, [socket, user?.email, router]);
 
   // Handle page refresh and disconnection
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      // If we're in a game, notify the server that we're leaving
-      if (socket && gameId && user?.email && matchmakingStatus === 'in_game') {
-        socket.emit('LeaveGame', { 
-          gameId, 
-          playerEmail: user.email 
-        });
-      }
-    };
-
     const handleVisibilityChange = () => {
       // If page becomes hidden (user switches tabs or minimizes), don't leave game immediately
       // Only leave if the page is being unloaded
@@ -239,14 +313,12 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [socket, gameId, user?.email, matchmakingStatus]);
+  }, []);
 
   // Handle automatic retry for matchmaking
   useEffect(() => {
@@ -375,46 +447,8 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
               </div>
             </>
           )}
-          
-          {/* {matchmakingStatus === 'idle' && (
-            <div className="text-center flex flex-col items-center justify-center w-full">
-              {errorMessage && (
-                <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg w-full max-w-lg mx-auto">
-                  <p className="text-red-400 text-lg mb-2">{errorMessage}</p>
-                  {showCleanupOption && (
-                    <div className="mt-4">
-                      <p className="text-gray-400 text-sm mb-3">
-                        This might be due to stale game data. You can try cleaning it up:
-                      </p>
-                      <button
-                        onClick={handleCleanupGameData}
-                        className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-2 rounded-lg transition-colors"
-                      >
-                        Clean Up Game Data
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )} */}
-              
-              {/* <p className="text-gray-400 text-lg mb-8">
-                Click the button below to start searching for a random opponent.
-              </p>
-              <button
-                onClick={() => {
-                  if (socket && user?.email) {
-                    socket.emit('JoinMatchmaking', { email: user.email });
-                    setMatchmakingStatus('searching');
-                  }
-                }}
-                className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl text-xl font-semibold transition-colors"
-              >
-                Start Matchmaking
-              </button> */}
-            {/* </div> */}
-          {/* )} */}
         </div>
       </div>
     </div>
   );
-} 
+}
