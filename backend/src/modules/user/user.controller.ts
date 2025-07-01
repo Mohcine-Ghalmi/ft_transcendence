@@ -39,7 +39,7 @@ export async function registerUserHandler(
         .code(404)
         .send({ status: false, message: 'User Already exists' })
 
-    if (!body.avatar) body.avatar = '/images/Default.avif'
+    if (!body.avatar) body.avatar = 'default.avif'
     const user = await createUser(body)
     const { password, salt, ...tmp } = user as any
     const accessToken = server.jwt.sign(tmp, { expiresIn: '1d' })

@@ -68,7 +68,7 @@ async function googleRegister(req: FastifyRequest, rep: FastifyReply) {
       existingUser = await createUser({
         email: email,
         username: name || `${given_name} ${family_name}`,
-        avatar: fileName || '/images/Default.avif',
+        avatar: fileName || 'default.avif',
         type: 1,
         password: '',
         login: '',
@@ -116,7 +116,7 @@ export async function fortyTwoRegister(req: FastifyRequest, rep: FastifyReply) {
       existingUser = await createUser({
         email: email,
         username: usual_full_name || `${first_name} ${last_name}`,
-        avatar: fileName || '/images/Default.avif',
+        avatar: fileName || 'default.avif',
         type: 2,
         password: '',
         login: login || '',
@@ -153,7 +153,7 @@ export async function registerHandler(
         .code(404)
         .send({ status: false, message: 'User Already exists' })
 
-    if (!body.avatar) body.avatar = '/images/Default.avif'
+    if (!body.avatar) body.avatar = 'default.avif'
     const user = await createUser(body)
     const { password, salt, ...tmp } = user as any
     const accessToken = signJWT(tmp, rep)
