@@ -3,6 +3,7 @@ import speakeasy from 'speakeasy'
 import { FastifyInstance, FastifyRequest, type FastifyReply } from 'fastify'
 import { db } from '../../app'
 import { getUserByEmail } from './user.service'
+import { signJWT } from './user.login'
 
 export async function setTwoFASecret(
   id: number,
@@ -40,6 +41,49 @@ async function handleQRCodeGenerator(req: FastifyRequest, rep: FastifyReply) {
   } catch (error) {
     console.error('Error generating QR code:', error)
     return rep.status(500).send({ error: 'Failed to generate QR code' })
+  }
+}
+
+async function verifyTwoFaLogin(
+  req: FastifyRequest<{ Body: { token: string; email: string } }>,
+  rep: FastifyReply
+) {
+  try {
+    const { token, email } = req.body
+
+    if (!token || !email) {
+      return rep.status(200).send({ error: 'Token and email are required' })
+    }
+
+    const user: any = await getUserByEmail(email)
+    if (!user) {
+      return rep.status(200).send({ error: 'User not found' })
+    }
+
+    if (!user.twoFASecret) {
+      return rep
+        .status(200)
+        .send({ error: 'Two-factor authentication not set up' })
+    }
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFASecret,
+      encoding: 'base32',
+      token,
+      window: 2,
+    })
+    if (!verified) {
+      return rep
+        .status(401)
+        .send({ error: 'Invalid two-factor authentication token' })
+    }
+
+    const { password, salt, ...rest } = user
+
+    const accessToken = signJWT(rest, rep)
+    return rep.code(200).send({ ...rest, accessToken })
+  } catch (err) {
+    console.error('Error in verifyTwoFaLogin:', err)
+    return rep.status(500).send({ error: 'Internal server error' })
   }
 }
 
@@ -88,6 +132,8 @@ export async function twoFARoutes(server: FastifyInstance) {
     { preHandler: [server.authenticate] },
     handleQRCodeGenerator
   )
+
+  server.post('/verifyTwoFaLogin', verifyTwoFaLogin)
 
   server.post(
     '/verifyQRCode',

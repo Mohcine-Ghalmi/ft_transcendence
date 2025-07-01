@@ -24,6 +24,7 @@ export const signJWT = (user: any, rep: FastifyReply) => {
     sameSite: 'lax',
     path: '/',
     domain: 'localhost',
+    maxAge: 60 * 60 * 24,
   })
   return accessToken
 }
@@ -147,16 +148,14 @@ export async function registerHandler(
     const user = await createUser(body)
     const { password, salt, ...tmp } = user as any
     const accessToken = signJWT(tmp, rep)
-    return rep
-      .code(201)
-      .send({ ...tmp, accessToken })
-      .redirect(`${process.env.FRONT_END_URL}/dashboard`)
+    return rep.code(201).send({ ...tmp, accessToken })
   } catch (err: unknown) {
     console.log(err)
 
     return rep.code(500).send({ message: 'Internal server error' })
   }
 }
+
 
 export async function loginHandler(
   req: FastifyRequest<{ Body: LoginInput }>,
@@ -173,6 +172,14 @@ export async function loginHandler(
     return rep
       .code(401)
       .send({ message: 'This Email is signed in with another method' })
+
+  if (user.isTwoFAVerified) {
+    return rep.code(200).send({
+      status: false,
+      message: 'Please verify your 2FA code first',
+      desc: '2FA verification required',
+    })
+  }
   const correctPassword = verifyPassword(
     body.password,
     user.salt,
@@ -183,10 +190,7 @@ export async function loginHandler(
     const { password, salt, ...rest } = user
 
     const accessToken = signJWT(rest, rep)
-    return rep
-      .code(200)
-      .send({ ...rest, accessToken })
-      .redirect(`${process.env.FRONT_END_URL}/dashboard`)
+    return rep.code(200).send({ ...rest, accessToken })
   }
 
   return rep.code(401).send({ message: 'Invalid Email or password' })

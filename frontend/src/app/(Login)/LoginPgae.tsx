@@ -7,6 +7,7 @@ import SignInWithOthers from './SignInWithOthers'
 import ResetPassword from './ResetPassword/resetPassword'
 import { CustomError } from './SignUp/SingUpPage'
 import { useRouter } from 'next/navigation'
+import VerifyTwoFa from './VerifyTwoFa'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -45,7 +46,7 @@ export default function LoginPage() {
   }
 
   //
-  const { login } = useAuthStore()
+  const { login, hidePopUp } = useAuthStore()
 
   const handleLogin = async () => {
     const newErrors = {
@@ -108,7 +109,7 @@ export default function LoginPage() {
           </button>
         </Link>
       </header>
-
+      {hidePopUp && <VerifyTwoFa email={email} />}
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-5xl">

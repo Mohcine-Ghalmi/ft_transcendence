@@ -71,6 +71,8 @@ interface UserState {
     oldPassword: string
     newPassword: string
   }) => Promise<boolean>
+  hidePopUp: boolean
+  setHidePopUp: (data: boolean) => void
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -81,6 +83,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   onlineUsers: [],
   notifications: null,
   seachedUsers: [],
+  hidePopUp: false,
+
+  setHidePopUp: (data: boolean) => {
+    set({ hidePopUp: data })
+  },
 
   setUser: (user) => {
     set({ user })
@@ -155,6 +162,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       // localStorage.setItem('accessToken', accessToken)
       set({ user, isAuthenticated: true })
       get().connectSocket()
+      window.location.href = `${FRON_END}/dashboard`
       return true
     } catch (err: any) {
       console.log(err)
@@ -212,9 +220,20 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning('Login failed')
         return false
       }
-      const { ...user } = res.data
-      set({ user, isAuthenticated: true })
-      get().connectSocket()
+      if (res.data.status) {
+        const { ...user } = res.data
+        set({ user, isAuthenticated: true })
+        get().connectSocket()
+        window.location.href = `${FRON_END}/dashboard`
+      } else {
+        console.log(res.data)
+        if (res.data.desc === '2FA verification required') {
+          get().setHidePopUp(true)
+          return false
+        }
+        return false
+      }
+
       return true
     } catch (err: any) {
       toast.warning(err.response?.data?.message || err.message)

@@ -142,7 +142,7 @@ export default function Signup() {
     }
   }
 
-  const handleSubmit = (e: any) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault()
 
     if (currentStep === 1) {
@@ -177,8 +177,10 @@ export default function Signup() {
         !newErrors.confirmPassword
 
       if (isStep1Valid) {
-        setCurrentStep(2)
+        await register({ ...formData, avatar: '/avatar/Default.avif' })
       }
+      //   setCurrentStep(2)
+      // }
     }
   }
 
@@ -385,7 +387,7 @@ export default function Signup() {
               </div>
             )}
             {/* Progress Section */}
-            <div className="py-6">
+            {/* <div className="py-6">
               <div className="text-sm md:text-base xl:text-lg text-gray-400 mb-2">
                 Account Creation Progress
               </div>
@@ -398,7 +400,7 @@ export default function Signup() {
               <div className="text-xs md:text-sm xl:text-base text-gray-500 mt-1">
                 Step {currentStep} of 2
               </div>
-            </div>
+            </div> */}
             {/* Social Login Buttons - Only show on step 1 */}
             {currentStep === 1 && (
               <div className="mb-6">
@@ -421,11 +423,7 @@ export default function Signup() {
                   type="submit"
                   className="flex-1 py-3 md:py-4 xl:py-6 bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl xl:rounded-2xl font-medium transition-colors text-base md:text-lg xl:text-2xl"
                 >
-                  {currentStep === 1
-                    ? 'Next'
-                    : currentStep === 2
-                    ? 'Next'
-                    : 'Finish'}
+                  Register
                 </button>
               </div>
             )}
