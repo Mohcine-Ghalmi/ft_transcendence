@@ -71,7 +71,7 @@ export const Conversation: React.FC<FriendConversationType> = ({
       <div className="w-full relative items-center flex py-4 xl:py-6">
         <div className="relative">
           <Image
-            src={image}
+            src={`/images/${image}`}
             alt={`${sender} profile`}
             width={100}
             height={100}
@@ -257,7 +257,7 @@ const InChatSearch = () => {
                 >
                   <div className="relative">
                     <Image
-                      src={conv.user.avatar}
+                      src={`/images/${conv.user.avatar}`}
                       alt={`profile`}
                       width={100}
                       height={100}
