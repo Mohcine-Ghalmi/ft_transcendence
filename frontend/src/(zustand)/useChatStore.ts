@@ -23,6 +23,7 @@ interface ChatStoreType {
   disconnectChatSocket: () => void
   setConversations: (data: any) => void
   setChatHeader: (data: any) => void
+  tmp: (data: any) => void
 }
 
 export let chatSocket: Socket | null = null
@@ -35,6 +36,10 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   pageNumber: 0,
   isLoading: true,
   selectedConversationId: undefined,
+
+  tmp: (data) => {
+    set({ selectedConversation: data })
+  },
 
   setConversations: (data: any) => {
     set({ conversations: data })

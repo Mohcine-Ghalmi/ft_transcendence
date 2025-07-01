@@ -280,6 +280,8 @@ const Chat = () => {
     updateChat,
     chatHeader,
     handleNewMessage,
+    tmp,
+    selectedConversation,
   } = useChatStore()
   const { user } = useAuthStore()
 
@@ -322,11 +324,18 @@ const Chat = () => {
     }
 
     handleNewMessage(sendingText)
-
     try {
       let imagePath = null
       if (image) {
         imagePath = await hostImage(image)
+        if (!imagePath) {
+          setIsLoading(false)
+          const newConv = selectedConversation.filter(
+            (conv) => conv.isSending !== true
+          )
+          tmp(newConv)
+          return
+        }
       }
 
       // Optional: Encrypt message before sending
