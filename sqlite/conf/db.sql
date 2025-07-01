@@ -4,15 +4,14 @@ CREATE TABLE "User" (
     "username" TEXT NOT NULL,
     "salt" TEXT NOT NULL,
     "password" TEXT NOT NULL,
-    "login" TEXT,
-    "level" INTEGER,
-    "xp" INTEGER NULL,
+    "login" TEXT NOT NULL UNIQUE,
+    "level" INTEGER DEFAULT 0,
+    "xp" INTEGER DEFAULT 0,
     "avatar" TEXT,
-    "type" INTEGER,
+    "type" INTEGER DEFAULT 0,
     "resetOtp" TEXT NULL,
     "resetOtpExpireAt" TEXT NULL,
-    "isOnline" BOOLEAN,
-    "twoFASecret" TEXT,
+    "twoFASecret" TEXT NULL,
     "isTwoFAVerified" BOOLEAN DEFAULT 0
 );
 
@@ -23,7 +22,7 @@ CREATE TABLE "Messages" (
     "message" TEXT,
     "image" TEXT,
     "seen" BOOLEAN DEFAULT FALSE,
-    "date" DATETIME NOT NULL,
+    "date" DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Messages_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Messages_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );

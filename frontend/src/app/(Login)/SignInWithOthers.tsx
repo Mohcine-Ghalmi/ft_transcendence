@@ -49,15 +49,7 @@ const SignInWithOthers = () => {
 
     try {
       setIsProcessing(true)
-      const result = await signIn('google', {
-        redirect: false,
-        callbackUrl: '/',
-      })
-
-      if (result?.error) {
-        toast.error('Google login failed')
-        setIsProcessing(false)
-      }
+      router.replace('http://localhost:5005/login/google')
     } catch (err) {
       toast.error('Google login failed')
       setIsProcessing(false)
@@ -69,15 +61,7 @@ const SignInWithOthers = () => {
 
     try {
       setIsProcessing(true)
-      const result = await signIn('42-school', {
-        redirect: false,
-        callbackUrl: '/',
-      })
-
-      if (result?.error) {
-        toast.error('42 School login failed')
-        setIsProcessing(false)
-      }
+      router.replace('http://localhost:5005/login/42')
     } catch (err) {
       toast.error('42 School login failed')
       setIsProcessing(false)

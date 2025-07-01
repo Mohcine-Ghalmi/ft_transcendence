@@ -55,7 +55,7 @@ interface UserState {
   user: any | null
   socketConnected: boolean
   onlineUsers: string[] // lasdj@gmail.com asdasd@gaialcom
-  checkAuth: (accessToken: string) => Promise<boolean>
+  checkAuth: () => Promise<boolean>
   register: (data: any) => Promise<boolean>
   login: (data: any) => Promise<boolean>
   logout: () => Promise<void>
@@ -66,6 +66,13 @@ interface UserState {
   setNotifations: () => void
   seachedUsers: any
   setIsLoading: (data: boolean) => void
+  setUser: (user: any) => void
+  changePassword: (data: {
+    oldPassword: string
+    newPassword: string
+  }) => Promise<boolean>
+  hidePopUp: boolean
+  setHidePopUp: (data: boolean) => void
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -76,34 +83,37 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   onlineUsers: [],
   notifications: null,
   seachedUsers: [],
+  hidePopUp: false,
 
+  setHidePopUp: (data: boolean) => {
+    set({ hidePopUp: data })
+  },
+
+  setUser: (user) => {
+    set({ user })
+  },
   setNotifations: () => {
     set({ notifications: null })
   },
   setIsLoading: (data) => {
     set({ isLoading: data })
   },
-  checkAuth: async (accessToken) => {
-    set({ isLoading: true })
-    try {
-      if (accessToken) {
-        const user: any = jwtDecode(accessToken)
-
-        if (user?.exp < (new Date().getTime() + 1) / 1000) {
-          localStorage.removeItem('accessToken')
-          return false
-        }
-        set({ user, isAuthenticated: true })
-        get().connectSocket()
-        return true
-      } else {
-        return false
-      }
-    } catch (err) {
-      return false
-    } finally {
-      set({ isLoading: false })
-    }
+  checkAuth: async () => {
+    return true
+    // set({ isLoading: true })
+    // try {
+    //   const res = await axiosInstance.get('/api/users/getMe')
+    //   const { user } = res.data
+    //   set({ user, isAuthenticated: true })
+    //   get().connectSocket()
+    //   return true
+    // } catch (err) {
+    //   console.error('Auth check failed:', err)
+    //   set({ user: null, isAuthenticated: false })
+    //   return false
+    // } finally {
+    //   set({ isLoading: false })
+    // }
   },
 
   googleLogin: async (data: any): Promise<void> => {
@@ -141,22 +151,47 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(`/api/users/register`, data)
+      const res = await axiosInstance.post(`/v2/api/users/register`, data)
       console.log(res)
 
       if (!res.data) {
         toast.warning('Registration failed')
         return false
       }
-      const { accessToken, ...user } = res.data
-      localStorage.setItem('accessToken', accessToken)
+      const { ...user } = res.data
+      // localStorage.setItem('accessToken', accessToken)
       set({ user, isAuthenticated: true })
       get().connectSocket()
+      window.location.href = `${FRON_END}/dashboard`
       return true
     } catch (err: any) {
       console.log(err)
 
       toast.warning(err.response?.data?.message || err.message)
+      return false
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  changePassword: async (data: {
+    oldPassword: string
+    newPassword: string
+  }) => {
+    set({ isLoading: true })
+    try {
+      const res = await axiosInstance.post(`/api/users/changePassword`, data)
+      if (res?.status === 200) {
+        toast.success('Password changed successfully!')
+        return true
+      } else {
+        toast.warning(res.data?.message || 'Password change failed')
+        return false
+      }
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || err.message || 'Password change failed'
+      toast.error(errorMessage)
       return false
     } finally {
       set({ isLoading: false })
@@ -170,15 +205,35 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(`/api/users/login`, data)
+      // const hasTwoFAres = await axiosInstance.post(
+      //   `/api/users/verify-hasTwoFA`,
+      //   data.email
+      // )
+      // if (hasTwoFAres?.data?.isTwoFAVerified) {
+      //   toast.warning(
+      //     'You have two-factor authentication enabled. Please verify your OTP.'
+      //   )
+      //   return false
+      // }
+      const res = await axiosInstance.post(`/v2/api/users/login`, data)
       if (!res.data) {
         toast.warning('Login failed')
         return false
       }
-      const { accessToken, ...user } = res.data
-      localStorage.setItem('accessToken', accessToken)
-      set({ user, isAuthenticated: true })
-      get().connectSocket()
+      if (res.data.status) {
+        const { ...user } = res.data
+        set({ user, isAuthenticated: true })
+        get().connectSocket()
+        window.location.href = `${FRON_END}/dashboard`
+      } else {
+        console.log(res.data)
+        if (res.data.desc === '2FA verification required') {
+          get().setHidePopUp(true)
+          return false
+        }
+        return false
+      }
+
       return true
     } catch (err: any) {
       toast.warning(err.response?.data?.message || err.message)
@@ -189,10 +244,20 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   logout: async () => {
-    localStorage.removeItem('accessToken')
-    get().disconnectSocket()
-    set({ user: null, isAuthenticated: false, isLoading: false })
-    signOut({ callbackUrl: `${FRON_END}/` })
+    try {
+      const res = await axiosInstance.post(`/api/users/logout`)
+      if (res?.status === 200) {
+        toast.success('Logout successful!')
+      } else {
+        toast.warning(res.data?.message || 'Logout failed')
+      }
+      get().disconnectSocket()
+    } catch (err) {
+      console.error('Logout failed:', err)
+      toast.warning('Logout failed')
+    }
+    // set({ user: null, isAuthenticated: false, isLoading: false })
+    // signOut({ callbackUrl: `${FRON_END}/` })
   },
 
   connectSocket: () => {

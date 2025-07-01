@@ -1,9 +1,15 @@
 'use client'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import { useRef, useState } from 'react'
+import FA2 from '@/app/(Login)/FA2'
+import Image from 'next/image'
+import { CustomError } from '../../(Login)/SignUp/SingUpPage'
 
 const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const { user } = useAuthStore()
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(
+    user.avatar || null
+  )
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -83,7 +89,9 @@ const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
         <div className="text-center">
           {avatarPreview ? (
             <div className="mb-4">
-              <img
+              <Image
+                width={1000}
+                height={1000}
                 src={avatarPreview}
                 alt="Avatar preview"
                 className="w-24 h-24 md:w-32 md:h-32 xl:w-40 xl:h-40 rounded-full mx-auto object-cover border-2 border-gray-600"
@@ -154,12 +162,32 @@ const Settings = () => {
   const [errors, setErrors] = useState({
     username: '',
     email: '',
+    login: '',
     avatar: '',
   })
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    console.log(formData)
+    const newErrors = {
+      ...errors,
+      username: validateField('username', formData.username),
+      email: validateField('email', formData.email),
+      login: validateField('login', formData.login),
+      avatar: validateField('avatar', formData.avatar),
+    }
+
+    setErrors(newErrors)
+
+    const isStep1Valid =
+      !newErrors.username &&
+      !newErrors.email &&
+      !newErrors.login &&
+      !newErrors.avatar
+    if (!isStep1Valid) {
+      console.log('Form has errors:', newErrors)
+      return
+    }
+    console.log({ ...formData, type: user.type })
   }
 
   const validateField = (name: string, value: string | File | null) => {
@@ -204,9 +232,7 @@ const Settings = () => {
         break
 
       case 'avatar':
-        if (!value) {
-          error = 'Please upload an avatar image'
-        } else if (value && value instanceof File) {
+        if (value && value instanceof File) {
           const maxSize = 5 * 1024 * 1024 // 5MB
           const allowedTypes = [
             'image/jpeg',
@@ -231,9 +257,9 @@ const Settings = () => {
   }
 
   return (
-    <div>
+    <div className="w-full">
       <h2 className="text-4xl">Settings</h2>
-      <div className="w-[50%] flex flex-col  gap-6 mt-6">
+      <div className="flex flex-col  gap-6 mt-6">
         <div className="flex flex-col gap-2">
           <span>Username</span>
           <input
@@ -245,6 +271,7 @@ const Settings = () => {
             placeholder={user.username}
             className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
           />
+          <CustomError message={errors.username} isTouched={errors.username} />
         </div>
         {user.type !== 2 && (
           <div className="flex flex-col gap-2">
@@ -258,6 +285,7 @@ const Settings = () => {
               value={formData.login}
               className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
             />
+            <CustomError message={errors.login} isTouched={errors.login} />
           </div>
         )}
         {user.type === 0 && (
@@ -272,6 +300,7 @@ const Settings = () => {
               value={formData.email}
               className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
             />
+            <CustomError message={errors.email} isTouched={errors.email} />
           </div>
         )}
         <DragAndDrop
@@ -291,15 +320,152 @@ const Settings = () => {
   )
 }
 
-export default function SettingsPage() {
+const PassowrdSettings = () => {
+  const { changePassword } = useAuthStore()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [errors, setErrors] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+
+  const validateField = (name: string, value: string) => {
+    let error = ''
+    if (!value.trim()) {
+      error = `${name} is required`
+    } else if (name === 'newPassword' && value.length < 6) {
+      error = 'New password must be at least 6 characters'
+    } else if (name === 'confirmPassword' && value !== newPassword) {
+      error = 'Passwords do not match'
+    }
+    return error
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (
+      !currentPassword.trim() ||
+      !newPassword.trim() ||
+      !confirmPassword.trim()
+    )
+      return
+    await changePassword({ oldPassword: currentPassword, newPassword })
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setErrors({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
+    // Handle password change logic here
+  }
+
   return (
-    <div className="h-[90vh] mt-10 flex items-center justify-center text-white py-10">
+    <div className="w-full">
+      <h2 className="text-4xl">Change Password</h2>
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div>
+          <label className="block mb-2">Current Password</label>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => {
+              setCurrentPassword(e.target.value)
+              setErrors((prev) => ({
+                ...prev,
+                currentPassword: validateField(
+                  'currentPassword',
+                  e.target.value
+                ),
+              }))
+            }}
+            className={`w-full px-2 py-4 border rounded-2xl bg-[#1F2124] outline-none ${
+              errors.currentPassword ? 'border-red-500' : 'border-gray-500'
+            }`}
+          />
+          {errors.currentPassword && (
+            <p className="text-red-500 text-sm">{errors.currentPassword}</p>
+          )}
+        </div>
+        <div>
+          <label className="block mb-2">New Password</label>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value)
+              setErrors((prev) => ({
+                ...prev,
+                newPassword: validateField('newPassword', e.target.value),
+              }))
+            }}
+            className={`w-full px-2 py-4 border rounded-2xl bg-[#1F2124] outline-none ${
+              errors.currentPassword ? 'border-red-500' : 'border-gray-500'
+            }`}
+          />
+          {errors.newPassword && (
+            <p className="text-red-500 text-sm">{errors.newPassword}</p>
+          )}
+        </div>
+        <div>
+          <label className="block mb-2">Confirm New Password</label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value)
+              setErrors((prev) => ({
+                ...prev,
+                confirmPassword: validateField(
+                  'confirmPassword',
+                  e.target.value
+                ),
+              }))
+            }}
+            className={`w-full px-2 py-4 border rounded-2xl bg-[#1F2124] outline-none ${
+              errors.currentPassword ? 'border-red-500' : 'border-gray-500'
+            }`}
+          />
+          {errors.confirmPassword && (
+            <p className="text-red-500 text-sm">{errors.confirmPassword}</p>
+          )}
+        </div>
+        <button
+          type="submit"
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Change Password
+        </button>
+      </form>
+    </div>
+  )
+}
+
+export default function SettingsPage() {
+  const [page, setPage] = useState<number>(0)
+  const { user } = useAuthStore()
+  if (!user) return <div className="text-white">Loading...</div>
+  return (
+    <div className="flex text-white py-10 h-full">
       {/* left side */}
-      <div className="w-[30%] h-full flex items-center flex-col gap-4">
-        <button className="w-[200px] py-4 px-6 bg-[#2B3036] rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
+      <div className="w-[25%] flex items-center flex-col gap-4">
+        <button
+          onClick={() => setPage(0)}
+          className={`w-[200px] py-4 px-6 ${
+            page === 0 && 'bg-[#2B3036]'
+          } rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
+        >
           Account
         </button>
-        <button className="w-[200px] py-4 px-6  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
+        <button
+          onClick={() => setPage(1)}
+          className={`w-[200px] py-4 px-6 ${
+            page === 1 && 'bg-[#2B3036]'
+          }  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
+        >
           Security
         </button>
         <button className="w-[200px] py-4 px-6  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
@@ -307,8 +473,14 @@ export default function SettingsPage() {
         </button>
       </div>
       {/* right side */}
-      <div className="w-full h-full">
-        <Settings />
+      <div className="h-full w-[50%]">
+        {page === 0 && <Settings />}
+        {page === 1 && (
+          <>
+            {user.type === 0 && <PassowrdSettings />}
+            <FA2 />
+          </>
+        )}
       </div>
     </div>
   )

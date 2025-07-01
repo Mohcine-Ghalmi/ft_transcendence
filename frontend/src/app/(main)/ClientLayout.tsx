@@ -3,53 +3,51 @@
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { Header } from '@/components/layout/Header'
 import { SessionProvider } from 'next-auth/react'
-import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ToastContainer } from 'react-toastify'
 
 export default function ClientLayout({
   children,
+  user,
 }: {
   children: React.ReactNode
+  user: any
 }) {
-  console.log('(main)')
-
+  const { setUser, connectSocket } = useAuthStore()
+  const [socketConnected, setSocketConnected] = useState(false)
   const router = useRouter()
-  const { checkAuth } = useAuthStore()
-  const pathname = usePathname()
 
-  const [loading, setLoading] = useState(true)
-
-  const checkIsAuth = async () => {
-    try {
-      const res = await checkAuth(localStorage.getItem('accessToken') as string)
-      if (!res) router.push('/')
-      setLoading(false)
-    } catch (err) {
-      router.push('/')
-    }
-  }
   useEffect(() => {
-    console.log('check auth ?')
+    if (!user) {
+      router.push('/')
+      return
+    }
 
-    checkIsAuth()
-  }, [pathname, router])
+    setUser(user)
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    )
+    connectSocket()
+
+    const checkSocket = () => {
+      if (socketInstance?.connected) {
+        setSocketConnected(true)
+      }
+    }
+
+    const interval = setInterval(checkSocket, 1000)
+    return () => clearInterval(interval)
+  }, [user])
+
   return (
     <SessionProvider>
       <ToastContainer theme="dark" stacked />
-      {socketInstance && socketInstance.connected && (
-        <>
-          <Header />
-          {children}
-        </>
+      <Header />
+      {!socketConnected ? (
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-white">Connecting to server...</div>
+        </div>
+      ) : (
+        children
       )}
     </SessionProvider>
   )

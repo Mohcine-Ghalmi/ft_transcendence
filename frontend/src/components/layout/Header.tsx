@@ -155,9 +155,10 @@ export const Header = () => {
   const handleNavClick = (label: string): void => {
     setActiveTab(label)
   }
+  if (!user) return null
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 w-full bg-[#121417] border-b border-gray-700 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+    <header className="h-[8vh] top-0 left-0 right-0 z-50 w-full bg-[#121417] border-b border-gray-700 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
       <div className="flex items-center justify-between">
         {/* Mobile Menu */}
         <MobileMenu

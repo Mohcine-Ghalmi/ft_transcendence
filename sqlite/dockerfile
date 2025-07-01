@@ -7,3 +7,5 @@ WORKDIR /db
 COPY ./conf/db.sql /db/mydb.sql
 
 RUN sqlite3 database.db < mydb.sql
+
+ENTRYPOINT ["tail", "-f", "/dev/null"]
