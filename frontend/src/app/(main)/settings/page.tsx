@@ -8,7 +8,7 @@ import { CustomError } from '../../(Login)/SignUp/SingUpPage'
 const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
   const { user } = useAuthStore()
   const [avatarPreview, setAvatarPreview] = useState<string | null>(
-    user.avatar || null
+    `/images/${user.avatar}` || null
   )
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
