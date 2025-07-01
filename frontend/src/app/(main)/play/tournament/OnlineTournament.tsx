@@ -1,14 +1,18 @@
 "use client";
 
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import {MATCH_STATES} from '../../../../data/mockData';
 import TournamentBracket from './TournamentBracket';
-import { user, onlineFriends } from '@/data/mockData';
+import { useAuthStore } from '@/(zustand)/useAuthStore';
+import { getSocketInstance } from '@/(zustand)/useAuthStore';
+import CryptoJS from 'crypto-js';
+import { PlayerListItem } from '../../play/OneVsOne/Online';
 
 interface Player {
   name: string;
+  email: string;
   avatar: string;
   GameStatus: string;
   nickname: string;
@@ -18,32 +22,18 @@ interface OnlinePlayModeProps {
   onInvitePlayer: (player: Player) => void;
   pendingInvites: Map<string, any>;
   sentInvites: Map<string, any>;
+  backendAvailable: boolean;
 }
 
-const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites }: OnlinePlayModeProps) => {
+const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, backendAvailable }: OnlinePlayModeProps & { friends: Player[] }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [friends, setFriends] = useState(onlineFriends);
-  
-  // Filter online players based on search query
-  const filteredPlayers = friends.filter((player: Player) =>
-    player.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  // Use the same filtering logic as OneVsOne
+  const filteredPlayers = friends.filter(player =>
+    player.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  
-  // Get button state for a player
-  const getPlayerButtonState = (player: Player) => {
-    if (pendingInvites.has(player.name)) {
-      return { text: 'Pending...', disabled: true, color: 'bg-yellow-600' };
-    }
-    if (sentInvites.has(player.name)) {
-      return { text: 'Invited', disabled: true, color: 'bg-blue-600' };
-    }
-    return { text: 'Invite', disabled: false, color: 'bg-green-600 hover:bg-green-700' };
-  };
-  
   return (
-    <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+    <div className="bg-[#0f1419] rounded-lg p-6 border border-[#2a2f3a]">
       <h3 className="text-white text-xl font-semibold mb-4">Invite Players</h3>
-      
       {/* Search Bar */}
       <div className="relative mb-6">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -54,67 +44,53 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites }: OnlineP
           placeholder="Search for players..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-3 bg-[#2a2f3a] text-white rounded-lg border border-gray-600 outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+          className="w-full pl-12 pr-4 py-3 bg-[#1a1d23] text-white rounded-lg border border-[#2a2f3a] outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
         />
       </div>
-      
       {/* Online Players List */}
       <div className="space-y-3 max-h-96 overflow-y-auto">
         <h4 className="text-white text-lg font-medium mb-3">Online Players</h4>
+        {!backendAvailable && (
+          <div className="text-center py-8 mb-6 bg-red-900/20 border border-red-500/30 rounded-lg">
+            <p className="text-red-400 text-lg mb-2">Backend server is not available</p>
+            <p className="text-gray-400 text-sm mb-4">
+              Please make sure the backend server is running on port 5005
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {filteredPlayers.length > 0 ? (
-          filteredPlayers.map((player: Player) => {
-            const buttonState = getPlayerButtonState(player);
-            const isAvailable = player.GameStatus === 'Available';
-            
-            return (
-              <div key={player.name} className="flex items-center justify-between p-3 hover:bg-[#2a2f3a] rounded-lg transition-colors border border-gray-700/50">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-gray-600">
-                      <Image 
-                        src={player.avatar} 
-                        alt={player.name} 
-                        width={40} 
-                        height={40}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    {/* Status indicator */}
-                    <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-[#1a1d23] ${
-                      player.GameStatus === 'Available' ? 'bg-green-500' : 
-                      player.GameStatus === 'In a match' ? 'bg-yellow-500' : 'bg-red-500'
-                    }`}></div>
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">{player.name}</h3>
-                    <p className={`text-sm ${
-                      player.GameStatus === 'Available' ? 'text-green-400' : 
-                      player.GameStatus === 'In a match' ? 'text-yellow-400' : 'text-gray-400'
-                    }`}>
-                      {player.GameStatus}
-                    </p>
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={() => onInvitePlayer(player)}
-                  disabled={buttonState.disabled || !isAvailable}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    !isAvailable
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : buttonState.disabled
-                      ? `${buttonState.color} text-white cursor-not-allowed`
-                      : `${buttonState.color} text-white`
-                  }`}
-                >
-                  {!isAvailable ? 'Unavailable' : buttonState.text}
-                </button>
-              </div>
-            );
-          })
+          filteredPlayers.map((player: Player, index: number) => (
+            <PlayerListItem
+              key={`${player.email}-${player.nickname}-${index}`}
+              player={player}
+              onInvite={onInvitePlayer}
+              isInviting={false} // You can enhance this to match invite state
+            />
+          ))
         ) : (
           <div className="text-center py-8">
-            <p className="text-gray-400">No players found matching your search.</p>
+            <p className="text-gray-400 text-lg mb-4">
+              {searchQuery ? 'No players found matching your search.' : 'No friends online right now.'}
+            </p>
+            {!searchQuery && backendAvailable && (
+              <div className="space-y-2">
+                <p className="text-gray-500 text-sm">
+                  Make sure you have friends added to your account.
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Refresh
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -128,11 +104,11 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
   isHost: boolean;
 }) => {
   return (
-    <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-gray-700/50">
-      <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-gray-600">
+    <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
+      <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
         <Image 
-          src={player.avatar} 
-          alt={player.login} 
+          src={"/" + player.avatar} 
+          alt={player.login || "zahay"} 
           width={40}  
           height={40}
           className="w-full h-full object-cover"
@@ -140,7 +116,7 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
       </div>
       <div className="flex-grow">
         <div className="text-white font-medium">{player.login}</div>
-        {player.nickname && (
+        {player.nickname && player.nickname !== player.login && (
           <div className="text-gray-400 text-sm">{player.nickname}</div>
         )}
         {player.isHost && (
@@ -149,7 +125,7 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
       </div>
       {!player.isHost && isHost && (
         <button 
-          onClick={() => removeParticipant(player.nickname)}
+          onClick={() => removeParticipant(player.login)}
           className="ml-2 text-red-400 hover:text-red-300 transition-colors p-1 rounded-lg hover:bg-red-400/10"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -168,7 +144,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
   canAdvance: boolean;
 }) => {
   return (
-    <div className="flex items-center justify-center mb-6 bg-[#1a1d23] rounded-lg p-4 border border-gray-700/50">
+    <div className="flex items-center justify-center mb-6 bg-[#1a1d23] rounded-lg p-4 border border-[#2a2f3a]">
       <div className="flex items-center space-x-3">
         <span className="text-white text-lg">Round:</span>
         <span className="text-blue-400 font-bold text-xl">{currentRound + 1}/{totalRounds}</span>
@@ -180,7 +156,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
         className={`ml-6 px-6 py-2 rounded-lg text-white font-medium transition-colors ${
           canAdvance
             ? 'bg-blue-600 hover:bg-blue-700'
-            : 'bg-gray-600 cursor-not-allowed opacity-50'
+            : 'bg-[#2a2f3a] cursor-not-allowed opacity-50 border border-[#3a3f4a]'
         }`}
       >
         {currentRound + 1 === totalRounds ? "End Tournament" : "Next Round"}
@@ -191,24 +167,96 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
 
 // Main Tournament Component
 export default function OnlineTournament() {
+  const { user } = useAuthStore();
   const [tournamentState, setTournamentState] = useState('setup'); // setup, lobby, in_progress
   const [tournamentName, setTournamentName] = useState('Online Pong Championship');
   const [tournamentSize, setTournamentSize] = useState(4);
+  const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState(0);
-  const [participants, setParticipants] = useState([{
-    id: user.nickname, 
+  const [participants, setParticipants] = useState(user ? [{
+    id: user.id || user.nickname || 'host',
     login: user.name, 
     avatar: user.avatar,
     nickname: user.nickname,
     isHost: true
-  }]);
+  }] : []);
   const [matches, setMatches] = useState([]);
   const [sentInvites, setSentInvites] = useState(new Map());
   const [pendingInvites, setPendingInvites] = useState(new Map());
   const [tournamentComplete, setTournamentComplete] = useState(false);
   const [champion, setChampion] = useState(null);
+  const [tournaments, setTournaments] = useState([]);
+  const [friends, setFriends] = useState<Player[]>([]);
+  const [backendAvailable, setBackendAvailable] = useState(true);
+  const [isInviting, setIsInviting] = useState(false);
+  const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null);
+  const [inviteId, setInviteId] = useState<string | null>(null);
+  const [waitTime, setWaitTime] = useState(30);
+  const [waitingForResponse, setWaitingForResponse] = useState(false);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const totalRounds = Math.log2(tournamentSize);
+
+  // Use getSocketInstance at runtime
+  let socket;
+
+  // Fetch tournaments from backend
+  useEffect(() => {
+    socket = getSocketInstance();
+    if (!socket) return;
+    socket.emit('ListTournaments');
+    socket.on('TournamentList', (data) => {
+      setTournaments(data);
+    });
+    return () => {
+      socket.off('TournamentList');
+    };
+  }, []);
+
+  // Fetch friends from backend (like OneVsOne)
+  useEffect(() => {
+    async function fetchFriends() {
+      if (!user?.email) return;
+      
+      try {
+        // First check if backend is running
+        const healthRes = await fetch('http://localhost:5005/healthcheck');
+        if (!healthRes.ok) {
+          setBackendAvailable(false);
+          setFriends([]);
+          return;
+        }
+        
+        setBackendAvailable(true);
+        const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
+        
+        if (!res.ok) {
+          setFriends([]);
+          return;
+        }
+        
+        const data = await res.json();
+        
+        if (data.friends && Array.isArray(data.friends)) {
+          const formatted = data.friends.map((f, index) => ({
+            id: f.id || `friend-${index}`,
+            name: f.username,
+            avatar: f.avatar,
+            nickname: f.login,
+            GameStatus: 'Available',
+            ...f,
+          }));
+          setFriends(formatted);
+        } else {
+          setFriends([]);
+        }
+      } catch (err) {
+        setFriends([]);
+        // Don't show alert to user, just log the error
+      }
+    }
+    fetchFriends();
+  }, [user]);
 
   // Helper function to get display name
   const getDisplayName = (player: any) => {
@@ -336,58 +384,144 @@ export default function OnlineTournament() {
     setTournamentState('in_progress');
   };
 
-  // Invite a specific player to tournament
-  const handleInvitePlayer = (player: Player) => {
+  // Tournament invite handler (encrypt and emit)
+  const handleInvitePlayer = async (player: Player) => {
     if (participants.length >= tournamentSize) {
       alert('Tournament is full!');
       return;
     }
-    
-    // Add to sent invites
-    setSentInvites(prev => new Map(prev).set(player.name, {
-      player,
-      timestamp: Date.now()
-    }));
-    
-    // Simulate invitation response after 2 seconds
-    setTimeout(() => {
-      const accepted = Math.random() > 0.3; // 70% chance of acceptance
-      
-      if (accepted) {
-        // Remove from sent invites and add player to participants
-        setSentInvites(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(player.name);
-          return newMap;
-        });
-        
-        // Add player to participants
-        setParticipants(prev => {
-          if (prev.some(p => p.nickname === player.nickname)) return prev;
-          return [...prev, {
-            id: player.nickname,
-            login: player.name,
-            avatar: player.avatar,
-            nickname: player.nickname,
-            isHost: false
-          }];
-        });
-      } else {
-        // Remove from sent invites
-        setSentInvites(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(player.name);
-          return newMap;
-        });
-        alert(`${player.name} declined the tournament invitation.`);
+    if (!tournamentId) {
+      alert('Tournament not created yet!');
+      return;
+    }
+    socket = getSocketInstance();
+    if (!socket) {
+      alert('Socket not connected!');
+      return;
+    }
+    setIsInviting(true);
+    setInvitedPlayer(player);
+    setWaitingForResponse(true);
+    setWaitTime(30);
+    setInviteId(null);
+    if (!process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
+      alert('Encryption key not found');
+      setIsInviting(false);
+      setWaitingForResponse(false);
+      return;
+    }
+    const inviteData = {
+      tournamentId: tournamentId,
+      hostEmail: user.email,
+      inviteeEmail: player.email
+    };
+    const encrypted = CryptoJS.AES.encrypt(
+      JSON.stringify(inviteData),
+      process.env.NEXT_PUBLIC_ENCRYPTION_KEY
+    ).toString();
+    socket.emit('InviteToTournament', encrypted);
+    // Start countdown
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    countdownIntervalRef.current = setInterval(() => {
+      setWaitTime(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownIntervalRef.current!);
+          setWaitingForResponse(false);
+          setIsInviting(false);
+          setInvitedPlayer(null);
+          setInviteId(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Socket event listeners for tournament invite
+  useEffect(() => {
+    socket = getSocketInstance();
+    if (!socket) return;
+    const handleInviteResponse = (data: any) => {
+      if (data.status === 'success' && data.type === 'invite_sent') {
+        setInviteId(data.inviteId);
+      } else if (data.status === 'error') {
+        alert(data.message);
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
       }
-    }, 2000);
+    };
+    const handleInviteAccepted = (data: any) => {
+      if (data.inviteId === inviteId) {
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
+        alert('Tournament invite accepted!');
+        // TODO: Add participant to tournament state
+      }
+    };
+    const handleInviteDeclined = (data: any) => {
+      if (data.inviteId === inviteId) {
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
+        alert('Tournament invite declined.');
+      }
+    };
+    const handleInviteTimeout = (data: any) => {
+      if (data.inviteId === inviteId) {
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
+        alert('Tournament invite timed out.');
+      }
+    };
+    const handleInviteCanceled = (data: any) => {
+      if (data.inviteId === inviteId) {
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
+        alert('Tournament invite canceled.');
+      }
+    };
+    socket.on('InviteToTournamentResponse', handleInviteResponse);
+    socket.on('TournamentInviteAccepted', handleInviteAccepted);
+    socket.on('TournamentInviteDeclined', handleInviteDeclined);
+    socket.on('TournamentInviteTimeout', handleInviteTimeout);
+    socket.on('TournamentInviteCanceled', handleInviteCanceled);
+    return () => {
+      socket.off('InviteToTournamentResponse', handleInviteResponse);
+      socket.off('TournamentInviteAccepted', handleInviteAccepted);
+      socket.off('TournamentInviteDeclined', handleInviteDeclined);
+      socket.off('TournamentInviteTimeout', handleInviteTimeout);
+      socket.off('TournamentInviteCanceled', handleInviteCanceled);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, [inviteId, user?.email]);
+
+  // Cancel invite
+  const handleCancelInvite = () => {
+    socket = getSocketInstance();
+    if (socket && inviteId && user?.email) {
+      socket.emit('CancelTournamentInvite', { inviteId, hostEmail: user.email });
+    }
+    setIsInviting(false);
+    setWaitingForResponse(false);
+    setInvitedPlayer(null);
+    setInviteId(null);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
   };
 
   // Leave tournament
   const leaveTournament = () => {
+    setTournamentId(null);
     setParticipants([{
-      id: user.nickname, 
+      id: user.id || user.nickname || 'host',
       login: user.name, 
       avatar: user.avatar,
       nickname: user.nickname,
@@ -430,8 +564,117 @@ export default function OnlineTournament() {
     return participants.filter(p => !eliminatedPlayerIds.has(p.id));
   };
 
+  // Create tournament handler
+  const handleCreateTournament = () => {
+    if (!tournamentName || tournamentName.trim().length === 0) return;
+    socket = getSocketInstance();
+    if (!socket) {
+      alert('Socket not connected!');
+      return;
+    }
+    socket.emit('CreateTournament', {
+      name: tournamentName,
+      hostEmail: user.email,
+      hostNickname: user.login || user.name,
+      hostAvatar: user.avatar,
+      size: tournamentSize,
+    });
+  };
+
+  // Handle tournament creation response
+  useEffect(() => {
+    socket = getSocketInstance();
+    if (!socket) return;
+    
+    const handleTournamentCreated = (tournament: any) => {
+      console.log('Tournament created:', tournament);
+      setTournamentId(tournament.tournamentId);
+      setTournamentState('lobby');
+      setParticipants(tournament.participants.map((p: any) => ({
+        id: p.email,
+        login: p.nickname,
+        avatar: p.avatar,
+        nickname: p.nickname,
+        isHost: p.isHost
+      })));
+    };
+    
+    const handleTournamentError = (error: any) => {
+      console.error('Tournament creation error:', error);
+      alert(error.message || 'Failed to create tournament');
+    };
+
+    const handleTournamentUpdated = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setParticipants(data.tournament.participants.map((p: any) => ({
+          id: p.email,
+          login: p.nickname,
+          avatar: p.avatar,
+          nickname: p.nickname,
+          isHost: p.isHost
+        })));
+      }
+    };
+
+    const handleTournamentReady = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setParticipants(data.tournament.participants.map((p: any) => ({
+          id: p.email,
+          login: p.nickname,
+          avatar: p.avatar,
+          nickname: p.nickname,
+          isHost: p.isHost
+        })));
+        // Tournament is full and ready to start
+        if (data.tournament.hostEmail === user?.email) {
+          // Host can start the tournament
+          alert('Tournament is full! You can now start the tournament.');
+        }
+      }
+    };
+
+    const handleTournamentStarted = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentState('in_progress');
+        setMatches(data.tournament.matches);
+        // Navigate to tournament game page
+        window.location.href = `/play/tournament/${tournamentId}`;
+      }
+    };
+
+    const handleTournamentParticipantLeft = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setParticipants(data.tournament.participants.map((p: any) => ({
+          id: p.email,
+          login: p.nickname,
+          avatar: p.avatar,
+          nickname: p.nickname,
+          isHost: p.isHost
+        })));
+        const leftPlayerName = data.leftPlayer?.nickname || data.leftPlayer?.email || 'Unknown';
+        alert(`${leftPlayerName} left the tournament`);
+      }
+    };
+    
+    socket.on('TournamentCreated', handleTournamentCreated);
+    socket.on('TournamentError', handleTournamentError);
+    socket.on('TournamentUpdated', handleTournamentUpdated);
+    socket.on('TournamentReady', handleTournamentReady);
+    socket.on('TournamentStarted', handleTournamentStarted);
+    socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
+    
+    return () => {
+      socket.off('TournamentCreated', handleTournamentCreated);
+      socket.off('TournamentError', handleTournamentError);
+      socket.off('TournamentUpdated', handleTournamentUpdated);
+      socket.off('TournamentReady', handleTournamentReady);
+      socket.off('TournamentStarted', handleTournamentStarted);
+      socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
+    };
+  }, [tournamentId, user?.email]);
+
   return (
-    <div className="h-full w-full text-white">
+    <div className="h-full w-full text-white bg-[#0f1419]">
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl">
           <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
@@ -442,7 +685,7 @@ export default function OnlineTournament() {
           {tournamentState === 'setup' && (
             <div className="space-y-6">
               {/* Tournament Settings */}
-              <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+              <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <h2 className="text-2xl font-semibold mb-6">Tournament Setup</h2>
                 
                 <div className="mb-6">
@@ -451,7 +694,7 @@ export default function OnlineTournament() {
                     type="text"
                     value={tournamentName}
                     onChange={(e) => setTournamentName(e.target.value)}
-                    className="bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 text-lg"
+                    className="bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 focus:ring-blue-500 border border-[#3a3f4a] text-lg"
                     placeholder="Enter tournament name"
                     required
                   />
@@ -465,7 +708,7 @@ export default function OnlineTournament() {
                         key={size} 
                         className={`py-3 px-4 rounded-lg font-medium transition-colors ${tournamentSize === size ? 
                           'bg-blue-600 text-white' : 
-                          'bg-[#2a2f3a] text-gray-300 hover:bg-[#3a3f4a] border border-gray-600'}`}
+                          'bg-[#2a2f3a] text-gray-300 hover:bg-[#3a3f4a] border border-[#3a3f4a]'}`}
                         onClick={() => setTournamentSize(size)}
                       >
                         {size} Players
@@ -478,12 +721,12 @@ export default function OnlineTournament() {
               {/* Create Button */}
               <div className="text-center">
                 <button
-                  onClick={() => setTournamentState('lobby')}
+                  onClick={handleCreateTournament}
                   disabled={!tournamentName || tournamentName.trim().length === 0}
                   className={`w-full max-w-md text-white font-semibold rounded-lg py-4 text-xl transition-all ${
                     tournamentName && tournamentName.trim().length !== 0
                       ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-[#2a2f3a] cursor-not-allowed border border-[#3a3f4a]'
                   }`}
                 >
                   Create Tournament
@@ -496,7 +739,7 @@ export default function OnlineTournament() {
           {tournamentState === 'lobby' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Tournament Info and Participants */}
-              <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+              <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-2xl font-semibold text-white">Tournament Lobby</h3>
                   <div className="flex items-center space-x-4">
@@ -512,9 +755,9 @@ export default function OnlineTournament() {
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                    {participants.map((player) => (
+                    {participants.map((player, index) => (
                       <ParticipantItem
-                        key={player.id}
+                        key={player.id || player.nickname || player.login || `participant-${index}`}
                         player={player}
                         removeParticipant={removeParticipant}
                         isHost={true}
@@ -523,7 +766,7 @@ export default function OnlineTournament() {
                     
                     {/* Empty slots */}
                     {Array.from({ length: tournamentSize - participants.length }).map((_, index) => (
-                      <div key={`empty-${index}`} className="flex items-center justify-center bg-[#1a1d23] rounded-lg p-3 border border-gray-700/50 border-dashed min-h-[58px]">
+                      <div key={`empty-slot-${index}`} className="flex items-center justify-center bg-[#1a1d23] rounded-lg p-3 border border-[#2a2f3a] border-dashed min-h-[58px]">
                         <div className="text-gray-400">Waiting for player...</div>
                       </div>
                     ))}
@@ -549,7 +792,7 @@ export default function OnlineTournament() {
                     className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
                       participants.length >= tournamentSize
                         ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-gray-600 cursor-not-allowed text-gray-400'
+                        : 'bg-[#2a2f3a] cursor-not-allowed text-gray-400 border border-[#3a3f4a]'
                     }`}
                   >
                     Start Tournament
@@ -562,6 +805,8 @@ export default function OnlineTournament() {
                 onInvitePlayer={handleInvitePlayer} 
                 pendingInvites={pendingInvites}
                 sentInvites={sentInvites}
+                friends={friends}
+                backendAvailable={backendAvailable}
               />
             </div>
           )}
@@ -582,16 +827,17 @@ export default function OnlineTournament() {
                 matches={matches}
                 currentRound={currentRound}
                 onMatchUpdate={handleMatchUpdate}
+                onPlayMatch={() => {}}
               />
               
-              <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+              <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <h3 className="text-xl font-semibold text-white mb-4">Active Players</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {getActivePlayers().map(player => (
-                    <div key={player.id} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-gray-600">
+                  {getActivePlayers().map((player, index) => (
+                    <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                         <Image 
-                          src={player.avatar} 
+                          src={"/" + player.avatar} 
                           alt={player.login} 
                           width={48} 
                           height={48}
@@ -601,61 +847,29 @@ export default function OnlineTournament() {
                       <div className="text-green-400 text-sm mt-2 truncate max-w-full font-medium">
                         {getDisplayName(player)}
                       </div>
-                      {player.nickname && player.nickname !== player.login && (
-                        <div className="text-gray-400 text-xs truncate max-w-full">
-                          ({player.login})
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           )}
-
-          {/* Tournament Complete View */}
+          
+          {/* Tournament Complete Section */}
           {tournamentComplete && (
             <div className="text-center space-y-6">
-              <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50">
-                <div className="flex flex-col items-center">
-                  <div className="bg-gradient-to-b from-yellow-400 to-yellow-600 p-2 rounded-full mb-6">
-                    <div className="w-32 h-32 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-yellow-500">
-                      <Image 
-                        src={champion?.avatar || '/mghalmi.jpg'} 
-                        alt={champion?.login || 'Champion'} 
-                        width={128} 
-                        height={128}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]">
+                <h2 className="text-3xl font-bold text-white mb-4">Tournament Complete!</h2>
+                {champion && (
+                  <div className="mb-6">
+                    <div className="text-2xl text-yellow-400 mb-2">🏆 Champion</div>
+                    <div className="text-xl text-white">{getDisplayName(champion)}</div>
                   </div>
-                  
-                  <h2 className="text-3xl font-bold text-white mb-2">🏆 Tournament Champion</h2>
-                  <div className="text-yellow-400 text-4xl font-bold mb-2">
-                    {champion ? getDisplayName(champion) : 'Unknown'}
-                  </div>
-                  {champion?.nickname && champion.nickname !== champion.login && (
-                    <div className="text-yellow-300 text-xl mb-6">
-                      ({champion.login})
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <TournamentBracket
-                participants={participants}
-                tournamentSize={tournamentSize}
-                matches={matches}
-                currentRound={currentRound}
-                onMatchUpdate={() => {}} // No more updates allowed
-              />
-              
-              <div className="flex justify-center space-x-4">
+                )}
                 <button
                   onClick={resetTournament}
-                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-lg transition-colors"
+                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                 >
-                  New Tournament
+                  Create New Tournament
                 </button>
               </div>
             </div>

@@ -87,30 +87,35 @@ export const onlineFriends = [
     nickname: 'SLEEPS00',
     GameStatus: 'Available',
     avatar: '/mghalmi.jpg',
+    email: 'sophia@example.com',
   },
   {
     name: 'Ethan Bennett',
     nickname: 'SLEEPS00',
     GameStatus: 'In a match',
     avatar: '/mghalmi.jpg',
+    email: 'ethan@example.com',
   },
   {
     name: 'Olivia Carter',
     nickname: 'SLEEPS00',
     GameStatus: 'Available',
     avatar: '/mghalmi.jpg',
+    email: 'olivia@example.com',
   },
   {
     name: 'Liam Davis',
     nickname: 'SLEEPS00',
     GameStatus: 'Available',
     avatar: '/mghalmi.jpg',
+    email: 'liam@example.com',
   },
   {
     name: 'Ava Evans',
     nickname: 'SLEEPS00',
     GameStatus: 'In a match',
     avatar: '/mghalmi.jpg',
+    email: 'ava@example.com',
   },
 ]
 

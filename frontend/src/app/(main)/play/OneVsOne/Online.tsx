@@ -8,7 +8,7 @@ import { useGameInvite } from './GameInviteProvider';
 import { PingPongGame } from '../game/PingPongGame';
 import CryptoJS from 'crypto-js';
 
-const PlayerListItem = ({ player, onInvite, isInviting }) => {
+export const PlayerListItem = ({ player, onInvite, isInviting }) => {
   const isAvailable = player.GameStatus === 'Available';
 
   return (
@@ -133,21 +133,11 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
   );
 };
 
-// Notification component
-const Notification = ({ message, type, onClose }) => {
-  if (!message) return null;
-
-  const bgColor = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600';
-  
-  return (
-    <div className={`fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-3`}>
-      <span>{message}</span>
-      <button onClick={onClose} className="text-white hover:text-gray-200">
-        ✕
-      </button>
-    </div>
-  );
-};
+function handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user }) {
+  if (isHost && gameId && gameState === 'waiting_to_start' && socket && user?.email) {
+    socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+  }
+}
 
 export default function OnlineMatch() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -169,6 +159,67 @@ export default function OnlineMatch() {
   const router = useRouter();
   
   const countdownIntervalRef = useRef(null);
+  // Track current pathname to detect route changes
+  const [currentPath, setCurrentPath] = useState('');
+
+  useEffect(() => {
+    // Set initial path
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname);
+    }
+  }, []);
+
+  // Handle route changes and page navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleRouteChange = () => {
+      const newPath = window.location.pathname;
+      // If the path has changed and we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
+      handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
+      // Existing logic for in_game exit
+      if (currentPath && newPath !== currentPath && gameState === 'in_game' && gameId) {
+        handleGameExit();
+      }
+      setTimeout(() => setCurrentPath(newPath), 0);
+    };
+
+    const handleBeforeUnload = (e) => {
+      // If we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
+      handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
+      // Existing logic for in_game exit
+      if (gameState === 'in_game' && gameId) {
+        handleGameExit();
+      }
+    };
+
+    const handlePopState = () => {
+      handleRouteChange();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+      originalPushState.apply(history, args);
+      handleRouteChange();
+    };
+
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(history, args);
+      handleRouteChange();
+    };
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, [currentPath, gameState, gameId, isHost, socket, user]);
 
   // Helper function to show notifications
   const showNotification = (message, type = 'info') => {
@@ -221,9 +272,6 @@ export default function OnlineMatch() {
         setIsWaitingForResponse(false);
         clearCountdown();
 
-        // CRITICAL FIX: Determine host/guest based on current game state
-        // If we were already waiting for response (host sent invite), we are the host
-        // If we received an invite through context, we are the guest
         if (gameState === 'waiting_response') {
           // We are the host
           setIsHost(true);
@@ -279,7 +327,7 @@ export default function OnlineMatch() {
       resetGameState();
       
       // Navigate back to the main play page using React router
-      router.push('/play');
+      // router.push('/play');
     };
 
     const handleGameInviteCanceled = (data) => {
@@ -295,7 +343,7 @@ export default function OnlineMatch() {
       resetGameState();
       
       // Navigate back to the main play page using React router
-      router.push('/play');
+      // router.push('/play');
     };
 
     const handlePlayerLeft = (data) => {
@@ -305,13 +353,20 @@ export default function OnlineMatch() {
       setWaitTime(0);
       clearCountdown();
       
-      showNotification('Player left the game.', 'error');
+      showNotification('Opponent left the game. You win!', 'success');
       
-      // Reset game state and redirect back to play page
+      // Reset game state
       resetGameState();
       
-      // Navigate back to the main play page using React router
-      router.push('/play');
+      // Clean up any stale game data
+      if (socket && user?.email) {
+        socket.emit('CleanupGameData', { email: user.email });
+      }
+      
+      // Redirect to win page since the current user wins when opponent leaves
+      const winnerName = user?.username || user?.name || 'You';
+      const loserName = data.playerWhoLeft || 'Opponent';
+      router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
     };
 
     const handleGameEnded = (data) => {
@@ -321,13 +376,27 @@ export default function OnlineMatch() {
       setWaitTime(0);
       clearCountdown();
       
-      showNotification('Game ended.', 'info');
+      // Determine if current user won
+      const isWinner = data.winner === user?.email;
+      const winnerName = isWinner ? (user?.username || user?.name || 'You') : (data.winner || 'Opponent');
+      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.name || 'You');
       
-      // Reset game state and redirect back to play page
+      showNotification(data.message || 'Game ended.', 'info');
+      
+      // Reset game state
       resetGameState();
       
-      // Navigate back to the main play page using React router
-      router.push('/play');
+      // Clean up any stale game data
+      if (socket && user?.email) {
+        socket.emit('CleanupGameData', { email: user.email });
+      }
+      
+      // Redirect to appropriate result page based on whether user won or lost
+      if (isWinner) {
+        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      } else {
+        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      }
     };
 
     const handleGameCanceled = (data) => {
@@ -374,6 +443,18 @@ export default function OnlineMatch() {
       }
     };
 
+    // Handler for guest leaving before game starts
+    const handleGameEndedByOpponentLeave = (data) => {
+      setIsInviting(false);
+      setInvitedPlayer(null);
+      setIsWaitingForResponse(false);
+      setWaitTime(0);
+      clearCountdown();
+      showNotification('Opponent left the game.', 'error');
+      resetGameState();
+      router.push('/play');
+    };
+
     // Add event listeners
     socket.on('InviteToGameResponse', handleInviteResponse);
     socket.on('GameInviteAccepted', handleGameInviteAccepted);
@@ -385,6 +466,7 @@ export default function OnlineMatch() {
     socket.on('GameCanceled', handleGameCanceled);
     socket.on('GameStartResponse', handleGameStartResponse);
     socket.on('GameStarted', handleGameStarted);
+    socket.on('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave);
 
     return () => {
       socket.off('InviteToGameResponse', handleInviteResponse);
@@ -397,6 +479,7 @@ export default function OnlineMatch() {
       socket.off('GameCanceled', handleGameCanceled);
       socket.off('GameStartResponse', handleGameStartResponse);
       socket.off('GameStarted', handleGameStarted);
+      socket.off('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave);
     };
   }, [socket, gameId, clearInvite, user?.email, gameState, isHost, receivedInvite]);
 
@@ -456,14 +539,6 @@ export default function OnlineMatch() {
       if (!user?.email) return;
       
       try {
-        // First check if backend is running
-        const healthRes = await fetch('http://localhost:5005/healthcheck');
-        if (!healthRes.ok) {
-          setBackendAvailable(false);
-          setFriends([]);
-          return;
-        }
-        
         setBackendAvailable(true);
         const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
         
@@ -618,6 +693,17 @@ export default function OnlineMatch() {
       />
     );
   }
+
+  // Function to handle game exit (triggered by route change or manual exit)
+  // This will run for both host and guest (any player in the game)
+  const handleGameExit = () => {
+    if (socket && gameId && user?.email && gameState === 'in_game') {
+      socket.emit('LeaveGame', {
+        gameId,
+        playerEmail: user.email,
+      });
+    }
+  };
 
   return (
     <div className="h-full w-full text-white">

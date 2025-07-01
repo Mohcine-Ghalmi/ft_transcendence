@@ -57,7 +57,7 @@ export default function GamePage() {
         setAuthorizationChecked(true)
         window.location.href = '/play'
       }
-    }, 3000) // 3 second timeout
+    }, 1000) // 3 second timeout
 
     return () => {
       clearTimeout(authTimeout)
@@ -155,19 +155,11 @@ export default function GamePage() {
 
     // Add listener for GameStartResponse to debug
     const handleGameStartResponse = (data: any) => {
-      if (data.status === 'success') {
-        // Don't redirect or change state here - let the GameStarted event handle the transition
-        // The GameStartResponse just confirms the server received the start request
-        // CRITICAL: Don't redirect the host - they should stay on this page
-      } else {
-        // Show error to user but don't redirect
-        // alert(`Failed to start game: ${data.message}`)
-        // Clear the timeout since start failed
+      if (data.status !== 'success') {
         if (startGameTimeout) {
           clearTimeout(startGameTimeout)
           setStartGameTimeout(null)
         }
-        // Clear the starting game flag
         setIsStartingGame(false)
       }
     }
@@ -175,11 +167,16 @@ export default function GamePage() {
     // Handle when a player leaves the game - FIXED
     const handlePlayerLeft = (data: any) => {
       if (data.gameId === gameId) {
+        console.log('Player left:', data)
+        
         // Only show alert and redirect if we're not the one leaving
         if (!isLeavingGameRef.current) {
-          // alert('The other player left the game.')
-          setIsLeavingGame(true)
-          router.push('/play')
+          // Current player wins when opponent leaves
+          const winnerName = user?.username || user?.name || 'You';
+          const loserName = data.playerWhoLeft || 'Opponent';
+          
+          // Navigate to winner page
+          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         }
       }
     }
@@ -187,10 +184,18 @@ export default function GamePage() {
     // Handle game ended - FIXED
     const handleGameEnded = (data: any) => {
       if (data.gameId === gameId) {
-        // Only redirect if we're not already leaving and the game was actually started
-        if (!isLeavingGameRef.current && gameStartedRef.current) {
-          setIsLeavingGame(true)
-          router.push('/play')
+        console.log('Game ended:', data)
+        
+        // Determine winner and loser
+        const isWinner = data.winner === user?.email;
+        const winnerName = isWinner ? (user?.username || user?.name || 'You') : (data.winner || 'Opponent');
+        const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.name || 'You');
+        
+        // Navigate to appropriate result page
+        if (isWinner) {
+          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+        } else {
+          router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         }
       }
     }
@@ -216,7 +221,7 @@ export default function GamePage() {
         
         // Check if game is in a valid state
         if (data.gameStatus === 'canceled' || data.gameStatus === 'completed') {
-          alert('This game is no longer active.')
+          // alert('This game is no longer active.')
           router.push('/play')
           return
         }
@@ -224,7 +229,7 @@ export default function GamePage() {
         setIsAuthorized(false)
         // Don't redirect if we're in the process of starting the game
         if (!isStartingGameRef.current) {
-          alert(data.message || 'You do not have access to this game.')
+          // alert(data.message || 'You do not have access to this game.')
           router.push('/play')
         }
       }
@@ -271,17 +276,16 @@ export default function GamePage() {
         })
         
         // Show confirmation dialog if game is in progress
-        // if (gameStartedRef.current) {
-        //   e.preventDefault()
-        //   e.returnValue = 'Are you sure you want to leave the game?'
-        //   return 'Are you sure you want to leave the game?'
-        // }
+        if (gameStartedRef.current) {
+          e.preventDefault()
+          e.returnValue = 'Are you sure you want to leave the game? This will result in a loss.'
+          return 'Are you sure you want to leave the game? This will result in a loss.'
+        }
       }
     }
 
     const handleVisibilityChange = () => {
-      // Removed automatic leave on visibility change as it's too aggressive
-      // Only leave if the page is being unloaded
+      // Only leave if the page is being unloaded, not just hidden
       if (document.visibilityState === 'hidden' && hasUnloaded) {
         if (socket && gameId && user?.email && !isLeavingGameRef.current) {
           setIsLeavingGame(true)
@@ -328,7 +332,7 @@ export default function GamePage() {
           setIsStartingGame(false) // Clear the flag
         }
         setStartGameTimeout(null)
-      }, 5000) // 5 second timeout
+      }, 1000) // 5 second timeout
       
       setStartGameTimeout(timeout)
     }

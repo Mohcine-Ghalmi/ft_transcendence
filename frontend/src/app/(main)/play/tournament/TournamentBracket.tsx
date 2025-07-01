@@ -16,8 +16,8 @@ export function MobileBracket({
 }) {
   const getPlayerDisplayName = (player) => {
     if (!player) return 'TBD'
-    if (player.nickname) return `${player.name} "${player.nickname}"`
-    return player.name
+    if (player.nickname) return player.nickname
+    return player.name || 'Unknown'
   }
 
   return (
@@ -218,8 +218,8 @@ export function DesktopBracket({
 }) {
   const getPlayerDisplayName = (player) => {
     if (!player) return 'TBD'
-    if (player.nickname) return `${player.name} "${player.nickname}"`
-    return player.name
+    if (player.nickname) return player.nickname
+    return player.name || 'Unknown'
   }
 
   // Increase match height for better visibility

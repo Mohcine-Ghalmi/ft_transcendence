@@ -42,6 +42,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
+  const [gameReady, setGameReady] = useState(false);
   const [mobile, setMobile] = useState(isMobile());
   const [gameTime, setGameTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
   const gameStartTime = useRef<number | null>(null);
@@ -105,6 +106,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           currentScores.current = { p1: 0, p2: 0 };
           setScores({ p1: 0, p2: 0 });
         }
+        
+        // Add 1-second delay before game is ready to play
+        setTimeout(() => {
+          setGameReady(true);
+        }, 0);
       }
     };
 
@@ -122,7 +128,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         if (!gameStarted && socket && gameId) {
           socket.emit('StartGame', { gameId });
         }
-      }, 2000); // 2 second delay
+      }, 1000); // 2 second delay
 
       return () => clearTimeout(autoStartTimer);
     }
@@ -130,19 +136,19 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   // Validate players have required properties
   const safePlayer1 = {
-    id: user?.id || 1000,
+    id: user?.id || crypto.randomUUID(),
     name: user?.username,
     avatar: user?.avatar || '/mghalmi.jpg',
     nickname: user?.login || 'Player 1'
   };
 
   const safePlayer2 = isRemoteGame ? {
-    id: opponent?.id || 1000,
+    id: opponent?.id || crypto.randomUUID(),
     name: opponent?.username || opponent?.name,
     avatar: opponent?.avatar || '/mghalmi.jpg',
     nickname: opponent?.login || opponent?.nickname || 'Player 2'
   } : {
-    id: player2?.id || 1000,
+    id: player2?.id || crypto.randomUUID(),
     name: player2?.username || player2?.name,
     avatar: player2?.avatar || '/mghalmi.jpg',
     nickname: player2?.login || player2?.nickname || 'Player 2'
@@ -171,7 +177,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         const minutes = Math.floor((elapsed % 3600) / 60);
         const seconds = elapsed % 60;
         setGameTime({ hours, minutes, seconds });
-      }, 1000); // Update every second instead of 0
+      }, 0); // Update every second instead of 0
     }
 
     return () => {
@@ -292,13 +298,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       ctx.shadowColor = "#20242a";
       ctx.shadowBlur = 7;
       ctx.fillRect(
-        0, 
+        10, 
         paddle1Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
       );
       ctx.fillRect(
-        canvasDims.width - PADDLE_WIDTH * scaleX, 
+        canvasDims.width - PADDLE_WIDTH * scaleX - 10, 
         paddle2Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
@@ -544,7 +550,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
 
     const loop = () => {
-      if (!paused) update();
+      if (!paused && gameReady) update(); // Only update when game is ready
       draw();
       // Use throttled animation frame for better performance
       animationRef.current = requestAnimationFrame(loop);
@@ -564,7 +570,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         animationRef.current = null;
       }
     };
-  }, [gameStarted, paused]);
+  }, [gameStarted, paused, gameReady]); // Add gameReady to dependencies
 
   // Win condition - Updated for tournament mode with better winner object
   useEffect(() => {
@@ -575,18 +581,21 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       const winner = scores.p1 >= 7 ? safePlayer1 : safePlayer2;
       
       if (isRemoteGame && socket && gameId) {
-        // Send game end event to server
-        const finalScore = { p1: scores.p1, p2: scores.p2 };
-        const winnerEmail = scores.p1 >= 7 ? user?.email : opponent?.email;
-        const loserEmail = scores.p1 >= 7 ? opponent?.email : user?.email;
-        
-        socket.emit('GameEnd', {
-          gameId,
-          winner: winnerEmail,
-          loser: loserEmail,
-          finalScore,
-          reason: 'normal_end'
-        });
+        // Only the host should emit GameEnd event to prevent duplicates
+        if (isGameHost) {
+          // Send game end event to server
+          const finalScore = { p1: scores.p1, p2: scores.p2 };
+          const winnerEmail = scores.p1 >= 7 ? user?.email : opponent?.email;
+          const loserEmail = scores.p1 >= 7 ? opponent?.email : user?.email;
+          
+          socket.emit('GameEnd', {
+            gameId,
+            winner: winnerEmail,
+            loser: loserEmail,
+            finalScore,
+            reason: 'normal_end'
+          });
+        }
         
         // Don't navigate immediately - wait for server confirmation
         return;
@@ -601,9 +610,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         
         // Check if current user won (assuming player1 is always the user in 1v1 mode)
         if (scores.p1 >= 7) {
-            router.push(`/play/result/win`);
+          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         } else {
-            router.push(`/play/result/loss`);
+          router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         }
       }
     }
@@ -674,10 +683,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   const handleGameEnded = useCallback((data: any) => {
     if (data.gameId === gameId) {
+      console.log('Game ended:', data);
+      
+      // Set game state to ended
       setGameStarted(false);
       setPaused(true);
       
-      // Determine winner and loser
+      // Determine winner and loser based on server data
       const isWinner = data.winner === user?.email;
       const winnerName = isWinner ? safePlayer1.name : safePlayer2.name;
       const loserName = isWinner ? safePlayer2.name : safePlayer1.name;
@@ -689,14 +701,25 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
       }
     }
-  }, [gameId, user?.email, safePlayer1.name, safePlayer2.name]);
+  }, [gameId, user?.email, safePlayer1.name, safePlayer2.name, router]);
 
   const handlePlayerLeft = useCallback((data: any) => {
     if (data.gameId === gameId) {
-      // Other player left, current player wins
-      handleGameEnd(safePlayer1);
+      console.log('Opponent left:', data);
+      
+      // Set game state to ended
+      setGameStarted(false);
+      setPaused(true);
+      
+      // Current player wins when opponent leaves
+      const isWinner = true; // Current player is always the winner when opponent leaves
+      const winnerName = safePlayer1.name;
+      const loserName = safePlayer2.name;
+      
+      // Navigate to winner page
+      router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
     }
-  }, [gameId, safePlayer1, handleGameEnd]);
+  }, [gameId, safePlayer1.name, safePlayer2.name, router]);
 
   // Socket event listeners for remote game
   useEffect(() => {
@@ -734,7 +757,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       // For remote games, emit start game event to server
       socket.emit('StartGame', { gameId });
     } else {
-      // For local games, start immediately
+      // For local games, start immediately but add 1-second delay before ready
       currentScores.current = { p1: 0, p2: 0 };
       setScores({ p1: 0, p2: 0 });
       paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
@@ -746,6 +769,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       setGameStarted(true);
       setPaused(false);
       gameStartTime.current = Date.now();
+      
+      // Add 1-second delay before game is ready to play
+      setTimeout(() => {
+        setGameReady(true);
+      }, 0);
     }
   };
 

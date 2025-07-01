@@ -11,7 +11,6 @@ import {
   gameRooms,
   GameSocketHandler 
 } from './game.socket.types'
-import { emitToUsers } from './game.socket.utils'
 
 export const handleGameAcceptance: GameSocketHandler = (socket: Socket, io: Server) => {
   

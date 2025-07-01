@@ -70,7 +70,7 @@ export function GameInviteProvider({ children }) {
             <h3 className="text-white text-xl font-semibold mb-4">Game Invitation</h3>
             <div className="flex items-center space-x-4 mb-4">
               <Image
-              src={receivedInvite.hostData.avatar}
+              src={"/" + receivedInvite.hostData.avatar}
               alt={receivedInvite.hostData.username}
               width={48}
               height={48}

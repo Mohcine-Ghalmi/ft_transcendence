@@ -18,10 +18,13 @@ export interface GameRoomData {
   gameId: string
   hostEmail: string
   guestEmail: string
-  status: 'waiting' | 'accepted' | 'in_progress' | 'completed' | 'canceled'
+  status: 'waiting' | 'accepted' | 'in_progress' | 'completed' | 'canceled' | 'ended'
   createdAt: number
   startedAt?: number
   endedAt?: number
+  winner?: string
+  loser?: string
+  leaver?: string
 }
 
 export interface GameState {
@@ -52,6 +55,7 @@ export interface User {
 }
 
 export interface PlayerData {
+  id: number
   username: string
   login: string
   avatar: string
@@ -69,8 +73,9 @@ export const gameRooms = new Map<string, GameRoomData>()
 export const matchmakingQueue: MatchmakingPlayer[] = []
 
 // Helper functions
-export function getPlayerData(user: User): PlayerData {
+export function getPlayerData(user: any): PlayerData {
   return {
+    id: user.id,
     username: user.username,
     login: user.login,
     avatar: user.avatar
@@ -92,4 +97,36 @@ export function isInQueue(email: string): boolean {
 }
 
 // Socket handler type
-export type GameSocketHandler = (socket: Socket, io: Server) => void 
+export type GameSocketHandler = (socket: Socket, io: Server) => void
+
+// Tournament types
+export interface Tournament {
+  tournamentId: string;
+  name: string;
+  hostEmail: string;
+  size: number;
+  participants: TournamentParticipant[];
+  matches: TournamentMatch[];
+  status: 'setup' | 'lobby' | 'in_progress' | 'completed' | 'canceled';
+  createdAt: number;
+  startedAt?: number;
+  endedAt?: number;
+}
+
+export interface TournamentParticipant {
+  email: string;
+  nickname: string;
+  avatar: string;
+  isHost: boolean;
+  status: 'invited' | 'accepted' | 'declined' | 'playing' | 'eliminated' | 'winner';
+}
+
+export interface TournamentMatch {
+  id: string;
+  round: number;
+  matchIndex: number;
+  player1?: TournamentParticipant;
+  player2?: TournamentParticipant;
+  state: 'waiting' | 'in_progress' | 'player1_win' | 'player2_win' | 'completed';
+  winner?: TournamentParticipant;
+} 

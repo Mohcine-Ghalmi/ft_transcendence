@@ -84,22 +84,28 @@ async function periodicCleanup() {
           const gameRoom = JSON.parse(gameRoomData)
           const gameAge = Date.now() - gameRoom.createdAt
           
-          // Remove game rooms older than 10 minutes or with completed/canceled status
-          if (gameAge > 600000 || gameRoom.status === 'completed' || gameRoom.status === 'canceled') {
+          // Remove game rooms older than 5 minutes or with completed/canceled status
+          // More aggressive cleanup for completed games
+          if (gameAge > 300000 || // 5 minutes instead of 10
+              gameRoom.status === 'completed' || 
+              gameRoom.status === 'canceled' ||
+              gameRoom.status === 'ended') {
             await redis.del(key)
             cleanedGameRooms++
+            console.log(`Cleaned up game room ${key} (status: ${gameRoom.status}, age: ${Math.round(gameAge/1000/60)}min)`)
           }
         }
       } catch (parseError) {
         // If we can't parse the game room data, it's corrupted, so delete it
         await redis.del(key)
         cleanedGameRooms++
+        console.log(`Cleaned up corrupted game room ${key}`)
       }
     }
     
-    // Clean up stale matchmaking queue entries (older than 5 minutes)
+    // Clean up stale matchmaking queue entries (older than 3 minutes instead of 5)
     const now = Date.now()
-    const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 300000) // 5 minutes
+    const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 180000) // 3 minutes
     
     for (const player of stalePlayers) {
       removeFromQueueByEmail(player.email)

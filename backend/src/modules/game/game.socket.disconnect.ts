@@ -9,6 +9,9 @@ import {
 } from './game.socket.types'
 import { cleanupGame, saveMatchHistory, emitToUsers } from './game.socket.utils'
 
+// Track games that are currently being processed to prevent duplicate processing
+const processingGames = new Set<string>();
+
 export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Server) => {
   
   // Handle game cleanup on disconnect
@@ -18,7 +21,9 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
       const userEmail = (socket as any).userEmail
       
       if (userEmail) {
-        // Find all active games for this user
+        console.log(`User ${userEmail} disconnected`)
+        
+        // Get all game rooms from Redis
         const redisGameRooms = await redis.keys('game_room:*')
         
         for (const roomKey of redisGameRooms) {
@@ -29,10 +34,23 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
             // Check if this user is in this game
             if (gameRoom.hostEmail === userEmail || gameRoom.guestEmail === userEmail) {
               const gameId = gameRoom.gameId
+              const otherPlayerEmail = gameRoom.hostEmail === userEmail ? gameRoom.guestEmail : gameRoom.hostEmail
               
-              // If game is in progress, mark the other player as winner
+              // Check if game is already being processed
+              if (processingGames.has(gameId)) {
+                console.log(`Game ${gameId} is already being processed, skipping duplicate disconnect handling`)
+                continue
+              }
+              
+              console.log(`Found active game ${gameId} for disconnected user ${userEmail}`)
+              
+              // If game is in progress, mark the other player as winner and save to match history
               if (gameRoom.status === 'in_progress') {
-                const otherPlayerEmail = gameRoom.hostEmail === userEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+                // Mark game as being processed
+                processingGames.add(gameId);
+                
+                console.log(`Game ${gameId} was in progress, ending game due to disconnect`)
+                
                 const winner = otherPlayerEmail
                 const loser = userEmail
                 
@@ -40,13 +58,19 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
                 const currentGameState = activeGames.get(gameId)
                 const finalScore = currentGameState?.scores || { p1: 0, p2: 0 }
                 
+                // Update game room with end time
+                gameRoom.status = 'completed'
+                gameRoom.endedAt = Date.now()
+                gameRoom.winner = winner
+                gameRoom.leaver = loser
+                
                 // Save match history
-                await saveMatchHistory(gameId, gameRoom, winner, loser, finalScore, 'player_left');
+                await saveMatchHistory(gameId, gameRoom, winner, loser, finalScore, 'player_left')
                 
-                // Clean up game
-                await cleanupGame(gameId, 'player_left');
+                // Clean up game immediately
+                await cleanupGame(gameId, 'player_left')
                 
-                // Emit game end event
+                // Emit game end event to remaining player
                 const otherPlayerSocketIds = await (await import('../../socket')).getSocketIds(otherPlayerEmail, 'sockets') || []
                 io.to(otherPlayerSocketIds).emit('GameEnded', {
                   gameId,
@@ -56,22 +80,47 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
                   gameDuration: gameRoom.startedAt && gameRoom.endedAt 
                     ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
                     : 0,
-                  reason: 'player_left'
+                  reason: 'player_left',
+                  message: 'Opponent disconnected. You win!'
                 })
+                
+                console.log(`Game ${gameId} ended due to disconnect. Winner: ${winner}, Loser: ${loser}`)
+                
+                // Remove from processing set after a delay
+                setTimeout(() => {
+                  processingGames.delete(gameId);
+                }, 5000);
+                
               } else if (gameRoom.status === 'accepted') {
                 // Game was accepted but not started yet - mark as canceled
-                const otherPlayerEmail = gameRoom.hostEmail === userEmail ? gameRoom.guestEmail : gameRoom.hostEmail
+                // Mark game as being processed
+                processingGames.add(gameId);
                 
-                // Clean up game
-                await cleanupGame(gameId, 'timeout');
+                console.log(`Game ${gameId} was accepted but not started, canceling due to disconnect`)
+                
+                // Update game room
+                gameRoom.status = 'canceled'
+                gameRoom.endedAt = Date.now()
+                gameRoom.leaver = userEmail
+                
+                // Clean up game immediately
+                await cleanupGame(gameId, 'timeout')
                 
                 // Notify other player
                 const otherPlayerSocketIds = await (await import('../../socket')).getSocketIds(otherPlayerEmail, 'sockets') || []
-                io.to(otherPlayerSocketIds).emit('PlayerLeft', {
+                io.to(otherPlayerSocketIds).emit('GameEndedByOpponentLeave', {
                   gameId,
-                  playerWhoLeft: userEmail,
-                  reason: 'disconnected'
+                  winner: otherPlayerEmail,
+                  leaver: userEmail,
+                  message: 'Opponent disconnected before the game started.'
                 })
+                
+                console.log(`Game ${gameId} canceled due to disconnect before start`)
+                
+                // Remove from processing set after a delay
+                setTimeout(() => {
+                  processingGames.delete(gameId);
+                }, 5000);
               }
               
               break // Only handle one game per user
@@ -80,7 +129,7 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
         }
       }
     } catch (error) {
-      // Error handling for disconnect cleanup
+      console.error('Error in game disconnect handler:', error)
     }
   })
 } 
