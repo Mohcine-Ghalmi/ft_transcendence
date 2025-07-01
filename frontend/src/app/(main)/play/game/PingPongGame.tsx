@@ -581,18 +581,21 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       const winner = scores.p1 >= 7 ? safePlayer1 : safePlayer2;
       
       if (isRemoteGame && socket && gameId) {
-        // Send game end event to server
-        const finalScore = { p1: scores.p1, p2: scores.p2 };
-        const winnerEmail = scores.p1 >= 7 ? user?.email : opponent?.email;
-        const loserEmail = scores.p1 >= 7 ? opponent?.email : user?.email;
-        
-        socket.emit('GameEnd', {
-          gameId,
-          winner: winnerEmail,
-          loser: loserEmail,
-          finalScore,
-          reason: 'normal_end'
-        });
+        // Only the host should emit GameEnd event to prevent duplicates
+        if (isGameHost) {
+          // Send game end event to server
+          const finalScore = { p1: scores.p1, p2: scores.p2 };
+          const winnerEmail = scores.p1 >= 7 ? user?.email : opponent?.email;
+          const loserEmail = scores.p1 >= 7 ? opponent?.email : user?.email;
+          
+          socket.emit('GameEnd', {
+            gameId,
+            winner: winnerEmail,
+            loser: loserEmail,
+            finalScore,
+            reason: 'normal_end'
+          });
+        }
         
         // Don't navigate immediately - wait for server confirmation
         return;

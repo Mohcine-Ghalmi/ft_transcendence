@@ -8,6 +8,45 @@ interface MatchmakingProps {
   onBack: () => void;
 }
 
+// Game Result Popup Component
+const GameResultPopup = ({ isVisible, onComplete }: { isVisible: boolean; onComplete: () => void }) => {
+  const [countdown, setCountdown] = useState(3);
+
+  useEffect(() => {
+    if (isVisible) {
+      setCountdown(3);
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            onComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [isVisible, onComplete]);
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4 text-center">
+        <div className="mb-6">
+          <div className="w-16 h-16 rounded-full bg-[#2a2f3a] flex items-center justify-center mx-auto mb-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Calculating Match Result</h2>
+          <p className="text-gray-300 mb-4">Please wait while we process your game data...</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MatchmakingStatus = ({ status, queuePosition, totalInQueue }: { 
   status: string; 
   queuePosition?: number; 
@@ -18,18 +57,18 @@ const MatchmakingStatus = ({ status, queuePosition, totalInQueue }: {
       <div className="mb-4">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
-      <h2 className="text-2xl font-semibold text-white mb-2">{status}</h2>
-      {queuePosition && totalInQueue && (
-        <p className="text-gray-400">
-          Position: {queuePosition} of {totalInQueue} players
+      <p className="text-white text-lg">{status}</p>
+      {/* {queuePosition !== undefined && totalInQueue !== undefined && (
+        <p className="text-gray-400 text-sm mt-2">
+          Position: {queuePosition} / {totalInQueue}
         </p>
-      )}
+      )} */}
     </div>
   );
 };
 
 export default function Matchmaking({ onBack }: MatchmakingProps) {
-  const [matchmakingStatus, setMatchmakingStatus] = useState<'idle' | 'searching' | 'in_game' | 'waiting_to_start'>('idle');
+  const [matchmakingStatus, setMatchmakingStatus] = useState<'idle' | 'preparing' | 'searching' | 'in_game' | 'waiting_to_start'>('idle');
   const [queuePosition, setQueuePosition] = useState(0);
   const [totalInQueue, setTotalInQueue] = useState(0);
   const [gameId, setGameId] = useState<string | null>(null);
@@ -42,6 +81,9 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   const [isHost, setIsHost] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showCleanupOption, setShowCleanupOption] = useState(false);
+  const [showResultPopup, setShowResultPopup] = useState(false);
+  const [pendingRedirect, setPendingRedirect] = useState<{ isWinner: boolean; winnerName: string; loserName: string } | null>(null);
+  const [roomPreparationCountdown, setRoomPreparationCountdown] = useState(5);
   
   const { user } = useAuthStore();
   const socket = getSocketInstance();
@@ -169,13 +211,49 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       };
     }, [socket, gameId, user?.email]);
 
+  // Handle result popup completion
+  const handleResultPopupComplete = () => {
+    setShowResultPopup(false);
+    if (pendingRedirect) {
+      const { isWinner, winnerName, loserName } = pendingRedirect;
+      if (isWinner) {
+        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      } else {
+        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      }
+      setPendingRedirect(null);
+    }
+  };
+
+  // Room preparation countdown effect
+  useEffect(() => {
+    if (matchmakingStatus === 'preparing') {
+      const timer = setInterval(() => {
+        setRoomPreparationCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            // Start actual matchmaking after countdown
+            if (socket && user?.email) {
+              socket.emit('JoinMatchmaking', { email: user.email });
+              setMatchmakingStatus('searching');
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [matchmakingStatus, socket, user?.email]);
+
   useEffect(() => {
     if (!socket || !user?.email) return;
 
-    // Join matchmaking
-    const joinMatchmaking = () => {
-      socket.emit('JoinMatchmaking', { email: user.email });
-      setMatchmakingStatus('searching');
+    // Start with room preparation phase (5-second delay)
+    const startMatchmaking = () => {
+      setMatchmakingStatus('preparing');
+      setRoomPreparationCountdown(5);
     };
 
     // Socket event listeners
@@ -257,12 +335,9 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         }, 5000);
       }
       
-      // Redirect to appropriate result page based on whether user won or lost
-      if (isWinner) {
-        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
-      } else {
-        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
-      }
+      // Show result popup and delay redirect by 3 seconds
+      setPendingRedirect({ isWinner, winnerName, loserName });
+      setShowResultPopup(true);
     };
 
     const handleCleanupResponse = (data: any) => {
@@ -280,8 +355,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         // Automatically retry joining matchmaking after cleanup
         setTimeout(() => {
           if (socket && user?.email) {
-            socket.emit('JoinMatchmaking', { email: user.email });
-            setMatchmakingStatus('searching');
+            startMatchmaking();
           }
         }, 1000);
       } else {
@@ -320,8 +394,8 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       setErrorMessage('The other player left before the game started.');
     });
 
-    // Join matchmaking on mount
-    joinMatchmaking();
+    // Start matchmaking on mount with room preparation
+    startMatchmaking();
 
     // Cleanup event listeners on unmount
     return () => {
@@ -370,8 +444,8 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       // If it's been less than 5 minutes, automatically retry
       if (timeSinceLastMatchmaking < 5 * 60 * 1000) {
         console.log('User was previously in matchmaking, automatically retrying...');
-        setMatchmakingStatus('searching');
-        socket.emit('JoinMatchmaking', { email: user.email });
+        setMatchmakingStatus('preparing');
+        setRoomPreparationCountdown(5);
       } else {
         // Clear old session data
         sessionStorage.removeItem('wasInMatchmaking');
@@ -418,7 +492,9 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       socket.emit('LeaveMatchmaking', { email: user.email });
     }
     // setMatchmakingStatus('idle');
-    onBack();
+    setTimeout(() => {
+      onBack();
+    }, 0);
   };
 
   const handleGameEnd = () => {
@@ -454,6 +530,12 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         />
         </div>
         </div>
+        
+        {/* Game Result Popup */}
+        <GameResultPopup 
+          isVisible={showResultPopup} 
+          onComplete={handleResultPopupComplete} 
+        />
         </div>
     );
   }
@@ -464,6 +546,25 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       <div className="flex items-center justify-center w-full h-full px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl flex flex-col items-center justify-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-8 text-center">Random Matchmaking</h1>
+          
+          {matchmakingStatus === 'preparing' && (
+            <>
+              <MatchmakingStatus 
+                status={`Preparing room... (${roomPreparationCountdown}s)`}
+                queuePosition={queuePosition}
+                totalInQueue={totalInQueue}
+              />
+              
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={handleLeaveMatchmaking}
+                  className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
           
           {matchmakingStatus === 'searching' && (
             <>

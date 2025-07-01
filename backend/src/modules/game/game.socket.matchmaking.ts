@@ -138,11 +138,14 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
   // Run cleanup every 30 seconds
   const cleanupInterval = setInterval(cleanupStaleQueueEntries, 30000)
   
-  // Periodic matchmaking attempts every 10 seconds
+  // Periodic matchmaking attempts every 10 seconds with 3-second delay
   const matchmakingInterval = setInterval(() => {
     if (matchmakingQueue.length >= 2) {
       console.log(`Periodic matchmaking attempt with ${matchmakingQueue.length} players in queue`)
-      tryMatchPlayers(io)
+      // Add a 3-second delay before starting matchmaking to allow for more players
+      setTimeout(async () => {
+        await tryMatchPlayers(io)
+      }, 3000)
     }
   }, 10000)
   
@@ -283,9 +286,12 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         maxPlayers: session.maxPlayers
       })
 
-      // Try to find a match if session is full
+      // Try to find a match if session is full, but with a 3-second delay between players
       if (session.players.length >= session.maxPlayers) {
-        await tryMatchPlayersInSession(io, sessionId)
+        // Add a 3-second delay before starting matchmaking to allow for more players
+        setTimeout(async () => {
+          await tryMatchPlayersInSession(io, sessionId)
+        }, 3000)
       }
 
     } catch (error) {

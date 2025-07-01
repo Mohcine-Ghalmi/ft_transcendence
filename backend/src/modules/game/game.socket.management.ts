@@ -9,6 +9,9 @@ import {
 } from './game.socket.types'
 import { cleanupGame, saveMatchHistory, emitToUsers } from './game.socket.utils'
 
+// Track games that are currently being processed to prevent duplicate GameEnd events
+const processingGames = new Set<string>();
+
 export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Server) => {
   
   // Handle game end
@@ -26,6 +29,25 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         console.log(`Game room not found for game ${gameId}`)
         return
       }
+      
+      // Check if game is already being processed or completed
+      if (processingGames.has(gameId) || gameRoom.status === 'completed') {
+        console.log(`Game ${gameId} is already being processed or completed, ignoring duplicate GameEnd event`)
+        return
+      }
+      
+      // Additional check: verify game status in Redis
+      const redisGameData = await redis.get(`game_room:${gameId}`)
+      if (redisGameData) {
+        const redisGameRoom = JSON.parse(redisGameData)
+        if (redisGameRoom.status === 'completed') {
+          console.log(`Game ${gameId} is already completed in Redis, ignoring duplicate GameEnd event`)
+          return
+        }
+      }
+      
+      // Mark game as being processed
+      processingGames.add(gameId);
       
       console.log(`Game ${gameId} ending with reason: ${reason}`)
       
@@ -70,8 +92,15 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       
       console.log(`Game ${gameId} ended successfully. Winner: ${winner}, Loser: ${loser}`)
       
+      // Remove from processing set after a delay to ensure cleanup is complete
+      setTimeout(() => {
+        processingGames.delete(gameId);
+      }, 5000);
+      
     } catch (error) {
       console.error('Error in GameEnd handler:', error)
+      // Remove from processing set on error
+      processingGames.delete(data.gameId);
     }
   })
 
@@ -93,6 +122,31 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
           message: 'Game room not found.',
         })
       }
+      
+      // Check if game is already being processed or completed
+      if (processingGames.has(gameId) || gameRoom.status === 'completed') {
+        console.log(`Game ${gameId} is already being processed or completed, ignoring duplicate LeaveGame event`)
+        return socket.emit('GameResponse', {
+          status: 'success',
+          message: 'Game already ended.',
+        })
+      }
+      
+      // Additional check: verify game status in Redis
+      const redisGameData = await redis.get(`game_room:${gameId}`)
+      if (redisGameData) {
+        const redisGameRoom = JSON.parse(redisGameData)
+        if (redisGameRoom.status === 'completed') {
+          console.log(`Game ${gameId} is already completed in Redis, ignoring duplicate LeaveGame event`)
+          return socket.emit('GameResponse', {
+            status: 'success',
+            message: 'Game already ended.',
+          })
+        }
+      }
+      
+      // Mark game as being processed
+      processingGames.add(gameId);
       
       console.log(`Player ${playerEmail} leaving game ${gameId}`)
       
@@ -145,12 +199,19 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       
       console.log(`Player ${playerEmail} left game ${gameId}. Winner: ${winner}`)
       
+      // Remove from processing set after a delay
+      setTimeout(() => {
+        processingGames.delete(gameId);
+      }, 5000);
+      
     } catch (error) {
       console.error('Error in LeaveGame handler:', error)
       socket.emit('GameResponse', {
         status: 'error',
         message: 'Failed to leave game.',
       })
+      // Remove from processing set on error
+      processingGames.delete(data.gameId);
     }
   })
 
@@ -174,6 +235,18 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         })
       }
 
+      // Check if game is already being processed
+      if (processingGames.has(gameId)) {
+        console.log(`Game ${gameId} is already being processed, ignoring duplicate CancelGame event`)
+        return socket.emit('GameResponse', {
+          status: 'success',
+          message: 'Game already being canceled.',
+        })
+      }
+
+      // Mark game as being processed
+      processingGames.add(gameId);
+
       // Clean up game
       await cleanupGame(gameId, 'timeout');
 
@@ -188,11 +261,18 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         message: 'Game canceled successfully.',
       })
 
+      // Remove from processing set after a delay
+      setTimeout(() => {
+        processingGames.delete(gameId);
+      }, 5000);
+
     } catch (error) {
       socket.emit('GameResponse', {
         status: 'error',
         message: 'Failed to cancel game.',
       })
+      // Remove from processing set on error
+      processingGames.delete(data.gameId);
     }
   })
 

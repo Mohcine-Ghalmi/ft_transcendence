@@ -9,6 +9,9 @@ import {
 } from './game.socket.types'
 import { cleanupGame, saveMatchHistory, emitToUsers } from './game.socket.utils'
 
+// Track games that are currently being processed to prevent duplicate processing
+const processingGames = new Set<string>();
+
 export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Server) => {
   
   // Handle game cleanup on disconnect
@@ -18,9 +21,9 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
       const userEmail = (socket as any).userEmail
       
       if (userEmail) {
-        console.log(`User ${userEmail} disconnected, checking for active games...`)
+        console.log(`User ${userEmail} disconnected`)
         
-        // Find all active games for this user
+        // Get all game rooms from Redis
         const redisGameRooms = await redis.keys('game_room:*')
         
         for (const roomKey of redisGameRooms) {
@@ -33,10 +36,19 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
               const gameId = gameRoom.gameId
               const otherPlayerEmail = gameRoom.hostEmail === userEmail ? gameRoom.guestEmail : gameRoom.hostEmail
               
+              // Check if game is already being processed
+              if (processingGames.has(gameId)) {
+                console.log(`Game ${gameId} is already being processed, skipping duplicate disconnect handling`)
+                continue
+              }
+              
               console.log(`Found active game ${gameId} for disconnected user ${userEmail}`)
               
               // If game is in progress, mark the other player as winner and save to match history
               if (gameRoom.status === 'in_progress') {
+                // Mark game as being processed
+                processingGames.add(gameId);
+                
                 console.log(`Game ${gameId} was in progress, ending game due to disconnect`)
                 
                 const winner = otherPlayerEmail
@@ -73,8 +85,17 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
                 })
                 
                 console.log(`Game ${gameId} ended due to disconnect. Winner: ${winner}, Loser: ${loser}`)
+                
+                // Remove from processing set after a delay
+                setTimeout(() => {
+                  processingGames.delete(gameId);
+                }, 5000);
+                
               } else if (gameRoom.status === 'accepted') {
                 // Game was accepted but not started yet - mark as canceled
+                // Mark game as being processed
+                processingGames.add(gameId);
+                
                 console.log(`Game ${gameId} was accepted but not started, canceling due to disconnect`)
                 
                 // Update game room
@@ -95,6 +116,11 @@ export const handleGameDisconnect: GameSocketHandler = (socket: Socket, io: Serv
                 })
                 
                 console.log(`Game ${gameId} canceled due to disconnect before start`)
+                
+                // Remove from processing set after a delay
+                setTimeout(() => {
+                  processingGames.delete(gameId);
+                }, 5000);
               }
               
               break // Only handle one game per user
