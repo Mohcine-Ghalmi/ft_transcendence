@@ -8,6 +8,7 @@ import {
   isBlockedStatus,
 } from '../user/user.service'
 import { db } from '../../app'
+import axios from 'axios'
 
 const fs = require('fs')
 const path = require('path')
@@ -307,11 +308,23 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
   }
 }
 
-const generateUniqueFilename = (originalFilename: string) => {
+export const generateUniqueFilename = (originalFilename: string) => {
   const timestamp = Date.now()
   const randomString = crypto.randomBytes(8).toString('hex')
-  const extension = path.extname(originalFilename)
+  const extension = path.extname(originalFilename) || '.png'
   return `${timestamp}-${randomString}${extension}`
+}
+
+export async function downloadAndSaveImage(imageUrl: string, filename: string) {
+  const response = await axios.get(imageUrl, { responseType: 'stream' })
+  const filepath = path.join(__dirname, '../../uploads', filename)
+  const writer = fs.createWriteStream(filepath)
+  response.data.pipe(writer)
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', resolve)
+    writer.on('error', reject)
+  })
 }
 
 export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
