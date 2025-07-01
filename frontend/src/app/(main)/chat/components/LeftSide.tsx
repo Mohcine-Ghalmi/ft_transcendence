@@ -295,9 +295,6 @@ const FriendsConversations = () => {
   useEffect(() => {
     getConversations()
   }, [])
-  useEffect(() => {
-    console.log(conversations)
-  }, [conversations])
 
   return (
     <div className="bg-[#121417] rounded-xl border-[#293038]  h-full  border overflow-y-auto">

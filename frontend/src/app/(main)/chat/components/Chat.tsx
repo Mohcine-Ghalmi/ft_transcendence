@@ -298,7 +298,6 @@ const Chat = () => {
       return res.data.filename
     } catch (err: any) {
       setImage(null)
-      console.log(err)
       toast.warning(err.response.data.message)
       return null
     }
@@ -309,6 +308,8 @@ const Chat = () => {
       return
 
     setIsLoading(true)
+    const user = useAuthStore.getState().user
+
     const sendingText = {
       isSending: true,
       senderId: user.id,
@@ -316,27 +317,20 @@ const Chat = () => {
       message: message.trim(),
       image: image ? 'general-img-landscape.png' : null,
       date: new Date(),
-      sender: {
-        ...user,
-      },
-      receiver: {
-        id: selectedConversationId,
-        ...chatHeader,
-      },
+      sender: { ...user },
+      receiver: { id: selectedConversationId, ...chatHeader },
     }
 
-    // const cryptedMessage = CryptoJs.AES.encrypt(
-    //   JSON.stringify(sendingText),
-    //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-    // )
     handleNewMessage(sendingText)
 
-    if (chatSocket && chatSocket.connected) {
+    try {
       let imagePath = null
       if (image) {
         imagePath = await hostImage(image)
       }
-      // const data = CryptoJs.AES.encrypt(
+
+      // Optional: Encrypt message before sending
+      // const payload = CryptoJs.AES.encrypt(
       //   JSON.stringify({
       //     recieverId: selectedConversationId,
       //     senderEmail: user.email,
@@ -347,16 +341,24 @@ const Chat = () => {
       //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       // ).toString()
 
-      chatSocket.emit('sendMessage', {
-        recieverId: selectedConversationId,
-        senderEmail: user.email,
-        senderId: user.id,
-        message: message.trim(),
-        image: imagePath,
-      })
-      setMessage('')
-    } else {
-      toast.error('Socket connection issue. Please try again.')
+      if (chatSocket?.connected) {
+        chatSocket.emit('sendMessage', {
+          recieverId: selectedConversationId,
+          senderEmail: user.email,
+          senderId: user.id,
+          message: message.trim(),
+          image: imagePath,
+        })
+
+        setMessage('')
+        setImage(null)
+      } else {
+        toast.error('Socket connection issue. Please try again.')
+      }
+    } catch (err) {
+      toast.error('Failed to send message.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -369,7 +371,6 @@ const Chat = () => {
     }
 
     const onMessageSent = () => {
-      console.log('Message sent successfully')
       setIsLoading(false)
     }
 
