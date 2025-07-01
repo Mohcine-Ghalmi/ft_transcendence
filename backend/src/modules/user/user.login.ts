@@ -156,7 +156,6 @@ export async function registerHandler(
   }
 }
 
-
 export async function loginHandler(
   req: FastifyRequest<{ Body: LoginInput }>,
   rep: FastifyReply
@@ -190,7 +189,7 @@ export async function loginHandler(
     const { password, salt, ...rest } = user
 
     const accessToken = signJWT(rest, rep)
-    return rep.code(200).send({ ...rest, accessToken })
+    return rep.code(200).send({ ...rest, accessToken, status: true })
   }
 
   return rep.code(401).send({ message: 'Invalid Email or password' })
