@@ -55,7 +55,7 @@ interface UserState {
   user: any | null
   socketConnected: boolean
   onlineUsers: string[] // lasdj@gmail.com asdasd@gaialcom
-  checkAuth: (accessToken: string) => Promise<boolean>
+  checkAuth: () => Promise<boolean>
   register: (data: any) => Promise<boolean>
   login: (data: any) => Promise<boolean>
   logout: () => Promise<void>
@@ -91,36 +91,22 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   setIsLoading: (data) => {
     set({ isLoading: data })
   },
-  checkAuth: async (accessToken) => {
-    set({ isLoading: true })
-
-    try {
-      if (!accessToken) return false
-
-      const userData: any = jwtDecode(accessToken)
-      const isExpired = userData?.exp < Date.now() / 1000
-
-      if (isExpired) {
-        localStorage.removeItem('accessToken')
-        return false
-      }
-
-      const res = await axiosInstance.get('/api/users/getMe')
-      const { accessTokenNew, ...me } = res.data
-
-      if (accessTokenNew) {
-        localStorage.setItem('accessToken', accessTokenNew)
-      }
-
-      set({ user: me, isAuthenticated: true })
-      get().connectSocket()
-      return true
-    } catch (err) {
-      console.error('Auth check failed:', err)
-      return false
-    } finally {
-      set({ isLoading: false })
-    }
+  checkAuth: async () => {
+    return true
+    // set({ isLoading: true })
+    // try {
+    //   const res = await axiosInstance.get('/api/users/getMe')
+    //   const { user } = res.data
+    //   set({ user, isAuthenticated: true })
+    //   get().connectSocket()
+    //   return true
+    // } catch (err) {
+    //   console.error('Auth check failed:', err)
+    //   set({ user: null, isAuthenticated: false })
+    //   return false
+    // } finally {
+    //   set({ isLoading: false })
+    // }
   },
 
   googleLogin: async (data: any): Promise<void> => {
@@ -158,15 +144,15 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(`/api/users/register`, data)
+      const res = await axiosInstance.post(`/v2/api/users/register`, data)
       console.log(res)
 
       if (!res.data) {
         toast.warning('Registration failed')
         return false
       }
-      const { accessToken, ...user } = res.data
-      localStorage.setItem('accessToken', accessToken)
+      const { ...user } = res.data
+      // localStorage.setItem('accessToken', accessToken)
       set({ user, isAuthenticated: true })
       get().connectSocket()
       return true
@@ -221,13 +207,12 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       //   )
       //   return false
       // }
-      const res = await axiosInstance.post(`/api/users/login`, data)
+      const res = await axiosInstance.post(`/v2/api/users/login`, data)
       if (!res.data) {
         toast.warning('Login failed')
         return false
       }
-      const { accessToken, ...user } = res.data
-      localStorage.setItem('accessToken', accessToken)
+      const { ...user } = res.data
       set({ user, isAuthenticated: true })
       get().connectSocket()
       return true
@@ -240,10 +225,20 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   logout: async () => {
-    localStorage.removeItem('accessToken')
-    get().disconnectSocket()
-    set({ user: null, isAuthenticated: false, isLoading: false })
-    signOut({ callbackUrl: `${FRON_END}/` })
+    try {
+      const res = await axiosInstance.post(`/api/users/logout`)
+      if (res?.status === 200) {
+        toast.success('Logout successful!')
+      } else {
+        toast.warning(res.data?.message || 'Logout failed')
+      }
+      get().disconnectSocket()
+    } catch (err) {
+      console.error('Logout failed:', err)
+      toast.warning('Logout failed')
+    }
+    // set({ user: null, isAuthenticated: false, isLoading: false })
+    // signOut({ callbackUrl: `${FRON_END}/` })
   },
 
   connectSocket: () => {

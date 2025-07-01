@@ -1,6 +1,7 @@
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import { Bell, Check, MessageCircle, X } from 'lucide-react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 
 export const NotificationItem = ({
@@ -125,6 +126,12 @@ export const NotificationDropdown = ({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const unreadCount = notifications.filter((n) => n.unread).length
   const { logout } = useAuthStore()
+  const router = useRouter()
+
+  const handleLogout = () => {
+    logout()
+    router.push('/')
+  }
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -167,7 +174,7 @@ export const NotificationDropdown = ({
         )}
       </button>
       {/* logout */}
-      <button className="mx-4 cursor-pointer" onClick={() => logout()}>
+      <button className="mx-4 cursor-pointer" onClick={() => handleLogout()}>
         <Image
           src="/logout.svg"
           alt="logout"

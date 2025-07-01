@@ -6,8 +6,10 @@ import { useAuthStore } from '@/(zustand)/useAuthStore'
 import SignInWithOthers from './SignInWithOthers'
 import ResetPassword from './ResetPassword/resetPassword'
 import { CustomError } from './SignUp/SingUpPage'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setemail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState({
@@ -73,7 +75,8 @@ export default function LoginPage() {
     }
 
     // If validation passes, proceed with login
-    await login({ email, password })
+    const res = await login({ email, password })
+    if (res) router.push('/dashboard')
     // Add your login logic here
   }
 

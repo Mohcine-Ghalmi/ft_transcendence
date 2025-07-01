@@ -173,6 +173,7 @@ export async function logoutUserHandled(
   rep: FastifyReply
 ) {
   try {
+    rep.clearCookie('accessToken', { path: '/' })
     return rep.code(200).send({ message: 'Logged out successfully' })
   } catch (err) {
     return rep.code(500).send({ message: 'Failed To Logout' })
