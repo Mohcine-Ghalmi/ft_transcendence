@@ -15,6 +15,7 @@ import {
   getMe,
   changePassword,
   hasTwoFA,
+  updateUserData,
 } from './user.controller'
 import { $ref } from './user.schema'
 
@@ -96,6 +97,12 @@ async function userRoutes(server: FastifyInstance) {
     '/logout',
     { preHandler: [server.authenticate] },
     logoutUserHandled
+  )
+
+  server.post(
+    '/updateUserData',
+    { preHandler: [server.authenticate] },
+    updateUserData
   )
 
   server.get(
