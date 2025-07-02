@@ -111,6 +111,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       if (currentPath && newPath !== currentPath && matchmakingStatus === 'in_game' && gameId) {
         handleGameExit();
         handleLeaveMatchmaking();
+        handleLeaveMatchmaking();
         handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user });
 
       }
@@ -123,6 +124,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       // Existing logic for in_game exit
       if (matchmakingStatus === 'in_game' && gameId) {
         handleGameExit();
+        handleLeaveMatchmaking();
         handleLeaveMatchmaking();
         handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user });
       }
@@ -503,7 +505,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     setMatchData(null);
     setOpponent(null);
     setIsHost(false);
-    // Don't call onBack() here - let the socket events handle redirects to win/loss pages
+    onBack();
   };
 
   const handleCleanupGameData = () => {
@@ -588,12 +590,11 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       </div>
     </div>
   );
-}
-
-// Add this helper function near the top-level of the component
+}// Add this helper function near the top-level of the component
 function handleHostLeaveBeforeStart({ isHost, gameId, matchmakingStatus, socket, user }) {
   // 'waiting_to_start' is the state after match found, before game starts
   if (isHost && gameId && matchmakingStatus === 'waiting_to_start' && socket && user?.email) {
     socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
   }
 }
+
