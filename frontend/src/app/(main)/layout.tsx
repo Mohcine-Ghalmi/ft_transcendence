@@ -4,8 +4,6 @@ import '../globals.css'
 import ClientLayout from './ClientLayout'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
-import { redirect } from 'next/navigation'
-import { log } from 'console'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -27,8 +25,6 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  console.log('DashboardLayout rendering')
-
   const cookieStore = await cookies()
   const accessToken = cookieStore.get('accessToken')
   let user = null

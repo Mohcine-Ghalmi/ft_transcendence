@@ -143,18 +143,18 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
     socket.on('sendMessage', async (data) => {
       try {
-        // const bytes = CryptoJs.AES.decrypt(
-        //   data,
-        //   process.env.ENCRYPTION_KEY || ''
-        // )
-        // const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+        const bytes = CryptoJs.AES.decrypt(
+          data,
+          process.env.ENCRYPTION_KEY || ''
+        )
+        const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
         const {
           recieverId,
           senderEmail,
           senderId: myId,
           message,
           image,
-        } = data as SentMessageData
+        } = dencrypt as SentMessageData
 
         const [me, receiver]: any = await Promise.all([
           getUserByEmail(senderEmail),

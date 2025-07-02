@@ -338,26 +338,19 @@ const Chat = () => {
         }
       }
 
-      // Optional: Encrypt message before sending
-      // const payload = CryptoJs.AES.encrypt(
-      //   JSON.stringify({
-      //     recieverId: selectedConversationId,
-      //     senderEmail: user.email,
-      //     senderId: user.id,
-      //     message: message.trim(),
-      //     image: imagePath,
-      //   }),
-      //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-      // ).toString()
-
-      if (chatSocket?.connected) {
-        chatSocket.emit('sendMessage', {
+      const payload = CryptoJs.AES.encrypt(
+        JSON.stringify({
           recieverId: selectedConversationId,
           senderEmail: user.email,
           senderId: user.id,
           message: message.trim(),
           image: imagePath,
-        })
+        }),
+        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+      ).toString()
+
+      if (chatSocket?.connected) {
+        chatSocket.emit('sendMessage', payload)
 
         setMessage('')
         setImage(null)
@@ -384,13 +377,11 @@ const Chat = () => {
     }
 
     const setupListeners = () => {
-      setTimeout(() => {
-        if (chatSocket?.connected) {
-          chatSocket.on('failedToSendMessage', onFailedToSendMessage)
-          chatSocket.on('messageSent', onMessageSent)
-          updateChat()
-        }
-      }, 100)
+      if (chatSocket?.connected) {
+        chatSocket.on('failedToSendMessage', onFailedToSendMessage)
+        chatSocket.on('messageSent', onMessageSent)
+        updateChat()
+      }
     }
 
     setupListeners()

@@ -185,10 +185,8 @@ const Settings = () => {
       !newErrors.login &&
       !newErrors.avatar
     if (!isStep1Valid) {
-      console.log('Form has errors:', newErrors)
       return
     }
-    console.log({ ...formData, type: user.type })
     const hostImage = async (image: File) => {
       const formData = new FormData()
       formData.append('file', image)
