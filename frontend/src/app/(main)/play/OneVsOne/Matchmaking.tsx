@@ -175,12 +175,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         socket.emit('LeaveMatchmaking', { email: user.email });
       }
     }
-    // Reset state
-    // setMatchmakingStatus('idle');
-    // setGameId(null);
-    // setMatchData(null);
-    // setOpponent(null);
-    // setIsHost(false);
   };
 
    useEffect(() => {
