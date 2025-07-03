@@ -70,15 +70,15 @@ export function GameInviteProvider({ children }) {
             <h3 className="text-white text-xl font-semibold mb-4">Game Invitation</h3>
             <div className="flex items-center space-x-4 mb-4">
               <Image
-              src={receivedInvite.hostData.avatar}
-              alt={receivedInvite.hostData.username}
+              src={receivedInvite.hostData.avatar || '/avatar/Default.svg'}
+              alt={receivedInvite.hostData.username || receivedInvite.hostData.login || 'Host'}
               width={48}
               height={48}
               className="w-12 h-12 rounded-full object-cover"
               />
               <div>
-              <p className="text-white font-medium">{receivedInvite.hostData.username}</p>
-              <p className="text-gray-400 text-sm">Level {receivedInvite.hostData.level}</p>
+              <p className="text-white font-medium">{receivedInvite.hostData.username || receivedInvite.hostData.login || 'Host'}</p>
+              <p className="text-gray-400 text-sm">Level {receivedInvite.hostData.level || 1}</p>
               </div>
             </div>
             <p className="text-gray-300 mb-6">{receivedInvite.message}</p>

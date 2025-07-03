@@ -92,7 +92,7 @@ const LocalTournamentMode = () => {
       id: crypto.randomUUID(), 
       name: user.name, 
       nickname: user.nickname || '', 
-      avatar: user.avatar, 
+      avatar: `/avatar/Default.svg`, 
       ready: true, 
       is_user: true
     }
@@ -255,7 +255,7 @@ const LocalTournamentMode = () => {
           id: crypto.randomUUID(),
           name: `Player ${participants.length + 1}`, 
           nickname: '',
-          avatar: `/mghalmi.jpg`, 
+          avatar: `/avatar/Default.svg`, 
           ready: true,
           is_user: false
         }
@@ -458,7 +458,7 @@ const LocalTournamentMode = () => {
                     <div className="mb-6">
                       <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-green-500 mx-auto mb-4">
                         <Image 
-                          src={matchWinner.avatar || '/mghalmi.jpg'} 
+                          src={matchWinner.avatar || '/avatar/Default.svg'} 
                           alt={matchWinner.name || 'Winner'} 
                           width={96} 
                           height={96}
@@ -520,7 +520,7 @@ const LocalTournamentMode = () => {
                         <div key={player.id} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-gray-600">
                           <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                             <Image 
-                              src={player.avatar} 
+                              src={player.avatar || '/avatar/Default.svg'} 
                               alt={player.name} 
                               width={48} 
                               height={48}
@@ -552,7 +552,7 @@ const LocalTournamentMode = () => {
                   <div className="bg-gradient-to-b from-yellow-400 to-yellow-600 p-2 rounded-full mb-6">
                     <div className="w-32 h-32 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-yellow-500">
                       <Image 
-                        src={champion?.avatar || '/mghalmi.jpg'} 
+                        src={champion?.avatar || '/avatar/Default.svg'} 
                         alt={champion?.name || 'Champion'} 
                         width={128} 
                         height={128}

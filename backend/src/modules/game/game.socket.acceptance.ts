@@ -150,7 +150,8 @@ export const handleGameAcceptance: GameSocketHandler = (socket: Socket, io: Serv
         io.to(hostSocketIds).emit('GameInviteDeclined', {
           gameId,
           declinedBy: guest.email,
-          guestName: guest.username
+          guestName: guest.username,
+          guestLogin: guest.login
         })
       }
 

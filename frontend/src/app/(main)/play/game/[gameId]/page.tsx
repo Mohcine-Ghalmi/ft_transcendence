@@ -72,18 +72,17 @@ export default function GamePage() {
       if (data.gameId === gameId && data.status === 'ready_to_start') {
         setGameAccepted(true)
         
-        // IMPROVED: Determine if current user is host correctly
-        // The host receives guestData, the guest receives hostData
+        // FIXED: Correct host detection logic
+        // The guest receives hostData, the host receives guestData
         let isCurrentUserHost = false;
         let opponentData = null;
         
-        // More reliable host detection
-        if (data.hostData && data.hostData.email === user?.email) {
-          // This user is the guest (received hostData)
+        if (data.hostData && data.hostData.email !== user?.email) {
+          // We received hostData but it's not our email, so we are the guest
           isCurrentUserHost = false;
           opponentData = data.hostData;
-        } else if (data.guestData && data.guestData.email === user?.email) {
-          // This user is the host (received guestData)
+        } else if (data.guestData && data.guestData.email !== user?.email) {
+          // We received guestData but it's not our email, so we are the host
           isCurrentUserHost = true;
           opponentData = data.guestData;
         } else {
@@ -108,7 +107,7 @@ export default function GamePage() {
           setOpponent({
             email: opponentData.email,
             username: opponentData.username || opponentData.login || opponentData.email,
-            avatar: opponentData.avatar || '/mghalmi.jpg',
+            avatar: opponentData.avatar || '/avatar/Default.svg',
             login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
           })
         }
@@ -129,14 +128,28 @@ export default function GamePage() {
           setStartGameTimeout(null)
         }
         
-        // Set opponent data if not already set from GameInviteAccepted
-        if (!opponent && data.players) {
+        // Set opponent data using the hostData and guestData from the event
+        if (data.hostData && data.guestData) {
+          const isCurrentUserHost = data.players.host === user?.email
+          const opponentData = isCurrentUserHost ? data.guestData : data.hostData
+          
+          setOpponent({
+            email: opponentData.email,
+            username: opponentData.username || opponentData.login || opponentData.email,
+            avatar: opponentData.avatar || '/avatar/Default.svg',
+            login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
+          })
+          
+          // Set host status
+          setIsHost(isCurrentUserHost)
+        } else if (!opponent && data.players) {
+          // Fallback if hostData/guestData not available
           const isCurrentUserHost = data.players.host === user?.email
           const opponentEmail = isCurrentUserHost ? data.players.guest : data.players.host
           setOpponent({
             email: opponentEmail,
             username: opponentEmail, // This should be fetched from user data
-            avatar: '/mghalmi.jpg',
+            avatar: '/avatar/Default.svg',
             login: opponentEmail
           })
           
@@ -173,7 +186,7 @@ export default function GamePage() {
         // Only show alert and redirect if we're not the one leaving
         if (!isLeavingGameRef.current) {
           // Current player wins when opponent leaves
-          const winnerName = user?.username || user?.name || 'You';
+          const winnerName = user?.username || user?.login || 'You';
           const loserName = data.playerWhoLeft || 'Opponent';
           
           // Navigate to winner page
@@ -189,8 +202,8 @@ export default function GamePage() {
         
         // Determine winner and loser
         const isWinner = data.winner === user?.email;
-        const winnerName = isWinner ? (user?.username || user?.name || 'You') : (data.winner || 'Opponent');
-        const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.name || 'You');
+        const winnerName = isWinner ? (user?.username || user?.login || 'You') : (data.winner || 'Opponent');
+        const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.login || 'You');
         
         // Navigate to appropriate result page
         if (isWinner) {
@@ -351,7 +364,7 @@ export default function GamePage() {
     // Set leaving flag to prevent duplicate events
     setIsLeavingGame(true)
     // Navigate back to play page
-    setTimeout(() => {router.push("/play")}, 0);
+    // setTimeout(() => {router.push("/play")}, 0);
   }
 
   // Track current pathname to detect route changes
@@ -568,7 +581,7 @@ export default function GamePage() {
               <div className="mb-8">
                 <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
                   <img
-                    src={user?.avatar || '/mghalmi.jpg'}
+                    src={user?.avatar || '/avatar/Default.svg'}
                     alt={user?.username}
                     className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
                   />

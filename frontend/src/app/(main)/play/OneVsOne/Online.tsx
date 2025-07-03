@@ -322,7 +322,9 @@ export default function OnlineMatch() {
         setGameId(data.gameId);
         setInvitedPlayer({
           ...data.guestData,
-          name: data.guestData.username,
+          name: data.guestData.username || data.guestData.login,
+          login: data.guestData.login,
+          avatar: data.guestData.avatar || '/avatar/Default.svg',
           GameStatus: 'Available'
         });
         setGameState('waiting_response');
@@ -352,7 +354,9 @@ export default function OnlineMatch() {
           setIsHost(true);
           setInvitedPlayer({
             ...data.guestData,
-            name: data.guestData.username,
+            name: data.guestData.username || data.guestData.login,
+            login: data.guestData.login,
+            avatar: data.guestData.avatar || '/avatar/Default.svg',
             GameStatus: 'Available'
           });
         } else {
@@ -360,7 +364,9 @@ export default function OnlineMatch() {
           setIsHost(false);
           setInvitedPlayer({
             ...data.hostData,
-            name: data.hostData.username,
+            name: data.hostData.username || data.hostData.login,
+            login: data.hostData.login,
+            avatar: data.hostData.avatar || '/avatar/Default.svg',
             GameStatus: 'Available'
           });
         }
@@ -381,7 +387,7 @@ export default function OnlineMatch() {
       setWaitTime(0);
       clearCountdown();
       
-      showNotification(`${data.guestName} declined your invitation.`, 'error');
+      showNotification(`${data.guestLogin || data.guestName} declined your invitation.`, 'error');
       
       // Reset game state and redirect host back to play page
       resetGameState();
@@ -439,7 +445,7 @@ export default function OnlineMatch() {
       }
       
       // Redirect to win page since the current user wins when opponent leaves
-      const winnerName = user?.username || user?.name || 'You';
+      const winnerName = user?.username || user?.login || 'You';
       const loserName = data.playerWhoLeft || 'Opponent';
       router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
     };
@@ -453,8 +459,8 @@ export default function OnlineMatch() {
       
       // Determine if current user won
       const isWinner = data.winner === user?.email;
-      const winnerName = isWinner ? (user?.username || user?.name || 'You') : (data.winner || 'Opponent');
-      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.name || 'You');
+      const winnerName = isWinner ? (user?.username || user?.login || 'You') : (data.winner || 'Opponent');
+      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.login || 'You');
       
       showNotification(data.message || 'Game ended.', 'info');
       

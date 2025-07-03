@@ -296,10 +296,14 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       setMatchData(data);
       setGameId(data.gameId);
       setIsHost(data.hostEmail === user.email);
+      
+      // Use real player data with login and avatar
+      const opponentData = data.hostEmail === user.email ? data.guestData : data.hostData;
       setOpponent({
-        name: data.hostEmail === user.email ? data.guestEmail : data.hostEmail,
+        name: opponentData?.username || opponentData?.login || 'Opponent',
+        login: opponentData?.login || 'opponent',
         email: data.hostEmail === user.email ? data.guestEmail : data.hostEmail,
-        avatar: '/avatar/Default.svg'
+        avatar: opponentData?.avatar || '/avatar/Default.svg'
       });
       
       // Directly go to game without showing modal
@@ -319,8 +323,8 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       
       // Determine if current user won
       const isWinner = data.winner === user?.email;
-      const winnerName = isWinner ? (user?.username || user?.name || 'You') : (data.winner || 'Opponent');
-      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.name || 'You');
+      const winnerName = isWinner ? (user?.username || user?.login || 'You') : (data.winner || 'Opponent');
+      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.login || 'You');
       
       // Show game result message
       if (data.message) {

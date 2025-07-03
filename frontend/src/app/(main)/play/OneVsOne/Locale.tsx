@@ -209,7 +209,7 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
             alt={player.login}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
             onError={(e: any) => {
-              e.target.src = '/mghalmi.jpg'
+              e.target.src = '/avatar/Default.svg'
             }}
           />
         </div>

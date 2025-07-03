@@ -391,7 +391,7 @@ export default function TournamentGamePage() {
             <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
               <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden mx-auto mb-4 border-2 border-blue-500">
                 <Image 
-                  src={user?.avatar || '/mghalmi.jpg'} 
+                  src={user?.avatar || '/avatar/Default.svg'} 
                   alt={user?.name || 'You'} 
                   width={96}
                   height={96}
@@ -406,7 +406,7 @@ export default function TournamentGamePage() {
             <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
               <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden mx-auto mb-4 border-2 border-green-500">
                 <Image 
-                  src={opponent?.avatar || '/mghalmi.jpg'} 
+                  src={opponent?.avatar || '/avatar/Default.svg'} 
                   alt={opponent?.nickname || 'Opponent'} 
                   width={96}
                   height={96}
