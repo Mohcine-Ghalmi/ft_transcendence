@@ -159,9 +159,8 @@ export default function OnlineMatch() {
   const router = useRouter();
   
   const countdownIntervalRef = useRef(null);
-  // Track current pathname to detect route changes
   const [currentPath, setCurrentPath] = useState('');
-
+  
   useEffect(() => {
     // Set initial path
     if (typeof window !== 'undefined') {
@@ -180,6 +179,7 @@ export default function OnlineMatch() {
       // Existing logic for in_game exit
       if (currentPath && newPath !== currentPath && gameState === 'in_game' && gameId) {
         handleGameExit();
+        handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
       }
       setTimeout(() => setCurrentPath(newPath), 0);
     };
@@ -190,6 +190,7 @@ export default function OnlineMatch() {
       // Existing logic for in_game exit
       if (gameState === 'in_game' && gameId) {
         handleGameExit();
+        handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
       }
     };
 
@@ -200,6 +201,7 @@ export default function OnlineMatch() {
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // Also listen for pushState and replaceState (for programmatic navigation)
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
 

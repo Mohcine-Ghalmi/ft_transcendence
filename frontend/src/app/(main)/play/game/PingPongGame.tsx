@@ -828,14 +828,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                 {(!isRemoteGame || isPlayer1) && (
                   <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
                     <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      className="w-12 h-12 bg-blue-700/80 hover:bg-blue-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg"
                       onTouchStart={() => handleMobilePress('p1up', true)}
                       onTouchEnd={() => handleMobilePress('p1up', false)}
                     >
                       ↑
                     </button>
                     <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      className="w-12 h-12 bg-blue-700/80 hover:bg-blue-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg"
                       onTouchStart={() => handleMobilePress('p1down', true)}
                       onTouchEnd={() => handleMobilePress('p1down', false)}
                     >
@@ -843,19 +843,18 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                     </button>
                   </div>
                 )}
-                
                 {/* Player 2 controls (right side) - only show if player 2 or local game */}
                 {(!isRemoteGame || !isPlayer1) && (
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
                     <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      className="w-12 h-12 bg-red-700/80 hover:bg-red-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg"
                       onTouchStart={() => handleMobilePress('p2up', true)}
                       onTouchEnd={() => handleMobilePress('p2up', false)}
                     >
                       ↑
                     </button>
                     <button
-                      className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
+                      className="w-12 h-12 bg-red-700/80 hover:bg-red-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg"
                       onTouchStart={() => handleMobilePress('p2down', true)}
                       onTouchEnd={() => handleMobilePress('p2down', false)}
                     >
@@ -864,6 +863,33 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                   </div>
                 )}
               </>
+            )}
+            {/* Desktop Controls Overlay */}
+            {!mobile && isGameActive && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 flex gap-8 bg-black/60 rounded-xl px-6 py-3 border border-gray-700 shadow-lg">
+                {/* Player 1 Controls */}
+                {(!isRemoteGame || isPlayer1) && (
+                  <div className="flex flex-col items-center">
+                    <div className="flex gap-2 items-center mb-1">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">W</span>
+                      <span className="text-white font-semibold">/</span>
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">S</span>
+                    </div>
+                    <span className="text-xs text-blue-200 font-semibold">Player 1</span>
+                  </div>
+                )}
+                {/* Player 2 Controls */}
+                {(!isRemoteGame || !isPlayer1) && (
+                  <div className="flex flex-col items-center">
+                    <div className="flex gap-2 items-center mb-1">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↑</span>
+                      <span className="text-white font-semibold">/</span>
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↓</span>
+                    </div>
+                    <span className="text-xs text-red-200 font-semibold">Player 2</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
