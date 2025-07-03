@@ -118,37 +118,8 @@ function updateSessionStatus(sessionId: string, status: MatchmakingSession['stat
 
 export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server) => {
   
-  // Periodic cleanup of stale queue entries
-  const cleanupStaleQueueEntries = () => {
-    const now = Date.now()
-    const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000) // 2 minutes
-    
-    if (stalePlayers.length > 0) {
-      console.log(`Cleaning up ${stalePlayers.length} stale players from matchmaking queue`)
-      
-      for (const player of stalePlayers) {
-        removeFromQueueByEmail(player.email)
-        console.log(`Removed stale player ${player.email} from matchmaking queue during periodic cleanup`)
-      }
-      
-      console.log(`Matchmaking queue size after cleanup: ${matchmakingQueue.length}`)
-    }
-  }
+  // Remove periodic cleanup - cleanup happens on specific events and disconnect
 
-  // Run cleanup every 30 seconds
-  const cleanupInterval = setInterval(cleanupStaleQueueEntries, 30000)
-  
-  // Periodic matchmaking attempts every 10 seconds with 3-second delay
-  const matchmakingInterval = setInterval(() => {
-    if (matchmakingQueue.length >= 2) {
-      console.log(`Periodic matchmaking attempt with ${matchmakingQueue.length} players in queue`)
-      // Add a 3-second delay before starting matchmaking to allow for more players
-      setTimeout(async () => {
-        await tryMatchPlayers(io)
-      }, 3000)
-    }
-  }, 10000)
-  
   // Handle socket disconnect - clean up user data
   socket.on('disconnect', async () => {
     try {
@@ -176,10 +147,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       
     } catch (error) {
       console.error('Error cleaning up on disconnect:', error)
-    } finally {
-      // Clean up intervals
-      clearInterval(cleanupInterval)
-      clearInterval(matchmakingInterval)
     }
   })
 

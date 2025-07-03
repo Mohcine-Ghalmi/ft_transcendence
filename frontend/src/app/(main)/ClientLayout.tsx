@@ -34,8 +34,10 @@ export default function ClientLayout({
       }
     }
 
-    const interval = setInterval(checkSocket, 1000)
-    return () => clearInterval(interval)
+    checkSocket()
+    const timeout = setTimeout(checkSocket, 1000)
+    
+    return () => clearTimeout(timeout)
   }, [user])
 
   return (

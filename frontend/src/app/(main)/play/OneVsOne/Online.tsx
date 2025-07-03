@@ -174,23 +174,94 @@ export default function OnlineMatch() {
 
     const handleRouteChange = () => {
       const newPath = window.location.pathname;
-      // If the path has changed and we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
-      handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
-      // Existing logic for in_game exit
-      if (currentPath && newPath !== currentPath && gameState === 'in_game' && gameId) {
-        handleGameExit();
-        handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
+      
+      // Handle different game states when player leaves
+      if (currentPath && newPath !== currentPath) {
+        if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
+          // Player left while waiting to start - emit appropriate event for both host and guest
+          if (isHost) {
+            // Host leaving - emit both events to ensure guest gets notified
+            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          } else {
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          }
+        } else if (gameState === 'in_game' && gameId && socket && user?.email) {
+          // Player left during active game - mark as lost
+          socket.emit('LeaveGame', { 
+            gameId, 
+            playerEmail: user.email,
+            reason: 'player_left_page'
+          });
+        } else if (gameState === 'waiting_response' && gameId && socket && user?.email) {
+          // Player left while waiting for response - cancel invite
+          socket.emit('CancelGameInvite', { 
+            gameId,
+            hostEmail: user.email
+          });
+        }
       }
+      
       setTimeout(() => setCurrentPath(newPath), 0);
     };
 
     const handleBeforeUnload = (e) => {
-      // If we're on the waiting-to-start page as host, emit PlayerLeftBeforeGameStart
-      handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
-      // Existing logic for in_game exit
-      if (gameState === 'in_game' && gameId) {
-        handleGameExit();
-        handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user });
+      // Handle page refresh/close for different game states
+      if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
+        // Both host and guest should emit appropriate events when leaving waiting room
+        if (isHost) {
+          // Host leaving - emit both events to ensure guest gets notified
+          socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+        } else {
+          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+        }
+      } else if (gameState === 'in_game' && gameId && socket && user?.email) {
+        // Show confirmation dialog for active games
+        e.preventDefault();
+        e.returnValue = 'Are you sure you want to leave the game? This will result in a loss.';
+        
+        // Emit leave event
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email,
+          reason: 'player_closed_page'
+        });
+        
+        return 'Are you sure you want to leave the game? This will result in a loss.';
+      } else if (gameState === 'waiting_response' && gameId && socket && user?.email) {
+        socket.emit('CancelGameInvite', { 
+          gameId,
+          hostEmail: user.email
+        });
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // Handle when user navigates to another tab or minimizes browser
+      if (document.visibilityState === 'hidden') {
+        if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
+          // Both host and guest should emit appropriate events when leaving waiting room
+          if (isHost) {
+            // Host leaving - emit both events to ensure guest gets notified
+            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          } else {
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          }
+        } else if (gameState === 'in_game' && gameId && socket && user?.email) {
+          // Player left during active game - mark as lost
+          socket.emit('LeaveGame', { 
+            gameId, 
+            playerEmail: user.email,
+            reason: 'player_changed_tab'
+          });
+        } else if (gameState === 'waiting_response' && gameId && socket && user?.email) {
+          socket.emit('CancelGameInvite', { 
+            gameId,
+            hostEmail: user.email
+          });
+        }
       }
     };
 
@@ -200,6 +271,7 @@ export default function OnlineMatch() {
 
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Also listen for pushState and replaceState (for programmatic navigation)
     const originalPushState = history.pushState;
@@ -218,6 +290,7 @@ export default function OnlineMatch() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       history.pushState = originalPushState;
       history.replaceState = originalReplaceState;
     };

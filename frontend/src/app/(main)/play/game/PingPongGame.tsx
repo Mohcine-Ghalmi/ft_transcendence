@@ -177,7 +177,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         const minutes = Math.floor((elapsed % 3600) / 60);
         const seconds = elapsed % 60;
         setGameTime({ hours, minutes, seconds });
-      }, 0); // Update every second instead of 0
+      }, 1000); // Update every second
     }
 
     return () => {

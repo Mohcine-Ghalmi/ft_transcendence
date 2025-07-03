@@ -10,40 +10,9 @@ import { getUserByEmail, getFriend } from '../user/user.service';
 const TOURNAMENT_PREFIX = 'tournament:';
 const TOURNAMENT_INVITE_PREFIX = 'tournament_invite:';
 
-// Helper function to clean up expired tournament invites
-async function cleanupExpiredTournamentInvites() {
-  try {
-    const inviteKeys = await redis.keys(`${TOURNAMENT_INVITE_PREFIX}*`);
-    const now = Date.now();
-    
-    for (const key of inviteKeys) {
-      const inviteData = await redis.get(key);
-      if (inviteData) {
-        try {
-          const invite = JSON.parse(inviteData);
-          // If invite is older than 30 seconds, delete it
-          if (now - invite.createdAt > 30000) {
-            await redis.del(key);
-            // Also clean up the email reference
-            await redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.inviteeEmail}`);
-          }
-        } catch (err) {
-          // If parsing fails, delete the invalid key
-          await redis.del(key);
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Error cleaning up expired tournament invites:', err);
-  }
-}
-
 type TournamentEventData = any; // TODO: Strongly type each event
 
 export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) => {
-  // Clean up expired invites when tournament handler is initialized
-  cleanupExpiredTournamentInvites();
-
   // Create a new tournament
   socket.on('CreateTournament', async (data: {
     name: string;
@@ -123,9 +92,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Check friendship
       const friendship = await getFriend(hostEmail, inviteeEmail);
       if (!friendship) return socket.emit('InviteToTournamentResponse', { status: 'error', message: 'You can only invite friends.' });
-      
-      // Clean up any expired invites before checking for existing ones
-      await cleanupExpiredTournamentInvites();
       
       // Check for existing invite and clean up if expired
       const existingInviteId = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`);

@@ -22,6 +22,7 @@ export default function GamePage() {
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [authorizationChecked, setAuthorizationChecked] = useState(false)
   const [isStartingGame, setIsStartingGame] = useState(false)
+  const [currentPath, setCurrentPath] = useState('');
   
   // Use refs to track the latest state in event handlers
   const gameStartedRef = useRef(gameStarted)
@@ -55,7 +56,7 @@ export default function GamePage() {
       if (!authorizationChecked && !isStartingGameRef.current) {
         setIsAuthorized(false)
         setAuthorizationChecked(true)
-        window.location.href = '/play'
+        setTimeout(() => {router.push("/play")}, 0);
       }
     }, 1000) // 3 second timeout
 
@@ -207,7 +208,7 @@ export default function GamePage() {
         if (!isLeavingGameRef.current) {
           // alert('The game was canceled.')
           setIsLeavingGame(true)
-          router.push('/play')
+          setTimeout(() => {router.push("/play")}, 0);
         }
       }
     }
@@ -222,7 +223,7 @@ export default function GamePage() {
         // Check if game is in a valid state
         if (data.gameStatus === 'canceled' || data.gameStatus === 'completed') {
           // alert('This game is no longer active.')
-          router.push('/play')
+          setTimeout(() => {router.push("/play")}, 0);
           return
         }
       } else {
@@ -230,7 +231,7 @@ export default function GamePage() {
         // Don't redirect if we're in the process of starting the game
         if (!isStartingGameRef.current) {
           // alert(data.message || 'You do not have access to this game.')
-          router.push('/play')
+          setTimeout(() => {router.push("/play")}, 0);
         }
       }
     }
@@ -340,18 +341,143 @@ export default function GamePage() {
 
   const handleCancelGame = () => {
     if (socket && gameId && !isLeavingGame) {
-      setIsLeavingGame(true)
+      setTimeout(() => {setIsLeavingGame(true), 0});
       socket.emit('LeaveGame', { gameId, playerEmail: user?.email })
     }
-    router.push('/play')
+    // setTimeout(() => {router.push("/play")}, 0);
   }
 
   const handleGameEnd = () => {
     // Set leaving flag to prevent duplicate events
     setIsLeavingGame(true)
     // Navigate back to play page
-    router.push('/play')
+    setTimeout(() => {router.push("/play")}, 0);
   }
+
+  // Track current pathname to detect route changes
+  useEffect(() => {
+    // Set initial path
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname);
+    }
+  }, []);
+
+  // Handle route changes and page navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleRouteChange = () => {
+      const newPath = window.location.pathname;
+      
+      // Handle route changes when player leaves the game page
+      if (currentPath && newPath !== currentPath) {
+        if (gameId && socket && user?.email) {
+          handleCancelGame();
+          // Player left during active game - mark as lost
+          socket.emit('LeaveGame', { 
+            gameId, 
+            playerEmail: user.email,
+            reason: 'player_left_page'
+          });
+        } else if (gameAccepted && gameId && socket && user?.email) {
+          // Player left while waiting to start - emit appropriate event for both host and guest
+          if (isHost) {
+            // Host leaving - emit both events to ensure guest gets notified
+            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          } else {
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          }
+        }
+      }
+      
+      setTimeout(() => setCurrentPath(newPath), 0);
+    };
+
+    const handleBeforeUnload = (e) => {
+      // Handle page refresh/close for different game states
+      if (gameId && socket && user?.email) {
+        // Show confirmation dialog for active games
+        e.preventDefault();
+        e.returnValue = 'Are you sure you want to leave the game? This will result in a loss.';
+        
+        // Emit leave event
+        socket.emit('LeaveGame', { 
+          gameId, 
+          playerEmail: user.email,
+          reason: 'player_closed_page'
+        });
+        
+        return 'Are you sure you want to leave the game? This will result in a loss.';
+      } else if (gameAccepted && gameId && socket && user?.email) {
+        // Both host and guest should emit appropriate events when leaving waiting room
+        if (isHost) {
+          // Host leaving - emit both events to ensure guest gets notified
+          socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+        } else {
+          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      // Handle when user navigates to another tab or minimizes browser
+      if (document.visibilityState === 'hidden') {
+        if (gameId && socket && user?.email) {
+          // Player left during active game - mark as lost
+          handleCancelGame();
+          socket.emit('LeaveGame', { 
+            gameId, 
+            playerEmail: user.email,
+            reason: 'player_changed_tab'
+          });
+        } else if (gameAccepted && gameId && socket && user?.email) {
+          // Both host and guest should emit appropriate events when leaving waiting room
+          if (isHost) {
+            // Host leaving - emit both events to ensure guest gets notified
+            handleCancelGame();
+            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          } else {
+            handleCancelGame();
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          }
+        }
+      }
+    };
+
+    const handlePopState = () => {
+      handleRouteChange();
+    };
+
+    // Listen for route changes
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Also listen for pushState and replaceState (for programmatic navigation)
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+      originalPushState.apply(history, args);
+      handleRouteChange();
+    };
+
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(history, args);
+      handleRouteChange();
+    };
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, [currentPath, gameAccepted, gameId, isHost, socket, user]);
 
   // Check authorization first - redirect unauthorized users
   if (authorizationChecked && !isAuthorized) {
@@ -399,7 +525,7 @@ export default function GamePage() {
           <div className="text-center">
             <h1 className="text-4xl font-bold text-white mb-8">Game not found or you don't have permission to join</h1>
             <button 
-              onClick={() => window.location.href = '/play'}
+              onClick={() => setTimeout(() => router.push("/play"), 0)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
             >
               Back to Play
@@ -546,13 +672,6 @@ export default function GamePage() {
         <h1 className="text-4xl font-bold text-white mb-8">Waiting for game to start...</h1>
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mx-auto"></div>
         <p className="text-gray-400 mt-4">Please wait while the game is being set up...</p>
-        <div className="mt-4 text-sm text-gray-500">
-          <p>Debug info:</p>
-          <p>Game ID: {gameId}</p>
-          <p>Socket connected: {socket ? 'Yes' : 'No'}</p>
-          <p>User: {user?.email}</p>
-          <p>Is Leaving: {isLeavingGame ? 'Yes' : 'No'}</p>
-        </div>
       </div>
     </div>
   )

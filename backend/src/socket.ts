@@ -68,59 +68,6 @@ export async function cleanupStaleSocketsOnStartup() {
   }
 }
 
-// Periodic cleanup function
-async function periodicCleanup() {
-  try {
-    console.log('Running periodic cleanup...')
-    
-    // Clean up stale game rooms
-    const redisGameKeys = await redis.keys('game_room:*')
-    let cleanedGameRooms = 0
-    
-    for (const key of redisGameKeys) {
-      try {
-        const gameRoomData = await redis.get(key)
-        if (gameRoomData) {
-          const gameRoom = JSON.parse(gameRoomData)
-          const gameAge = Date.now() - gameRoom.createdAt
-          
-          // Remove game rooms older than 5 minutes or with completed/canceled status
-          // More aggressive cleanup for completed games
-          if (gameAge > 300000 || // 5 minutes instead of 10
-              gameRoom.status === 'completed' || 
-              gameRoom.status === 'canceled' ||
-              gameRoom.status === 'ended') {
-            await redis.del(key)
-            cleanedGameRooms++
-            console.log(`Cleaned up game room ${key} (status: ${gameRoom.status}, age: ${Math.round(gameAge/1000/60)}min)`)
-          }
-        }
-      } catch (parseError) {
-        // If we can't parse the game room data, it's corrupted, so delete it
-        await redis.del(key)
-        cleanedGameRooms++
-        console.log(`Cleaned up corrupted game room ${key}`)
-      }
-    }
-    
-    // Clean up stale matchmaking queue entries (older than 3 minutes instead of 5)
-    const now = Date.now()
-    const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 180000) // 3 minutes
-    
-    for (const player of stalePlayers) {
-      removeFromQueueByEmail(player.email)
-      console.log(`Removed stale player ${player.email} from matchmaking queue`)
-    }
-    
-    if (cleanedGameRooms > 0 || stalePlayers.length > 0) {
-      console.log(`Periodic cleanup: Removed ${cleanedGameRooms} stale game rooms and ${stalePlayers.length} stale queue entries`)
-    }
-    
-  } catch (error) {
-    console.error('Error during periodic cleanup:', error)
-  }
-}
-
 export async function setupSocketIO(server: FastifyInstance) {
   io = new Server(server.server, {
     cors: {
@@ -132,8 +79,7 @@ export async function setupSocketIO(server: FastifyInstance) {
   const chatNamespace = io.of('/chat')
   setupChatNamespace(chatNamespace)
 
-  // Start periodic cleanup every 2 minutes
-  setInterval(periodicCleanup, 120000) // 2 minutes
+  // Remove periodic cleanup - not necessary as cleanup happens on disconnect and specific events
 
   io.on('connection', async (socket) => {
     const key = process.env.ENCRYPTION_KEY || ''
