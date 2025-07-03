@@ -9,7 +9,8 @@ import {
   isInQueue,
   MatchmakingPlayer,
   GameSocketHandler,
-  getPlayerData
+  getPlayerData,
+  gameRooms
 } from './game.socket.types'
 import { createMatchHistory } from './game.service'
 import { v4 as uuidv4 } from 'uuid'
@@ -392,48 +393,73 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       const { gameId, leaver } = data
       
       if (!gameId || !leaver) {
-        return
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Missing required information.',
+        })
       }
 
-      // Get game room data
-      const gameRoomData = await redis.get(`game_room:${gameId}`)
-      if (!gameRoomData) {
-        return
+      const gameRoom = gameRooms.get(gameId)
+      if (!gameRoom) {
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Game room not found.',
+        })
       }
 
-      const gameRoom: GameRoomData = JSON.parse(gameRoomData)
-      
       // Only handle if game hasn't started yet
       if (gameRoom.status !== 'accepted') {
-        return
+        return socket.emit('GameResponse', {
+          status: 'error',
+          message: 'Game has already started or ended.',
+        })
       }
 
-      // Determine winner (the player who didn't leave)
-      const winner = gameRoom.hostEmail === leaver ? gameRoom.guestEmail : gameRoom.hostEmail
+      console.log(`Player ${leaver} left before game start in room ${gameId}`)
 
-      // Update game status
-      gameRoom.status = 'ended'
+      // Determine the other player
+      const otherPlayerEmail = gameRoom.hostEmail === leaver ? gameRoom.guestEmail : gameRoom.hostEmail
+
+      // Update game room status
+      gameRoom.status = 'canceled'
       gameRoom.endedAt = Date.now()
-      gameRoom.winner = winner
       gameRoom.leaver = leaver
+      gameRoom.winner = otherPlayerEmail
+
+      // Save to Redis
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+      gameRooms.set(gameId, gameRoom)
 
-      // Get socket IDs for both players
-      const [hostSocketIds, guestSocketIds] = await Promise.all([
-        getSocketIds(gameRoom.hostEmail, 'sockets') || [],
-        getSocketIds(gameRoom.guestEmail, 'sockets') || []
-      ])
-
-      // Notify both players
-      io.to([...hostSocketIds, ...guestSocketIds]).emit('GameEndedByOpponentLeave', {
+      // Notify the other player
+      const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || []
+      io.to(otherPlayerSocketIds).emit('MatchmakingPlayerLeft', {
         gameId,
-        winner,
         leaver,
         message: 'Opponent left before the game started.'
       })
 
+      // Clean up the game room after a delay
+      setTimeout(async () => {
+        try {
+          await redis.del(`game_room:${gameId}`)
+          gameRooms.delete(gameId)
+          console.log(`Cleaned up game room ${gameId} after player left before start`)
+        } catch (error) {
+          console.error(`Error cleaning up game room ${gameId}:`, error)
+        }
+      }, 5000)
+
+      socket.emit('GameResponse', {
+        status: 'success',
+        message: 'Left game successfully.',
+      })
+
     } catch (error) {
-      console.error('Error handling player leaving before game start:', error)
+      console.error('Error handling PlayerLeftBeforeGameStart:', error)
+      socket.emit('GameResponse', {
+        status: 'error',
+        message: 'Failed to handle player leaving.',
+      })
     }
   })
 
@@ -599,7 +625,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       const player1SocketIds = await getSocketIds(player1.email, 'sockets') || []
       const player2SocketIds = await getSocketIds(player2.email, 'sockets') || []
 
-      // Notify both players about the match - use the same format as OneVsOne
+      // Notify both players about the match
       const matchData = {
         gameId,
         hostEmail: player1.email,
@@ -614,13 +640,27 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       console.log(`Match created: ${player1.email} vs ${player2.email} (Game ID: ${gameId})`)
 
-      // Wait a moment for players to prepare, then start the game
+      // Give players a moment to prepare, then start the game
       setTimeout(async () => {
         try {
-          // Verify game room still exists
-          const currentGameRoomData = await redis.get(`game_room:${gameId}`)
-          if (!currentGameRoomData) {
-            console.log(`Game room ${gameId} no longer exists, skipping game start`)
+          // Double-check that both players are still connected before starting
+          const currentPlayer1SocketIds = await getSocketIds(player1.email, 'sockets') || []
+          const currentPlayer2SocketIds = await getSocketIds(player2.email, 'sockets') || []
+          
+          if (currentPlayer1SocketIds.length === 0 || currentPlayer2SocketIds.length === 0) {
+            console.log(`One or both players disconnected before game start: ${player1.email}, ${player2.email}`)
+            
+            // Clean up the game room
+            await redis.del(`game_room:${gameId}`)
+            gameRooms.delete(gameId)
+            
+            // Notify the remaining player
+            const remainingPlayerSocketIds = currentPlayer1SocketIds.length > 0 ? currentPlayer1SocketIds : currentPlayer2SocketIds
+            io.to(remainingPlayerSocketIds).emit('MatchmakingPlayerLeft', {
+              gameId,
+              message: 'Opponent disconnected before the game started.'
+            })
+            
             return
           }
 
@@ -631,10 +671,10 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
           gameRooms.set(gameId, gameRoom)
 
           // Notify players that game is starting
-          io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
+          io.to([...currentPlayer1SocketIds, ...currentPlayer2SocketIds]).emit('GameStarting', {
             gameId,
-            hostEmail: player1.email,
-            guestEmail: player2.email,
+            hostEmail: gameRoom.hostEmail,
+            guestEmail: gameRoom.guestEmail,
             hostData: player1Data,
             guestData: player2Data,
             startedAt: gameRoom.startedAt
@@ -644,7 +684,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         } catch (error) {
           console.error(`Error starting game ${gameId}:`, error)
         }
-      }, 3000) // 3 second delay before starting
+      }, 2000) // 2 second delay to give players time to prepare
 
     } catch (error) {
       console.error('Error in tryMatchPlayers:', error)
@@ -712,7 +752,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       const player1Data = getPlayerData(player1User)
       const player2Data = getPlayerData(player2User)
 
-      // Create a new game room using the same system as OneVsOne
+      // Create the game room immediately when both players are matched
       const gameId = uuidv4()
       const gameRoom: GameRoomData = {
         gameId,
@@ -728,16 +768,13 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       // Save game room to Redis and add to gameRooms map
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
-      
-      // Import gameRooms from types to add the room
-      const { gameRooms } = await import('./game.socket.types')
       gameRooms.set(gameId, gameRoom)
 
       // Get socket IDs for both players
       const player1SocketIds = await getSocketIds(player1.email, 'sockets') || []
       const player2SocketIds = await getSocketIds(player2.email, 'sockets') || []
 
-      // Notify both players about the match - use the same format as OneVsOne
+      // Notify both players about the match
       const matchData = {
         gameId,
         hostEmail: player1.email,
@@ -752,13 +789,27 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       console.log(`Match created: ${player1.email} vs ${player2.email} (Game ID: ${gameId})`)
 
-      // Wait a moment for players to prepare, then start the game
+      // Give players a moment to prepare, then start the game
       setTimeout(async () => {
         try {
-          // Verify game room still exists
-          const currentGameRoomData = await redis.get(`game_room:${gameId}`)
-          if (!currentGameRoomData) {
-            console.log(`Game room ${gameId} no longer exists, skipping game start`)
+          // Double-check that both players are still connected before starting
+          const currentPlayer1SocketIds = await getSocketIds(player1.email, 'sockets') || []
+          const currentPlayer2SocketIds = await getSocketIds(player2.email, 'sockets') || []
+          
+          if (currentPlayer1SocketIds.length === 0 || currentPlayer2SocketIds.length === 0) {
+            console.log(`One or both players disconnected before game start: ${player1.email}, ${player2.email}`)
+            
+            // Clean up the game room
+            await redis.del(`game_room:${gameId}`)
+            gameRooms.delete(gameId)
+            
+            // Notify the remaining player
+            const remainingPlayerSocketIds = currentPlayer1SocketIds.length > 0 ? currentPlayer1SocketIds : currentPlayer2SocketIds
+            io.to(remainingPlayerSocketIds).emit('MatchmakingPlayerLeft', {
+              gameId,
+              message: 'Opponent disconnected before the game started.'
+            })
+            
             return
           }
 
@@ -769,10 +820,10 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
           gameRooms.set(gameId, gameRoom)
 
           // Notify players that game is starting
-          io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
+          io.to([...currentPlayer1SocketIds, ...currentPlayer2SocketIds]).emit('GameStarting', {
             gameId,
-            hostEmail: player1.email,
-            guestEmail: player2.email,
+            hostEmail: gameRoom.hostEmail,
+            guestEmail: gameRoom.guestEmail,
             hostData: player1Data,
             guestData: player2Data,
             startedAt: gameRoom.startedAt
@@ -782,7 +833,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         } catch (error) {
           console.error(`Error starting game ${gameId}:`, error)
         }
-      }, 3000) // 3 second delay before starting
+      }, 2000) // 2 second delay to give players time to prepare
 
     } catch (error) {
       console.error('Error in tryMatchPlayersInSession:', error)
