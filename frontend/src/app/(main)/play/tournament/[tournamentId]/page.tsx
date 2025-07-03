@@ -483,7 +483,7 @@ export default function TournamentGamePage() {
                 <div key={participant.email} className="bg-[#2a2f3a] rounded-lg p-4 border border-gray-600">
                   <div className="w-16 h-16 rounded-full bg-[#3a3f4a] overflow-hidden mx-auto mb-3 border-2 border-green-500">
                     <Image 
-                      src={"/" + participant.avatar} 
+                      src={participant.avatar} 
                       alt={participant.nickname} 
                       width={64}
                       height={64}

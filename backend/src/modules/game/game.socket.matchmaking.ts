@@ -617,6 +617,10 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         createdAt: Date.now()
       }
 
+      // Remove both players from the global matchmaking queue to prevent duplicate matches
+      removeFromQueueByEmail(player1.email)
+      removeFromQueueByEmail(player2.email)
+
       // Save game room to Redis and add to gameRooms map
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
       
@@ -750,6 +754,10 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         status: 'accepted', // Start with 'accepted' status like OneVsOne
         createdAt: Date.now()
       }
+
+      // Remove both players from the global matchmaking queue to prevent duplicate matches
+      removeFromQueueByEmail(player1.email)
+      removeFromQueueByEmail(player2.email)
 
       // Save game room to Redis and add to gameRooms map
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))

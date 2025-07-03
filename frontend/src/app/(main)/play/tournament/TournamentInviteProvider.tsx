@@ -100,7 +100,7 @@ export function TournamentInviteProvider({ children }) {
             <h3 className="text-white text-xl font-semibold mb-4">Tournament Invitation</h3>
             <div className="flex items-center space-x-4 mb-4">
               <Image
-                src={"/" + receivedInvite.hostData?.avatar || "/avatar/Default.svg"}
+                src={receivedInvite.hostData?.avatar || "/avatar/Default.svg"}
                 alt={receivedInvite.hostData?.username || "Host"}
                 width={48}
                 height={48}
