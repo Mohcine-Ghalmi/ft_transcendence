@@ -9,7 +9,7 @@ import { toast } from 'react-toastify'
 const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
   const { user } = useAuthStore()
   const [avatarPreview, setAvatarPreview] = useState<string | null>(
-    `/images/${user.avatar}` || null
+    `${user.avatar}` || null
   )
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)

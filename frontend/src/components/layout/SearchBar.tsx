@@ -82,7 +82,7 @@ const Notification = ({ user }) => {
       <div className="flex items-center">
         <div className="relative">
           <Image
-            src={`/images/${user.avatar}`}
+            src={`${user.avatar}`}
             alt="avatar"
             width={100}
             height={100}

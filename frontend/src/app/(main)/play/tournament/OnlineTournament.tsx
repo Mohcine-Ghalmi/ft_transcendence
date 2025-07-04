@@ -674,7 +674,7 @@ export default function OnlineTournament() {
   }, [tournamentId, user?.email]);
 
   return (
-    <div className="h-full w-full text-white bg-[#0f1419]">
+    <div className="h-full w-full text-white">
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl">
           <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
