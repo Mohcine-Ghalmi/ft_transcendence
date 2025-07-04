@@ -66,7 +66,7 @@ const ChatHeader = () => {
       <div className="flex items-center">
         <div className="relative">
           <Image
-            src={user.avatar}
+            src={`/images/${user.avatar}`}
             width={100}
             height={100}
             alt="avatar"
@@ -280,6 +280,8 @@ const Chat = () => {
     updateChat,
     chatHeader,
     handleNewMessage,
+    tmp,
+    selectedConversation,
   } = useChatStore()
   const { user } = useAuthStore()
 
@@ -298,7 +300,6 @@ const Chat = () => {
       return res.data.filename
     } catch (err: any) {
       setImage(null)
-      console.log(err)
       toast.warning(err.response.data.message)
       return null
     }
@@ -309,6 +310,8 @@ const Chat = () => {
       return
 
     setIsLoading(true)
+    const user = useAuthStore.getState().user
+
     const sendingText = {
       isSending: true,
       senderId: user.id,
@@ -316,47 +319,48 @@ const Chat = () => {
       message: message.trim(),
       image: image ? 'general-img-landscape.png' : null,
       date: new Date(),
-      sender: {
-        ...user,
-      },
-      receiver: {
-        id: selectedConversationId,
-        ...chatHeader,
-      },
+      sender: { ...user },
+      receiver: { id: selectedConversationId, ...chatHeader },
     }
 
-    // const cryptedMessage = CryptoJs.AES.encrypt(
-    //   JSON.stringify(sendingText),
-    //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-    // )
     handleNewMessage(sendingText)
-
-    if (chatSocket && chatSocket.connected) {
+    try {
       let imagePath = null
       if (image) {
         imagePath = await hostImage(image)
+        if (!imagePath) {
+          setIsLoading(false)
+          const newConv = selectedConversation.filter(
+            (conv) => conv.isSending !== true
+          )
+          tmp(newConv)
+          return
+        }
       }
-      // const data = CryptoJs.AES.encrypt(
-      //   JSON.stringify({
-      //     recieverId: selectedConversationId,
-      //     senderEmail: user.email,
-      //     senderId: user.id,
-      //     message: message.trim(),
-      //     image: imagePath,
-      //   }),
-      //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-      // ).toString()
 
-      chatSocket.emit('sendMessage', {
-        recieverId: selectedConversationId,
-        senderEmail: user.email,
-        senderId: user.id,
-        message: message.trim(),
-        image: imagePath,
-      })
-      setMessage('')
-    } else {
-      toast.error('Socket connection issue. Please try again.')
+      const payload = CryptoJs.AES.encrypt(
+        JSON.stringify({
+          recieverId: selectedConversationId,
+          senderEmail: user.email,
+          senderId: user.id,
+          message: message.trim(),
+          image: imagePath,
+        }),
+        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+      ).toString()
+
+      if (chatSocket?.connected) {
+        chatSocket.emit('sendMessage', payload)
+
+        setMessage('')
+        setImage(null)
+      } else {
+        toast.error('Socket connection issue. Please try again.')
+      }
+    } catch (err) {
+      toast.error('Failed to send message.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -369,18 +373,15 @@ const Chat = () => {
     }
 
     const onMessageSent = () => {
-      console.log('Message sent successfully')
       setIsLoading(false)
     }
 
     const setupListeners = () => {
-      setTimeout(() => {
-        if (chatSocket?.connected) {
-          chatSocket.on('failedToSendMessage', onFailedToSendMessage)
-          chatSocket.on('messageSent', onMessageSent)
-          updateChat()
-        }
-      }, 100)
+      if (chatSocket?.connected) {
+        chatSocket.on('failedToSendMessage', onFailedToSendMessage)
+        chatSocket.on('messageSent', onMessageSent)
+        updateChat()
+      }
     }
 
     setupListeners()

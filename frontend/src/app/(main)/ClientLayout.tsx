@@ -2,7 +2,6 @@
 
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { Header } from '@/components/layout/Header'
-import { SessionProvider } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ToastContainer } from 'react-toastify'
@@ -41,7 +40,7 @@ export default function ClientLayout({
   }, [user])
 
   return (
-    <SessionProvider>
+    <>
       <ToastContainer theme="dark" stacked />
       <Header />
       {!socketConnected ? (
@@ -51,6 +50,6 @@ export default function ClientLayout({
       ) : (
         children
       )}
-    </SessionProvider>
+    </>
   )
 }

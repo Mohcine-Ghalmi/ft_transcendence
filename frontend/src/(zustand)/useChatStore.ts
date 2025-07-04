@@ -15,7 +15,7 @@ interface ChatStoreType {
   getMessage: (id: number, offset: number) => Promise<void>
   updateChat: () => Promise<void>
   offUpdateChat: () => Promise<void>
-  handleNewMessage: (newMessage: any) => Promise<void>
+  handleNewMessage: (newMessage: any) => void
   handleChangeConversations: (newConversation: any) => void
   setSelectedConversationId: (id: number | undefined) => void
   setSearchedUsers: (conversations: any[]) => void
@@ -23,6 +23,7 @@ interface ChatStoreType {
   disconnectChatSocket: () => void
   setConversations: (data: any) => void
   setChatHeader: (data: any) => void
+  tmp: (data: any) => void
 }
 
 export let chatSocket: Socket | null = null
@@ -35,6 +36,10 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   pageNumber: 0,
   isLoading: true,
   selectedConversationId: undefined,
+
+  tmp: (data) => {
+    set({ selectedConversation: data })
+  },
 
   setConversations: (data: any) => {
     set({ conversations: data })
@@ -106,12 +111,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     }
   },
 
-  handleNewMessage: async (newMessage: any) => {
-    // const bytes = CryptoJs.AES.decrypt(
-    //   data,
-    //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-    // )
-    // const newMessage = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+  handleNewMessage: (newMessage: any) => {
     if (!newMessage) return
 
     const { selectedConversationId, selectedConversation } = get()
@@ -127,25 +127,25 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       chatSocket.emit('seenMessage', { myId, id: selectedConversationId })
     }
 
-    if (selectedConversationId)
+    if (selectedConversationId) {
       set({
-        selectedConversation: get().selectedConversation.filter(
+        selectedConversation: selectedConversation.filter(
           (conv: any) => conv.isSending !== true
         ),
       })
+    }
 
     if (
-      (user.id === newMessage.sender.id ||
-        user.id === newMessage.receiver.id) &&
+      (myId === newMessage.sender.id || myId === newMessage.receiver.id) &&
       (selectedConversationId === newMessage.receiver.id ||
         selectedConversationId === newMessage.sender.id)
     ) {
-      const newChat = await newMessage
       set({
-        selectedConversation: [...selectedConversation, newChat],
+        selectedConversation: [...get().selectedConversation, newMessage],
       })
     }
   },
+
   handleChangeConversations: (newConversation: any) => {
     set({ conversations: newConversation })
   },

@@ -177,7 +177,7 @@ export default function Signup() {
         !newErrors.confirmPassword
 
       if (isStep1Valid) {
-        await register({ ...formData, avatar: '/avatar/Default.avif' })
+        await register({ ...formData, avatar: 'default.avif' })
       }
       //   setCurrentStep(2)
       // }
@@ -195,11 +195,7 @@ export default function Signup() {
   const handleSkipFor2FA = async () => {
     console.log('Skipping 2FA for now')
     // Complete registration without 2FA
-    await register({ ...formData, avatar: '/avatar/Default.avif' })
-    console.log('Form submitted:', {
-      ...formData,
-      avatar: imageName.current,
-    })
+    await register({ ...formData, avatar: 'default.avif' })
   }
 
   const handle2FaVerify = (e: any) => {

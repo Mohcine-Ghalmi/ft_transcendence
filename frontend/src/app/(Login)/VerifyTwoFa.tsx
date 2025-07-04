@@ -19,8 +19,8 @@ const VerifyTwoFa = ({ email }) => {
         email,
       })
       setUser(res.data)
+      setHidePopUp(false)
       router.push('/dashboard')
-      setHidePopUp(true)
     } catch (error) {
       console.error('Error verifying 2FA code:', error)
       toast.warning('Verification failed. Please try again.')

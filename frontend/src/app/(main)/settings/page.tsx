@@ -1,14 +1,15 @@
 'use client'
-import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { axiosInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { useRef, useState } from 'react'
 import FA2 from '@/app/(Login)/FA2'
 import Image from 'next/image'
 import { CustomError } from '../../(Login)/SignUp/SingUpPage'
+import { toast } from 'react-toastify'
 
 const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
   const { user } = useAuthStore()
   const [avatarPreview, setAvatarPreview] = useState<string | null>(
-    user.avatar || null
+    `/images/${user.avatar}` || null
   )
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -152,7 +153,7 @@ const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
 }
 
 const Settings = () => {
-  const { user } = useAuthStore()
+  const { user, setUser } = useAuthStore()
   const [formData, setFormData] = useState({
     username: user.username,
     email: user.email,
@@ -166,7 +167,7 @@ const Settings = () => {
     avatar: '',
   })
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const newErrors = {
       ...errors,
@@ -184,10 +185,51 @@ const Settings = () => {
       !newErrors.login &&
       !newErrors.avatar
     if (!isStep1Valid) {
-      console.log('Form has errors:', newErrors)
       return
     }
-    console.log({ ...formData, type: user.type })
+    const hostImage = async (image: File) => {
+      const formData = new FormData()
+      formData.append('file', image)
+      try {
+        const res = await axiosInstance.post('/api/chat/postImage', formData)
+        toast.success('Image uploaded successfully')
+        return res.data.filename
+      } catch (err: any) {
+        console.log(err)
+        toast.warning(err.response.data.message)
+        return null
+      }
+    }
+    try {
+      let avatarUrl = null
+      if (formData.avatar && formData.avatar instanceof File) {
+        avatarUrl = await hostImage(formData.avatar)
+        if (!avatarUrl) {
+          toast.error('Failed to upload avatar')
+          return
+        }
+      }
+      const res = await axiosInstance.post('/api/users/updateUserData', {
+        username: formData.username,
+        email: formData.email,
+        login: formData.login,
+        avatar: avatarUrl,
+        type: user.type,
+      })
+      if (res.data.status) {
+        toast.success('User data updated successfully')
+        setUser({
+          ...user,
+          email: formData.email,
+          username: formData.username,
+          login: formData.login,
+          avatar: avatarUrl ? avatarUrl : user.avatar,
+        })
+      }
+      console.log(res)
+    } catch (error) {
+      console.error('Error updating user data:', error)
+    }
   }
 
   const validateField = (name: string, value: string | File | null) => {

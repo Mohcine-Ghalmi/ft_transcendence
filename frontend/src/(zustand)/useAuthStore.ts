@@ -220,8 +220,8 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning('Login failed')
         return false
       }
-      if (res.data.status) {
-        const { ...user } = res.data
+      const { status, ...user } = res.data
+      if (status) {
         set({ user, isAuthenticated: true })
         get().connectSocket()
         window.location.href = `${FRON_END}/dashboard`

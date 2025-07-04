@@ -1,8 +1,0 @@
-{
-  "/(Login)/page": "app/(Login)/page.js",
-  "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
-  "/(main)/play/OneVsOne/page": "app/(main)/play/OneVsOne/page.js",
-  "/(main)/play/page": "app/(main)/play/page.js",
-  "/(main)/play/tournament/page": "app/(main)/play/tournament/page.js",
-  "/_not-found/page": "app/_not-found/page.js"
-}

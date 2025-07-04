@@ -204,7 +204,7 @@ export const Header = () => {
           <Link href="/profile">
             <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
               <Image
-                src={user.avatar}
+                src={`/images/${user.avatar}`}
                 alt="Profile"
                 width={40}
                 height={40}

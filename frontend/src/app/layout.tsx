@@ -35,10 +35,8 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <GameInviteProvider >
-          <TournamentInviteProvider>
-            {children}
-          </TournamentInviteProvider>
+        <GameInviteProvider>
+          <TournamentInviteProvider>{children}</TournamentInviteProvider>
         </GameInviteProvider>
       </body>
     </html>

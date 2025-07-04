@@ -5,6 +5,10 @@ import type { CreateUserInput, LoginInput } from './user.schema'
 import { createUser, getUserByEmail } from './user.service'
 import { verifyPassword } from '../../utils/hash'
 import { sign } from 'crypto'
+import {
+  downloadAndSaveImage,
+  generateUniqueFilename,
+} from '../chat/chat.controller'
 
 // {
 //   id: '116279595096157558841',
@@ -58,10 +62,13 @@ async function googleRegister(req: FastifyRequest, rep: FastifyReply) {
     const { given_name, family_name, picture, email, name } = user
     let existingUser = await getUserByEmail(email)
     if (!existingUser) {
+      const fileName = generateUniqueFilename(picture)
+      await downloadAndSaveImage(picture, fileName)
+
       existingUser = await createUser({
         email: email,
         username: name || `${given_name} ${family_name}`,
-        avatar: picture || '/avatar/Default.avif',
+        avatar: fileName || 'default.avif',
         type: 1,
         password: '',
         login: '',
@@ -104,10 +111,12 @@ export async function fortyTwoRegister(req: FastifyRequest, rep: FastifyReply) {
     const { email, login, first_name, last_name, usual_full_name, image } = user
     let existingUser = await getUserByEmail(email)
     if (!existingUser) {
+      const fileName = generateUniqueFilename(image?.link)
+      await downloadAndSaveImage(image?.link, fileName)
       existingUser = await createUser({
         email: email,
         username: usual_full_name || `${first_name} ${last_name}`,
-        avatar: image?.link || '/avatar/Default.avif',
+        avatar: fileName || 'default.avif',
         type: 2,
         password: '',
         login: login || '',
@@ -144,7 +153,7 @@ export async function registerHandler(
         .code(404)
         .send({ status: false, message: 'User Already exists' })
 
-    if (!body.avatar) body.avatar = '/avatar/Default.avif'
+    if (!body.avatar) body.avatar = 'default.avif'
     const user = await createUser(body)
     const { password, salt, ...tmp } = user as any
     const accessToken = signJWT(tmp, rep)
@@ -155,7 +164,6 @@ export async function registerHandler(
     return rep.code(500).send({ message: 'Internal server error' })
   }
 }
-
 
 export async function loginHandler(
   req: FastifyRequest<{ Body: LoginInput }>,
@@ -190,7 +198,7 @@ export async function loginHandler(
     const { password, salt, ...rest } = user
 
     const accessToken = signJWT(rest, rep)
-    return rep.code(200).send({ ...rest, accessToken })
+    return rep.code(200).send({ ...rest, accessToken, status: true })
   }
 
   return rep.code(401).send({ message: 'Invalid Email or password' })

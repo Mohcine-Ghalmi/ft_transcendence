@@ -16,7 +16,6 @@ export default async function RootLayout({
   if (accessToken) {
     try {
       user = jwt.verify(accessToken.value, process.env.JWT_SECRET!)
-      console.log('authenticated user:', user)
     } catch (err) {
       console.error('Invalid JWT:', err)
       cookieStore.delete('accessToken')

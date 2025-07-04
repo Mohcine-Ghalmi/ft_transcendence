@@ -43,8 +43,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/images/:path*',
+        destination: 'http://localhost:5005/images/:path*',
+      },
+    ]
+  },
 }
-
-
 
 export default nextConfig

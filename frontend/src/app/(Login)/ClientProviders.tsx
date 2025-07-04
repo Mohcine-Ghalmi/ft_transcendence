@@ -1,7 +1,6 @@
 'use client'
 
 import { ToastContainer } from 'react-toastify'
-import { SessionProvider } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
@@ -20,9 +19,9 @@ export default function ClientProviders({
 
   if (user) return null
   return (
-    <SessionProvider>
+    <>
       <ToastContainer theme="dark" stacked />
       {children}
-    </SessionProvider>
+    </>
   )
 }
