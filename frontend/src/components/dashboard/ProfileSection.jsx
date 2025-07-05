@@ -8,7 +8,7 @@ export const ProfileSection = () => {
     <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 lg:gap-6 xl:gap-8 2xl:gap-10">
       <div className="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 xl:w-36 xl:h-36 2xl:w-40 2xl:h-40 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center overflow-hidden">
         <Image
-          src={`${user.avatar}`}
+          src={`/images/${user.avatar}`}
           alt="user profile"
           width={200}
           height={200}

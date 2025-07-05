@@ -22,7 +22,7 @@ export default function TournamentGamePage() {
   const [isStartingGame, setIsStartingGame] = useState(false)
   const [opponent, setOpponent] = useState<any>(null)
   const [waitingForOpponent, setWaitingForOpponent] = useState(false)
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null)
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null)
   
   // Use refs to track the latest state in event handlers
   const gameStartedRef = useRef(gameStarted)
@@ -46,7 +46,7 @@ export default function TournamentGamePage() {
       if (!authorizationChecked) {
         setIsAuthorized(false)
         setAuthorizationChecked(true)
-        router.push('/play/tournament')
+        router.push('/play')
       }
     }, 5000) // 5 second timeout
 
@@ -77,7 +77,7 @@ export default function TournamentGamePage() {
         }
       } else {
         setIsAuthorized(false)
-        router.push('/play/tournament')
+        router.push('/play')
       }
     }
 
@@ -214,6 +214,12 @@ export default function TournamentGamePage() {
           type: 'info' 
         })
         setTimeout(() => setNotification(null), 3000)
+        // If the current user is the one who left, redirect to play page
+        if (data.leftPlayer?.email === user?.email) {
+          setNotification({ message: 'You have been removed from the tournament.', type: 'info' })
+          setTimeout(() => setNotification(null), 2000)
+          router.push('/play')
+        }
       }
     }
 
@@ -224,7 +230,8 @@ export default function TournamentGamePage() {
           message: data.reason || 'Tournament was canceled.', 
           type: 'info' 
         })
-        setTimeout(() => setNotification(null), 3000)
+        setTimeout(() => setNotification(null), 2000)
+        router.push('/play')
       }
     }
 
@@ -292,7 +299,7 @@ export default function TournamentGamePage() {
 
     isLeavingGameRef.current = true
     socket.emit('LeaveTournament', { tournamentId, playerEmail: user?.email })
-    router.push('/play/tournament')
+    router.push('/play')
   }
 
   const handleStartMatch = () => {
@@ -328,6 +335,85 @@ export default function TournamentGamePage() {
     }
   };
 
+  // Add after main hooks
+  useEffect(() => {
+    if (!socket || !tournamentId || !user?.email || !tournamentData) return;
+
+    let currentPath = window.location.pathname;
+
+    const handleRouteChange = () => {
+      const newPath = window.location.pathname;
+      if (currentPath && newPath !== currentPath) {
+        if (isHost) {
+          // Host leaves lobby before tournament starts
+          socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
+        } else {
+          // Player leaves lobby before tournament starts
+          socket.emit('LeaveTournament', { tournamentId, playerEmail: user.email });
+        }
+      }
+      setTimeout(() => { currentPath = newPath; }, 0);
+    };
+
+    const handleBeforeUnload = () => {
+      if (isHost) {
+        socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
+      } else {
+        socket.emit('LeaveTournament', { tournamentId, playerEmail: user.email });
+      }
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Listen for pushState and replaceState
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+      originalPushState.apply(history, args);
+      handleRouteChange();
+    };
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(history, args);
+      handleRouteChange();
+    };
+
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, [socket, tournamentId, user?.email, isHost, tournamentData]);
+
+  // Add Cancel Tournament button for host in the lobby
+  const handleCancelTournament = () => {
+    if (!socket || !tournamentId || !isHost) return;
+    
+    socket.emit('CancelTournament', { tournamentId, hostEmail: user?.email });
+    setNotification({ message: 'Canceling tournament...', type: 'info' });
+  };
+
+  // Listen for TournamentCancelResponse
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleTournamentCancelResponse = (data: any) => {
+      if (data.status === 'success') {
+        setNotification({ message: 'Tournament canceled successfully.', type: 'success' });
+      } else {
+        setNotification({ message: data.message || 'Failed to cancel tournament.', type: 'error' });
+      }
+    };
+    
+    socket.on('TournamentCancelResponse', handleTournamentCancelResponse);
+    
+    return () => {
+      socket.off('TournamentCancelResponse', handleTournamentCancelResponse);
+    };
+  }, [socket]);
+
   // Loading state
   if (!authorizationChecked) {
     return (
@@ -347,7 +433,7 @@ export default function TournamentGamePage() {
         <div className="text-center">
           <p className="text-red-400 text-lg mb-4">You are not authorized to join this tournament.</p>
           <button
-            onClick={() => router.push('/play/tournament')}
+            onClick={() => router.push('/play')}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
           >
             Back to Tournaments
@@ -391,7 +477,7 @@ export default function TournamentGamePage() {
             <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
               <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden mx-auto mb-4 border-2 border-blue-500">
                 <Image 
-                  src={user?.avatar || '/avatar/Default.svg'} 
+                  src={`/images/${user?.avatar}` || '/avatar/Default.svg'} 
                   alt={user?.name || 'You'} 
                   width={96}
                   height={96}
@@ -406,7 +492,7 @@ export default function TournamentGamePage() {
             <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
               <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden mx-auto mb-4 border-2 border-green-500">
                 <Image 
-                  src={opponent?.avatar || '/avatar/Default.svg'} 
+                  src={`/images/${opponent?.avatar}` || '/avatar/Default.svg'} 
                   alt={opponent?.nickname || 'Opponent'} 
                   width={96}
                   height={96}
@@ -445,7 +531,8 @@ export default function TournamentGamePage() {
         {/* Notification */}
         {notification && (
           <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
-            notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
+            notification.type === 'success' ? 'bg-green-600 text-white' :
+            notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
           }`}>
             {notification.message}
           </div>
@@ -483,7 +570,7 @@ export default function TournamentGamePage() {
                 <div key={participant.email} className="bg-[#2a2f3a] rounded-lg p-4 border border-gray-600">
                   <div className="w-16 h-16 rounded-full bg-[#3a3f4a] overflow-hidden mx-auto mb-3 border-2 border-green-500">
                     <Image 
-                      src={participant.avatar} 
+                      src={`/images/${participant.avatar}`} 
                       alt={participant.nickname} 
                       width={64}
                       height={64}
@@ -527,6 +614,17 @@ export default function TournamentGamePage() {
               <p className="text-center text-yellow-400">
                 Waiting for {tournamentData.size - tournamentData.participants.length} more players...
               </p>
+            )}
+
+            {tournamentData?.status === 'lobby' && isHost && (
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={handleCancelTournament}
+                  className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg transition-colors"
+                >
+                  Cancel Tournament
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -584,7 +682,7 @@ export default function TournamentGamePage() {
             <h2 className="text-2xl font-semibold text-white mb-4">Tournament Complete!</h2>
             <p className="text-gray-300 mb-6">The tournament has finished.</p>
             <button
-              onClick={() => router.push('/play/tournament')}
+              onClick={() => router.push('/play')}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
             >
               Back to Tournaments

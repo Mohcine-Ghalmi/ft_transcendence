@@ -22,10 +22,9 @@ interface OnlinePlayModeProps {
   onInvitePlayer: (player: Player) => void;
   pendingInvites: Map<string, any>;
   sentInvites: Map<string, any>;
-  backendAvailable: boolean;
 }
 
-const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, backendAvailable }: OnlinePlayModeProps & { friends: Player[] }) => {
+const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends }: OnlinePlayModeProps & { friends: Player[] }) => {
   const [searchQuery, setSearchQuery] = useState('');
   // Use the same filtering logic as OneVsOne
   const filteredPlayers = friends.filter(player =>
@@ -50,20 +49,7 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, 
       {/* Online Players List */}
       <div className="space-y-3 max-h-96 overflow-y-auto">
         <h4 className="text-white text-lg font-medium mb-3">Online Players</h4>
-        {!backendAvailable && (
-          <div className="text-center py-8 mb-6 bg-red-900/20 border border-red-500/30 rounded-lg">
-            <p className="text-red-400 text-lg mb-2">Backend server is not available</p>
-            <p className="text-gray-400 text-sm mb-4">
-              Please make sure the backend server is running on port 5005
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        )}
+
         {filteredPlayers.length > 0 ? (
           filteredPlayers.map((player: Player, index: number) => (
             <PlayerListItem
@@ -78,7 +64,7 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, 
             <p className="text-gray-400 text-lg mb-4">
               {searchQuery ? 'No players found matching your search.' : 'No friends online right now.'}
             </p>
-            {!searchQuery && backendAvailable && (
+            {!searchQuery && (
               <div className="space-y-2">
                 <p className="text-gray-500 text-sm">
                   Make sure you have friends added to your account.
@@ -107,7 +93,7 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
         <Image 
-          src={player.avatar} 
+          src={`/images/${player.avatar}`} 
           alt={player.login || "zahay"} 
           width={40}  
           height={40}
@@ -187,7 +173,6 @@ export default function OnlineTournament() {
   const [champion, setChampion] = useState(null);
   const [tournaments, setTournaments] = useState([]);
   const [friends, setFriends] = useState<Player[]>([]);
-  const [backendAvailable, setBackendAvailable] = useState(true);
   const [isInviting, setIsInviting] = useState(false);
   const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null);
   const [inviteId, setInviteId] = useState<string | null>(null);
@@ -213,21 +198,11 @@ export default function OnlineTournament() {
     };
   }, []);
 
-  // Fetch friends from backend (like OneVsOne)
   useEffect(() => {
     async function fetchFriends() {
       if (!user?.email) return;
       
       try {
-        // First check if backend is running
-        const healthRes = await fetch('http://localhost:5005/healthcheck');
-        if (!healthRes.ok) {
-          setBackendAvailable(false);
-          setFriends([]);
-          return;
-        }
-        
-        setBackendAvailable(true);
         const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
         
         if (!res.ok) {
@@ -582,7 +557,7 @@ export default function OnlineTournament() {
   };
 
   // Handle tournament creation response
-  useEffect(() => {
+  useEffect(() => {0
     socket = getSocketInstance();
     if (!socket) return;
     
@@ -806,7 +781,6 @@ export default function OnlineTournament() {
                 pendingInvites={pendingInvites}
                 sentInvites={sentInvites}
                 friends={friends}
-                backendAvailable={backendAvailable}
               />
             </div>
           )}
@@ -837,7 +811,7 @@ export default function OnlineTournament() {
                     <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                         <Image 
-                          src={player.avatar} 
+                          src={`/images/${player.avatar}`} 
                           alt={player.login} 
                           width={48} 
                           height={48}

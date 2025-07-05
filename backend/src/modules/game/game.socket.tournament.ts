@@ -693,6 +693,63 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
     }
   });
 
+  // Cancel tournament (host only)
+  socket.on('CancelTournament', async (data: { tournamentId: string; hostEmail: string }) => {
+    try {
+      const { tournamentId, hostEmail } = data;
+      if (!tournamentId || !hostEmail) return socket.emit('TournamentCancelResponse', { status: 'error', message: 'Missing info.' });
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      if (!tournamentData) return socket.emit('TournamentCancelResponse', { status: 'error', message: 'Tournament not found.' });
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      
+      // Check if user is the host
+      if (tournament.hostEmail !== hostEmail) {
+        return socket.emit('TournamentCancelResponse', { status: 'error', message: 'Only the host can cancel the tournament.' });
+      }
+      
+      // Check if tournament is in lobby state
+      if (tournament.status !== 'lobby') {
+        return socket.emit('TournamentCancelResponse', { status: 'error', message: 'Tournament is not in lobby state.' });
+      }
+      
+      // Update tournament status to canceled
+      tournament.status = 'canceled';
+      tournament.endedAt = Date.now();
+      
+      // Update tournament in Redis
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      
+      // Notify all participants that tournament is canceled
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      // Emit tournament canceled event to all participants
+      io.to(allSocketIds).emit('TournamentCanceled', {
+        tournamentId,
+        tournament,
+        reason: 'Host canceled the tournament'
+      });
+      
+      // Redirect all participants to play page
+      io.to(allSocketIds).emit('RedirectToPlay', {
+        message: 'Tournament was canceled by the host.'
+      });
+      
+      socket.emit('TournamentCancelResponse', { status: 'success', message: 'Tournament canceled successfully.' });
+      
+    } catch (error) {
+      socket.emit('TournamentCancelResponse', { status: 'error', message: 'Failed to cancel tournament.' });
+    }
+  });
+
   // Leave tournament
   socket.on('LeaveTournament', async (data: { tournamentId: string; playerEmail: string }) => {
     try {

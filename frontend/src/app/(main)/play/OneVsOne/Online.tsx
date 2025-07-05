@@ -151,7 +151,6 @@ export default function OnlineMatch() {
   const [isInviting, setIsInviting] = useState(false);
   const [gameState, setGameState] = useState('idle'); // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
   const [isHost, setIsHost] = useState(false);
-  const [backendAvailable, setBackendAvailable] = useState(true);
   const [notification, setNotification] = useState({ message: '', type: 'info' });
   
   const { user } = useAuthStore();
@@ -620,7 +619,6 @@ export default function OnlineMatch() {
       if (!user?.email) return;
       
       try {
-        setBackendAvailable(true);
         const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
         
         if (!res.ok) {
@@ -815,22 +813,6 @@ export default function OnlineMatch() {
                 {/* Online Players Section */}
                 <div className="mb-8">
                   <h2 className="text-2xl font-semibold text-white mb-6">Online Players</h2>
-                  
-                  {!backendAvailable && (
-                    <div className="text-center py-8 mb-6 bg-red-900/20 border border-red-500/30 rounded-lg">
-                      <p className="text-red-400 text-lg mb-2">Backend server is not available</p>
-                      <p className="text-gray-400 text-sm mb-4">
-                        Please make sure the backend server is running on port 5005
-                      </p>
-                      <button
-                        onClick={() => window.location.reload()}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  )}
-                  
                   <div className="space-y-2">
                     {filteredPlayers.length > 0 ? (
                       filteredPlayers.map((player, index) => (
@@ -846,7 +828,7 @@ export default function OnlineMatch() {
                         <p className="text-gray-400 text-lg mb-4">
                           {searchQuery ? 'No players found matching your search.' : 'No friends online right now.'}
                         </p>
-                        {!searchQuery && backendAvailable && (
+                        {!searchQuery && (
                           <div className="space-y-2">
                             <p className="text-gray-500 text-sm">
                               Make sure you have friends added to your account.
