@@ -19,7 +19,7 @@ const ParticipantItem = ({ player, removeParticipant, changeParticipantName, cha
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-gray-700/50">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-gray-600">
         <Image 
-          src={player.avatar} 
+          src={`/images/${player.avatar}`} 
           alt={player.name} 
           width={40}  
           height={40}
@@ -347,6 +347,25 @@ const LocalTournamentMode = () => {
     setPlayingMatch(null);
   };
 
+  // Start matches for current round
+  const startCurrentRoundMatches = () => {
+    const currentRoundMatches = matches.filter(m => 
+      m.round === currentRound && 
+      m.state === MATCH_STATES.WAITING && 
+      m.player1 && 
+      m.player2
+    );
+    
+    if (currentRoundMatches.length === 0) {
+      alert('No matches ready to start in the current round.');
+      return;
+    }
+    
+    // Start the first available match
+    const firstMatch = currentRoundMatches[0];
+    setPlayingMatch(firstMatch);
+  };
+
   return (
     <div className="h-full w-full text-white">
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
@@ -458,7 +477,7 @@ const LocalTournamentMode = () => {
                     <div className="mb-6">
                       <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-green-500 mx-auto mb-4">
                         <Image 
-                          src={matchWinner.avatar || '/avatar/Default.svg'} 
+                          src={`/images/${matchWinner.avatar}` || '/avatar/Default.svg'} 
                           alt={matchWinner.name || 'Winner'} 
                           width={96} 
                           height={96}
@@ -504,6 +523,43 @@ const LocalTournamentMode = () => {
                     onAdvanceRound={advanceRound}
                     canAdvance={canAdvanceRound()}
                   />
+                  
+                  {/* Start Matches Button */}
+                  <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+                    <h3 className="text-xl font-semibold text-white mb-4">Tournament Controls</h3>
+                    <div className="flex flex-wrap gap-4">
+                      <button
+                        onClick={startCurrentRoundMatches}
+                        disabled={matches.filter(m => 
+                          m.round === currentRound && 
+                          m.state === MATCH_STATES.WAITING && 
+                          m.player1 && 
+                          m.player2
+                        ).length === 0}
+                        className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                          matches.filter(m => 
+                            m.round === currentRound && 
+                            m.state === MATCH_STATES.WAITING && 
+                            m.player1 && 
+                            m.player2
+                          ).length > 0
+                            ? 'bg-green-600 hover:bg-green-700 text-white'
+                            : 'bg-gray-600 cursor-not-allowed text-gray-400'
+                        }`}
+                      >
+                        Start Next Match
+                      </button>
+                      <div className="text-gray-300 text-sm flex items-center">
+                        {matches.filter(m => 
+                          m.round === currentRound && 
+                          m.state === MATCH_STATES.WAITING && 
+                          m.player1 && 
+                          m.player2
+                        ).length} matches waiting in Round {currentRound + 1}
+                      </div>
+                    </div>
+                  </div>
+                  
                   <TournamentBracket
                     participants={participants}
                     tournamentSize={tournamentSize}
@@ -520,7 +576,7 @@ const LocalTournamentMode = () => {
                         <div key={player.id} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-gray-600">
                           <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                             <Image 
-                              src={player.avatar || '/avatar/Default.svg'} 
+                              src={`/images/${player.avatar}`} 
                               alt={player.name} 
                               width={48} 
                               height={48}
@@ -552,7 +608,7 @@ const LocalTournamentMode = () => {
                   <div className="bg-gradient-to-b from-yellow-400 to-yellow-600 p-2 rounded-full mb-6">
                     <div className="w-32 h-32 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-yellow-500">
                       <Image 
-                        src={champion?.avatar || '/avatar/Default.svg'} 
+                        src={`/images/${champion?.avatar}`} 
                         alt={champion?.name || 'Champion'} 
                         width={128} 
                         height={128}

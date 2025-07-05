@@ -112,6 +112,7 @@ export async function setupSocketIO(server: FastifyInstance) {
         
         // Store user email on socket for later use
         ;(socket as any).userEmail = email
+        socket.data = { userEmail: email }
         
         const redisKeys = await redis.keys('sockets:*')
 

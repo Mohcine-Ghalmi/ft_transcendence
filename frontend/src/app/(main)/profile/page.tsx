@@ -48,7 +48,7 @@ const TopProfile = ({ user }) => {
   return (
     <div className="w-full flex items-center justify-center flex-col">
       <Image
-        src={`${user.avatar}`}
+        src={`/images/${user.avatar}`}
         alt="profile"
         width={1000}
         height={1000}

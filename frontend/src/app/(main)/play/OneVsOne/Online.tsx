@@ -7,6 +7,7 @@ import { PlayerCard } from './Locale';
 import { useGameInvite } from './GameInviteProvider';
 import { PingPongGame } from '../game/PingPongGame';
 import CryptoJS from 'crypto-js';
+import Image from 'next/image';
 
 export const PlayerListItem = ({ player, onInvite, isInviting }) => {
   const isAvailable = player.GameStatus === 'Available';
@@ -15,10 +16,12 @@ export const PlayerListItem = ({ player, onInvite, isInviting }) => {
     <div className="flex items-center justify-between p-4 hover:bg-[#1a1d23] rounded-lg transition-colors">
       <div className="flex items-center space-x-4">
         <div className="relative">
-          <img
-            src={player.avatar}
+          <Image
+            src={`/images/${player.avatar}`}
             alt={player.name}
             className="w-12 h-12 rounded-full object-cover"
+            width={48}
+            height={48}
           />
         </div>
         <div>

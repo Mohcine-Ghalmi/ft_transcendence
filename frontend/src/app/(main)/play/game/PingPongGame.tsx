@@ -919,7 +919,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Player 1 - Left Column */}
             <div className="flex items-center gap-2 sm:gap-3 justify-start">
               <img
-                src={safePlayer1.avatar}
+                src={`/images/${safePlayer1.avatar}`}
                 alt={safePlayer1.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
@@ -947,7 +947,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                 <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{safePlayer2.nickname}</p>
               </div>
               <img
-                src={safePlayer2.avatar}
+                src={`/images/${safePlayer2.avatar}`}
                 alt={safePlayer2.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />

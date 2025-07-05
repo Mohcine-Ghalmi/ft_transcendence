@@ -25,6 +25,9 @@ export interface GameRoomData {
   winner?: string
   loser?: string
   leaver?: string
+  // Tournament properties (optional)
+  tournamentId?: string
+  matchId?: string
 }
 
 export interface GameState {
@@ -111,6 +114,7 @@ export interface Tournament {
   createdAt: number;
   startedAt?: number;
   endedAt?: number;
+  winner?: TournamentParticipant;
 }
 
 export interface TournamentParticipant {
@@ -129,4 +133,6 @@ export interface TournamentMatch {
   player2?: TournamentParticipant;
   state: 'waiting' | 'in_progress' | 'player1_win' | 'player2_win' | 'completed';
   winner?: TournamentParticipant;
+  loser?: TournamentParticipant;
+  gameRoomId?: string;
 } 

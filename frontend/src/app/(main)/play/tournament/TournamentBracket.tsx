@@ -720,6 +720,8 @@ const TournamentBracket = ({
         return 'border-green-400 bg-green-900/30'
       case MATCH_STATES.PLAYER2_WIN:
         return 'border-green-400 bg-green-900/30'
+      case MATCH_STATES.WAITING:
+        return 'border-indigo-400/50 bg-gray-700/50'
       default:
         return 'border-indigo-400/50 bg-gray-700/50'
     }
@@ -761,6 +763,39 @@ const TournamentBracket = ({
     if (match.state === MATCH_STATES.IN_PROGRESS)
       return 'bg-yellow-900/30 animate-pulse'
     return 'bg-gray-700/30'
+  }
+
+  const getMatchStatusText = (match) => {
+    if (!match) return 'TBD'
+    
+    switch (match.state) {
+      case MATCH_STATES.WAITING:
+        return 'Waiting'
+      case MATCH_STATES.IN_PROGRESS:
+        return 'Playing'
+      case MATCH_STATES.PLAYER1_WIN:
+        return 'Completed'
+      case MATCH_STATES.PLAYER2_WIN:
+        return 'Completed'
+      default:
+        return 'TBD'
+    }
+  }
+
+  const getMatchStatusColor = (match) => {
+    if (!match) return 'bg-gray-600/70 text-gray-200'
+    
+    switch (match.state) {
+      case MATCH_STATES.WAITING:
+        return 'bg-yellow-600/70 text-yellow-200'
+      case MATCH_STATES.IN_PROGRESS:
+        return 'bg-blue-600/70 text-blue-200'
+      case MATCH_STATES.PLAYER1_WIN:
+      case MATCH_STATES.PLAYER2_WIN:
+        return 'bg-green-600/70 text-green-200'
+      default:
+        return 'bg-gray-600/70 text-gray-200'
+    }
   }
 
   const getMatch = (roundIndex, matchIndex) => {

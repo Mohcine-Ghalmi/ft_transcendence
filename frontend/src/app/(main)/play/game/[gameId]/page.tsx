@@ -581,7 +581,7 @@ export default function GamePage() {
               <div className="mb-8">
                 <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
                   <img
-                    src={user?.avatar || '/avatar/Default.svg'}
+                    src={`/images/${user?.avatar}`}
                     alt={user?.username}
                     className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
                   />
@@ -601,7 +601,7 @@ export default function GamePage() {
               <div className="mb-8">
                 <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
                   <img
-                    src={opponent.avatar}
+                    src={`/images/${opponent.avatar}`}
                     alt={opponent.username}
                     className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
                   />

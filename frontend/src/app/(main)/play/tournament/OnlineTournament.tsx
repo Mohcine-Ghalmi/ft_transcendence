@@ -359,6 +359,35 @@ export default function OnlineTournament() {
     setTournamentState('in_progress');
   };
 
+  // Start matches for current round
+  const startCurrentRoundMatches = () => {
+    const currentRoundMatches = matches.filter(m => 
+      m.round === currentRound && 
+      m.state === MATCH_STATES.WAITING && 
+      m.player1 && 
+      m.player2
+    );
+    
+    if (currentRoundMatches.length === 0) {
+      alert('No matches ready to start in the current round.');
+      return;
+    }
+    
+    // For online tournaments, we would typically send socket events to start matches
+    // For now, we'll just simulate starting the first match
+    const firstMatch = currentRoundMatches[0];
+    console.log('Starting match:', firstMatch);
+    
+    // Update match state to in_progress
+    setMatches(prevMatches => 
+      prevMatches.map(match => 
+        match.id === firstMatch.id 
+          ? { ...match, state: MATCH_STATES.IN_PROGRESS }
+          : match
+      )
+    );
+  };
+
   // Tournament invite handler (encrypt and emit)
   const handleInvitePlayer = async (player: Player) => {
     if (participants.length >= tournamentSize) {
@@ -794,6 +823,42 @@ export default function OnlineTournament() {
                 onAdvanceRound={advanceRound}
                 canAdvance={canAdvanceRound()}
               />
+              
+              {/* Start Matches Button */}
+              <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
+                <h3 className="text-xl font-semibold text-white mb-4">Tournament Controls</h3>
+                <div className="flex flex-wrap gap-4">
+                  <button
+                    onClick={startCurrentRoundMatches}
+                    disabled={matches.filter(m => 
+                      m.round === currentRound && 
+                      m.state === MATCH_STATES.WAITING && 
+                      m.player1 && 
+                      m.player2
+                    ).length === 0}
+                    className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                      matches.filter(m => 
+                        m.round === currentRound && 
+                        m.state === MATCH_STATES.WAITING && 
+                        m.player1 && 
+                        m.player2
+                      ).length > 0
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : 'bg-[#2a2f3a] cursor-not-allowed text-gray-400 border border-[#3a3f4a]'
+                    }`}
+                  >
+                    Start Next Match
+                  </button>
+                  <div className="text-gray-300 text-sm flex items-center">
+                    {matches.filter(m => 
+                      m.round === currentRound && 
+                      m.state === MATCH_STATES.WAITING && 
+                      m.player1 && 
+                      m.player2
+                    ).length} matches waiting in Round {currentRound + 1}
+                  </div>
+                </div>
+              </div>
               
               <TournamentBracket
                 participants={participants}

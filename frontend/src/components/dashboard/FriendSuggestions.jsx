@@ -82,7 +82,7 @@ const Friend = ({ user }) => {
       >
         <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 xl:w-18 xl:h-18 rounded-full overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600">
           <img
-            src={`${user.avatar}`}
+            src={`/images/${user.avatar}`}
             alt={user.username}
             className="w-full h-full object-cover"
           />

@@ -180,6 +180,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
   socket.on('AcceptTournamentInvite', async (data: { inviteId: string; inviteeEmail: string }) => {
     try {
       const { inviteId, inviteeEmail } = data;
+      console.log('[Tournament] AcceptTournamentInvite received:', { inviteId, inviteeEmail });
+      
       if (!inviteId || !inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Missing info.' });
       const inviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`);
       if (!inviteData) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invite expired.' });
@@ -221,6 +223,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       if (typeof user.parse === 'function') {
         userData = user.parse(user);
       }
+      
       // Add player to tournament
       const newParticipant: TournamentParticipant = {
         email: inviteeEmail,
@@ -235,7 +238,10 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Update tournament in Redis
       await redis.setex(`${TOURNAMENT_PREFIX}${invite.tournamentId}`, 3600, JSON.stringify(tournament));
       
-      // Notify all tournament participants
+      console.log('[Tournament] Participant added to tournament:', newParticipant);
+      console.log('[Tournament] Updated tournament participants:', tournament.participants);
+      
+      // Get all socket IDs for all participants (including the new one)
       const allParticipantEmails = tournament.participants.map(p => p.email);
       const allSocketIds = [];
       
@@ -244,9 +250,11 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         allSocketIds.push(...socketIds);
       }
       
-      // Notify host of acceptance
-      const hostSocketIds = await getSocketIds(invite.hostEmail, 'sockets') || [];
-      io.to(hostSocketIds).emit('TournamentInviteAccepted', { 
+      console.log('[Tournament] Emitting TournamentInviteAccepted to all participants:', allParticipantEmails);
+      console.log('[Tournament] Socket IDs to notify:', allSocketIds);
+      
+      // Emit to ALL participants (including host and new participant)
+      io.to(allSocketIds).emit('TournamentInviteAccepted', { 
         inviteId, 
         inviteeEmail,
         tournamentId: invite.tournamentId,
@@ -254,16 +262,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         tournament
       });
       
-      // Notify the accepted player
-      const guestSocketIds = await getSocketIds(inviteeEmail, 'sockets') || [];
-      io.to(guestSocketIds).emit('TournamentInviteAccepted', { 
-        inviteId, 
-        inviteeEmail,
-        tournamentId: invite.tournamentId,
-        tournament
-      });
-      
-      // Notify all participants about tournament update
+      // Also emit TournamentUpdated to ensure all participants get the latest data
       io.to(allSocketIds).emit('TournamentUpdated', {
         tournamentId: invite.tournamentId,
         tournament
@@ -278,7 +277,11 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         });
       }
       
+      // Send success response to the accepting player
+      socket.emit('TournamentInviteResponse', { status: 'success', message: 'Joined tournament successfully.' });
+      
     } catch (error) {
+      console.error('[Tournament] Error accepting tournament invite:', error);
       socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to accept tournament invite.' });
     }
   });
@@ -331,28 +334,47 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
   socket.on('StartTournament', async (data: { tournamentId: string; hostEmail: string }) => {
     try {
       const { tournamentId, hostEmail } = data;
-      if (!tournamentId || !hostEmail) return socket.emit('TournamentStartResponse', { status: 'error', message: 'Missing info.' });
+      console.log('[Tournament] StartTournament event received:', { tournamentId, hostEmail });
+      
+      if (!tournamentId || !hostEmail) {
+        console.log('[Tournament] Missing info, emitting error response');
+        return socket.emit('TournamentStartResponse', { status: 'error', message: 'Missing info.' });
+      }
       
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
-      if (!tournamentData) return socket.emit('TournamentStartResponse', { status: 'error', message: 'Tournament not found.' });
+      if (!tournamentData) {
+        console.log('[Tournament] Tournament not found, emitting error response');
+        return socket.emit('TournamentStartResponse', { status: 'error', message: 'Tournament not found.' });
+      }
       
       const tournament: Tournament = JSON.parse(tournamentData);
+      console.log('[Tournament] Tournament data retrieved:', { 
+        status: tournament.status, 
+        participants: tournament.participants.length,
+        size: tournament.size,
+        hostEmail: tournament.hostEmail 
+      });
       
       // Check if user is the host
       if (tournament.hostEmail !== hostEmail) {
+        console.log('[Tournament] User is not host, emitting error response');
         return socket.emit('TournamentStartResponse', { status: 'error', message: 'Only the host can start the tournament.' });
       }
       
       // Check if tournament is in lobby state
       if (tournament.status !== 'lobby') {
+        console.log('[Tournament] Tournament not in lobby state, emitting error response');
         return socket.emit('TournamentStartResponse', { status: 'error', message: 'Tournament is not in lobby state.' });
       }
       
       // Check if tournament is full
       if (tournament.participants.length !== tournament.size) {
+        console.log('[Tournament] Tournament not full, emitting error response');
         return socket.emit('TournamentStartResponse', { status: 'error', message: `Tournament needs ${tournament.size} players to start.` });
       }
+      
+      console.log('[Tournament] All checks passed, creating tournament bracket');
       
       // Create tournament bracket
       const matches = createTournamentBracket(tournament.participants, tournament.size);
@@ -364,6 +386,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       
       // Update tournament in Redis
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      console.log('[Tournament] Tournament updated in Redis');
       
       // Notify all participants
       const allParticipantEmails = tournament.participants.map(p => p.email);
@@ -374,16 +397,424 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         allSocketIds.push(...socketIds);
       }
       
+      console.log('[Tournament] Emitting TournamentStarted to all participants:', allSocketIds);
       io.to(allSocketIds).emit('TournamentStarted', {
         tournamentId,
         tournament,
-        firstMatch: matches.find(m => m.round === 0 && m.state === 'waiting')
+        message: 'Tournament has started!'
       });
       
+      console.log('[Tournament] Emitting TournamentStartResponse to host');
       socket.emit('TournamentStartResponse', { status: 'success', message: 'Tournament started successfully.' });
+      console.log('[Tournament] TournamentStartResponse emitted successfully');
       
     } catch (error) {
+      console.error('[Tournament] Error starting tournament:', error);
       socket.emit('TournamentStartResponse', { status: 'error', message: 'Failed to start tournament.' });
+    }
+  });
+
+  // Start next round matches (host only) - starts all matches in current round directly
+  socket.on('StartNextRoundMatches', async (data: { tournamentId: string; hostEmail: string }) => {
+    try {
+      const { tournamentId, hostEmail } = data;
+      console.log('[Tournament] Starting next round matches:', { tournamentId, hostEmail });
+      
+      if (!tournamentId || !hostEmail) return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Missing info.' });
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      if (!tournamentData) return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Tournament not found.' });
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      console.log('[Tournament] Tournament data:', { 
+        status: tournament.status, 
+        participants: tournament.participants.length,
+        matches: tournament.matches.length 
+      });
+      
+      // Check if user is the host
+      if (tournament.hostEmail !== hostEmail) {
+        return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Only the host can start matches.' });
+      }
+      
+      // Check if tournament is in progress
+      if (tournament.status !== 'in_progress') {
+        return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Tournament is not in progress.' });
+      }
+      
+      // Find current round matches that are waiting
+      const currentRoundMatches = tournament.matches.filter(m => 
+        m.state === 'waiting' && m.player1 && m.player2
+      );
+      
+      console.log('[Tournament] Current round matches found:', currentRoundMatches.length);
+      
+      if (currentRoundMatches.length === 0) {
+        return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'No matches ready to start.' });
+      }
+      
+      // Start all matches directly without invitations
+      const startedMatches = [];
+      
+      for (const match of currentRoundMatches) {
+        console.log('[Tournament] Starting match directly:', { 
+          matchId: match.id, 
+          player1: match.player1?.email, 
+          player2: match.player2?.email 
+        });
+        
+        // Update match state to in_progress
+        match.state = 'in_progress';
+        
+        // Create game room for this match
+        const gameId = uuidv4();
+        const gameRoom: GameRoomData = {
+          gameId,
+          hostEmail: match.player1!.email,
+          guestEmail: match.player2!.email,
+          status: 'accepted',
+          createdAt: Date.now(),
+          tournamentId: tournamentId,
+          matchId: match.id
+        };
+        
+        // Save game room to Redis
+        await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom));
+        
+        // Import gameRooms from types to add the room
+        const { gameRooms } = await import('./game.socket.types');
+        gameRooms.set(gameId, gameRoom);
+        
+        // Get socket IDs for both players
+        const [player1SocketIds, player2SocketIds] = await Promise.all([
+          getSocketIds(match.player1!.email, 'sockets') || [],
+          getSocketIds(match.player2!.email, 'sockets') || []
+        ]);
+        
+        // Get user data for both players
+        const [player1User, player2User] = await Promise.all([
+          getUserByEmail(match.player1!.email),
+          getUserByEmail(match.player2!.email)
+        ]);
+        
+        if (!player1User || !player2User) {
+          console.log('[Tournament] Failed to fetch player data for match:', match.id);
+          continue;
+        }
+        
+        const player1Data = getPlayerData(player1User);
+        const player2Data = getPlayerData(player2User);
+        
+        // Send match data to both players
+        const matchData = {
+          gameId,
+          tournamentId,
+          matchId: match.id,
+          hostEmail: match.player1!.email,
+          guestEmail: match.player2!.email,
+          hostData: player1Data,
+          guestData: player2Data,
+          status: 'tournament_match_found',
+          message: 'Tournament match starting!'
+        };
+        
+        const allSocketIds = [...player1SocketIds, ...player2SocketIds];
+        console.log('[Tournament] Sending match data to sockets:', allSocketIds);
+        console.log('[Tournament] Player 1 socket IDs:', player1SocketIds);
+        console.log('[Tournament] Player 2 socket IDs:', player2SocketIds);
+        console.log('[Tournament] Match data being sent:', matchData);
+        
+        if (allSocketIds.length > 0) {
+          console.log('[Tournament] Emitting TournamentMatchGameStarted to sockets:', allSocketIds);
+          io.to(allSocketIds).emit('TournamentMatchGameStarted', matchData);
+          console.log('[Tournament] TournamentMatchGameStarted event emitted successfully');
+        } else {
+          console.log('[Tournament] No socket IDs found for players, cannot emit event');
+        }
+        
+        startedMatches.push({
+          matchId: match.id,
+          gameId,
+          player1: match.player1!,
+          player2: match.player2!
+        });
+      }
+      
+      // Update tournament in Redis
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      
+      // Notify all tournament participants about match state changes
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      if (allSocketIds.length > 0) {
+        io.to(allSocketIds).emit('TournamentMatchesStarted', {
+          tournamentId,
+          matches: startedMatches,
+          tournament
+        });
+      }
+      
+      socket.emit('StartNextRoundMatchesResponse', { 
+        status: 'success', 
+        message: `Started ${startedMatches.length} matches. Players have been sent to their games.`,
+        matches: startedMatches
+      });
+      
+    } catch (error) {
+      console.error('[Tournament] Error starting next round matches:', error);
+      socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Failed to start matches.' });
+    }
+  });
+
+  // Accept tournament match invitation
+  socket.on('AcceptTournamentMatchInvitation', async (data: { invitationId: string; playerEmail: string }) => {
+    try {
+      const { invitationId, playerEmail } = data;
+      console.log('[Tournament] Accept invitation received:', { invitationId, playerEmail });
+      
+      // Get invitation data
+      const invitationData = await redis.get(`tournament_match_invite:${invitationId}`);
+      if (!invitationData) {
+        return socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'Invitation expired.' });
+      }
+      
+      const invitation = JSON.parse(invitationData);
+      console.log('[Tournament] Invitation data:', invitation);
+      
+      // Check if player is in this match
+      if (invitation.player1Email !== playerEmail && invitation.player2Email !== playerEmail) {
+        return socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'You are not in this match.' });
+      }
+      
+      // Mark this player as accepted
+      const acceptKey = `tournament_match_accept:${invitationId}:${playerEmail}`;
+      await redis.setex(acceptKey, 30, 'accepted');
+      
+      console.log('[Tournament] Player accepted:', playerEmail);
+      
+      // Check if both players have accepted
+      const player1Accepted = await redis.get(`tournament_match_accept:${invitationId}:${invitation.player1Email}`);
+      const player2Accepted = await redis.get(`tournament_match_accept:${invitationId}:${invitation.player2Email}`);
+      
+      console.log('[Tournament] Acceptance status:', { 
+        player1: invitation.player1Email, 
+        player1Accepted: !!player1Accepted,
+        player2: invitation.player2Email, 
+        player2Accepted: !!player2Accepted 
+      });
+      
+      if (player1Accepted && player2Accepted) {
+        console.log('[Tournament] Both players accepted, creating game room');
+        
+        // Both players accepted, create the game room
+        const gameId = uuidv4();
+        const gameRoom: GameRoomData = {
+          gameId,
+          hostEmail: invitation.player1Email,
+          guestEmail: invitation.player2Email,
+          status: 'accepted',
+          createdAt: Date.now()
+        };
+        
+        // Save game room to Redis
+        await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom));
+        
+        // Import gameRooms from types to add the room
+        const { gameRooms } = await import('./game.socket.types');
+        gameRooms.set(gameId, gameRoom);
+        
+        // Get socket IDs for both players
+        const [player1SocketIds, player2SocketIds] = await Promise.all([
+          getSocketIds(invitation.player1Email, 'sockets') || [],
+          getSocketIds(invitation.player2Email, 'sockets') || []
+        ]);
+        
+        // Get user data for both players
+        const [player1User, player2User] = await Promise.all([
+          getUserByEmail(invitation.player1Email),
+          getUserByEmail(invitation.player2Email)
+        ]);
+        
+        if (!player1User || !player2User) {
+          return socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'Failed to fetch player data.' });
+        }
+        
+        const player1Data = getPlayerData(player1User);
+        const player2Data = getPlayerData(player2User);
+        
+        // Get tournament data
+        const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${invitation.tournamentId}`);
+        if (!tournamentData) {
+          return socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'Tournament not found.' });
+        }
+        
+        const tournament: Tournament = JSON.parse(tournamentData);
+        
+        // Find the match and update its state
+        const match = tournament.matches.find(m => m.id === invitation.matchId);
+        if (match) {
+          match.state = 'in_progress';
+          await redis.setex(`${TOURNAMENT_PREFIX}${invitation.tournamentId}`, 3600, JSON.stringify(tournament));
+        }
+        
+        // Notify both players about the tournament match game
+        const matchData = {
+          gameId,
+          tournamentId: invitation.tournamentId,
+          matchId: invitation.matchId,
+          hostEmail: invitation.player1Email,
+          guestEmail: invitation.player2Email,
+          hostData: player1Data,
+          guestData: player2Data,
+          status: 'tournament_match_found',
+          message: 'Tournament match starting!'
+        };
+        
+        const allSocketIds = [...player1SocketIds, ...player2SocketIds];
+        console.log('[Tournament] Sending match data to sockets:', allSocketIds);
+        
+        io.to(allSocketIds).emit('TournamentMatchGameStarted', matchData);
+        
+        // Notify all tournament participants about match state change
+        const allParticipantEmails = tournament.participants.map(p => p.email);
+        const allParticipantSocketIds = [];
+        
+        for (const email of allParticipantEmails) {
+          const socketIds = await getSocketIds(email, 'sockets') || [];
+          allParticipantSocketIds.push(...socketIds);
+        }
+        
+        io.to(allParticipantSocketIds).emit('TournamentMatchStarted', {
+          tournamentId: invitation.tournamentId,
+          matchId: invitation.matchId,
+          match,
+          tournament
+        });
+        
+        // Clean up invitation and acceptance data
+        await Promise.all([
+          redis.del(`tournament_match_invite:${invitationId}`),
+          redis.del(`tournament_match_accept:${invitationId}:${invitation.player1Email}`),
+          redis.del(`tournament_match_accept:${invitationId}:${invitation.player2Email}`)
+        ]);
+        
+        socket.emit('TournamentMatchInvitationResponse', { 
+          status: 'success', 
+          message: 'Match invitation accepted. Game room created!',
+          gameId,
+          matchData
+        });
+        
+      } else {
+        // Only one player accepted, notify the other player
+        const otherPlayerEmail = invitation.player1Email === playerEmail ? invitation.player2Email : invitation.player1Email;
+        const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || [];
+        
+        if (otherPlayerSocketIds.length > 0) {
+          io.to(otherPlayerSocketIds).emit('TournamentMatchInvitationUpdate', {
+            invitationId,
+            message: `${playerEmail} has accepted the match invitation. Waiting for your response...`
+          });
+        }
+        
+        socket.emit('TournamentMatchInvitationResponse', { 
+          status: 'success', 
+          message: 'Match invitation accepted. Waiting for opponent...'
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error accepting tournament match invitation:', error);
+      socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'Failed to accept invitation.' });
+    }
+  });
+
+  // Decline tournament match invitation
+  socket.on('DeclineTournamentMatchInvitation', async (data: { invitationId: string; playerEmail: string }) => {
+    try {
+      const { invitationId, playerEmail } = data;
+      console.log('[Tournament] Decline invitation received:', { invitationId, playerEmail });
+      
+      // Get invitation data
+      const invitationData = await redis.get(`tournament_match_invite:${invitationId}`);
+      if (!invitationData) {
+        return socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'Invitation expired.' });
+      }
+      
+      const invitation = JSON.parse(invitationData);
+      
+      // Check if player is in this match
+      if (invitation.player1Email !== playerEmail && invitation.player2Email !== playerEmail) {
+        return socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'You are not in this match.' });
+      }
+      
+      // Mark the declining player as eliminated and the other player as winner
+      const decliningPlayer = invitation.player1Email === playerEmail ? invitation.player1Email : invitation.player2Email;
+      const winningPlayer = invitation.player1Email === playerEmail ? invitation.player2Email : invitation.player1Email;
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${invitation.tournamentId}`);
+      if (!tournamentData) {
+        return socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'Tournament not found.' });
+      }
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      
+      // Find the match
+      const match = tournament.matches.find(m => m.id === invitation.matchId);
+      if (match) {
+        match.state = invitation.player1Email === playerEmail ? 'player2_win' : 'player1_win';
+        match.winner = tournament.participants.find(p => p.email === winningPlayer);
+        
+        // Mark declining player as eliminated
+        const decliningParticipant = tournament.participants.find(p => p.email === decliningPlayer);
+        if (decliningParticipant) {
+          decliningParticipant.status = 'eliminated';
+        }
+        
+        // Update tournament in Redis
+        await redis.setex(`${TOURNAMENT_PREFIX}${invitation.tournamentId}`, 3600, JSON.stringify(tournament));
+      }
+      
+      // Clean up invitation and acceptance data
+      await Promise.all([
+        redis.del(`tournament_match_invite:${invitationId}`),
+        redis.del(`tournament_match_accept:${invitationId}:${invitation.player1Email}`),
+        redis.del(`tournament_match_accept:${invitationId}:${invitation.player2Email}`)
+      ]);
+      
+      // Notify all participants about the decline
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      io.to(allSocketIds).emit('TournamentMatchDeclined', {
+        tournamentId: invitation.tournamentId,
+        matchId: invitation.matchId,
+        decliningPlayer: { email: decliningPlayer },
+        winningPlayer: { email: winningPlayer },
+        message: `${decliningPlayer} declined the match invitation and was eliminated`
+      });
+      
+      socket.emit('TournamentMatchInvitationResponse', { 
+        status: 'success', 
+        message: 'Match invitation declined. You have been eliminated from the tournament.'
+      });
+      
+    } catch (error) {
+      console.error('Error declining tournament match invitation:', error);
+      socket.emit('TournamentMatchInvitationResponse', { status: 'error', message: 'Failed to decline invitation.' });
     }
   });
 
@@ -594,6 +1025,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
   }) => {
     try {
       const { tournamentId, matchId, winnerEmail, loserEmail, playerEmail } = data;
+      console.log('[Tournament] Match result received:', { tournamentId, matchId, winnerEmail, loserEmail, playerEmail });
       
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
@@ -621,10 +1053,27 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         return socket.emit('TournamentMatchResponse', { status: 'error', message: 'Invalid winner.' });
       }
       
-      // Update loser status
+      // Update loser status and send them back to lobby
       const loserParticipant = tournament.participants.find(p => p.email === loserEmail);
       if (loserParticipant) {
         loserParticipant.status = 'eliminated';
+        
+        // Send loser back to lobby
+        const loserSocketIds = await getSocketIds(loserEmail, 'sockets') || [];
+        if (loserSocketIds.length > 0) {
+          io.to(loserSocketIds).emit('TournamentPlayerEliminated', {
+            tournamentId,
+            matchId,
+            message: 'You have been eliminated from the tournament. Returning to lobby...',
+            redirectTo: '/play'
+          });
+        }
+      }
+      
+      // Update winner status
+      const winnerParticipant = tournament.participants.find(p => p.email === winnerEmail);
+      if (winnerParticipant) {
+        winnerParticipant.status = 'accepted';
       }
       
       // Check if all matches in current round are complete
@@ -650,13 +1099,67 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         
         if (updatedTournament.status === 'completed') {
           // Tournament is complete
+          const winner = updatedTournament.participants.find(p => p.status === 'winner');
+          
+          // Send winner to lobby
+          if (winner) {
+            const winnerSocketIds = await getSocketIds(winner.email, 'sockets') || [];
+            if (winnerSocketIds.length > 0) {
+              io.to(winnerSocketIds).emit('TournamentCompleted', {
+                tournamentId,
+                tournament: updatedTournament,
+                winner,
+                message: 'Congratulations! You won the tournament!',
+                redirectTo: '/play'
+              });
+            }
+          }
+          
+          // Send host back to tournament management (even if they lost)
+          const hostSocketIds = await getSocketIds(updatedTournament.hostEmail, 'sockets') || [];
+          if (hostSocketIds.length > 0) {
+            io.to(hostSocketIds).emit('TournamentCompleted', {
+              tournamentId,
+              tournament: updatedTournament,
+              winner,
+              message: 'Tournament completed! You can still manage the tournament.',
+              redirectTo: `/play/tournament/${tournamentId}`
+            });
+          }
+          
+          // Notify all other participants
           io.to(allSocketIds).emit('TournamentCompleted', {
             tournamentId,
             tournament: updatedTournament,
-            winner: updatedTournament.participants.find(p => p.status === 'winner')
+            winner
           });
         } else {
-          // Next round started
+          // Next round started - advance winners to their next matches
+          const nextRound = currentRound + 1;
+          const nextRoundMatches = updatedTournament.matches.filter(m => m.round === nextRound);
+          
+          // Find winners and send them to their next matches
+          for (const nextMatch of nextRoundMatches) {
+            if (nextMatch.player1 && nextMatch.player2) {
+              // Both players are set, this match is ready
+              const player1SocketIds = await getSocketIds(nextMatch.player1.email, 'sockets') || [];
+              const player2SocketIds = await getSocketIds(nextMatch.player2.email, 'sockets') || [];
+              
+              // Send both players to their next match
+              const allMatchSocketIds = [...player1SocketIds, ...player2SocketIds];
+              if (allMatchSocketIds.length > 0) {
+                io.to(allMatchSocketIds).emit('TournamentNextMatchReady', {
+                  tournamentId,
+                  matchId: nextMatch.id,
+                  player1: nextMatch.player1,
+                  player2: nextMatch.player2,
+                  round: nextRound,
+                  message: `Round ${nextRound} match ready: ${nextMatch.player1.nickname} vs ${nextMatch.player2.nickname}`
+                });
+              }
+            }
+          }
+          
           io.to(allSocketIds).emit('TournamentRoundAdvanced', {
             tournamentId,
             tournament: updatedTournament,
@@ -689,6 +1192,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       socket.emit('TournamentMatchResponse', { status: 'success', message: 'Match result recorded.' });
       
     } catch (error) {
+      console.error('[Tournament] Error recording match result:', error);
       socket.emit('TournamentMatchResponse', { status: 'error', message: 'Failed to record match result.' });
     }
   });
@@ -844,6 +1348,198 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       
     } catch (error) {
       socket.emit('TournamentLeaveResponse', { status: 'error', message: 'Failed to leave tournament.' });
+    }
+  });
+
+  // Test tournament socket connection
+  socket.on('TestTournamentSocket', async (data: { tournamentId: string; playerEmail: string }) => {
+    try {
+      const { tournamentId, playerEmail } = data;
+      console.log('[Tournament] Test socket event received:', { tournamentId, playerEmail });
+      
+      // Get socket IDs for the player
+      const playerSocketIds = await getSocketIds(playerEmail, 'sockets') || [];
+      console.log('[Tournament] Player socket IDs:', playerSocketIds);
+      
+      // Send test message back
+      socket.emit('TestTournamentSocketResponse', {
+        status: 'success',
+        message: 'Socket connection working',
+        playerSocketIds,
+        playerEmail
+      });
+      
+      // Also send to all player sockets
+      if (playerSocketIds.length > 0) {
+        io.to(playerSocketIds).emit('TestTournamentSocketResponse', {
+          status: 'success',
+          message: 'Socket connection working for player',
+          playerSocketIds,
+          playerEmail
+        });
+      }
+      
+    } catch (error) {
+      console.error('[Tournament] Test socket error:', error);
+      socket.emit('TestTournamentSocketResponse', {
+        status: 'error',
+        message: 'Socket test failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Start tournament matches directly (for host) - starts all matches in current round
+  socket.on('StartTournamentMatches', async (data: { tournamentId: string; hostEmail: string }) => {
+    try {
+      const { tournamentId, hostEmail } = data;
+      console.log('[Tournament] Starting all matches for tournament:', tournamentId);
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      if (!tournamentData) return socket.emit('StartTournamentMatchesResponse', { status: 'error', message: 'Tournament not found.' });
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      console.log('[Tournament] Tournament data:', { 
+        status: tournament.status, 
+        participants: tournament.participants.length,
+        matches: tournament.matches.length 
+      });
+      
+      // Check if user is the host
+      if (tournament.hostEmail !== hostEmail) {
+        return socket.emit('StartTournamentMatchesResponse', { status: 'error', message: 'Only the host can start matches.' });
+      }
+      
+      // Check if tournament is in progress
+      if (tournament.status !== 'in_progress') {
+        return socket.emit('StartTournamentMatchesResponse', { status: 'error', message: 'Tournament is not in progress.' });
+      }
+      
+      // Find current round matches that are waiting
+      const currentRoundMatches = tournament.matches.filter(m => 
+        m.state === 'waiting' && m.player1 && m.player2
+      );
+      
+      console.log('[Tournament] Current round matches found:', currentRoundMatches.length);
+      
+      if (currentRoundMatches.length === 0) {
+        return socket.emit('StartTournamentMatchesResponse', { status: 'error', message: 'No matches ready to start.' });
+      }
+      
+      // Start all matches directly without invitations
+      const startedMatches = [];
+      
+      for (const match of currentRoundMatches) {
+        console.log('[Tournament] Starting match directly:', { 
+          matchId: match.id, 
+          player1: match.player1?.email, 
+          player2: match.player2?.email 
+        });
+        
+        // Update match state to in_progress
+        match.state = 'in_progress';
+        
+        // Create game room for this match
+        const gameId = uuidv4();
+        const gameRoom: GameRoomData = {
+          gameId,
+          hostEmail: match.player1!.email,
+          guestEmail: match.player2!.email,
+          status: 'accepted',
+          createdAt: Date.now(),
+          tournamentId: tournamentId,
+          matchId: match.id
+        };
+        
+        // Save game room to Redis
+        await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom));
+        
+        // Import gameRooms from types to add the room
+        const { gameRooms } = await import('./game.socket.types');
+        gameRooms.set(gameId, gameRoom);
+        
+        // Get socket IDs for both players
+        const [player1SocketIds, player2SocketIds] = await Promise.all([
+          getSocketIds(match.player1!.email, 'sockets') || [],
+          getSocketIds(match.player2!.email, 'sockets') || []
+        ]);
+        
+        // Get user data for both players
+        const [player1User, player2User] = await Promise.all([
+          getUserByEmail(match.player1!.email),
+          getUserByEmail(match.player2!.email)
+        ]);
+        
+        if (!player1User || !player2User) {
+          console.log('[Tournament] Failed to fetch player data for match:', match.id);
+          continue;
+        }
+        
+        const player1Data = getPlayerData(player1User);
+        const player2Data = getPlayerData(player2User);
+        
+        // Send match data to both players
+        const matchData = {
+          gameId,
+          tournamentId,
+          matchId: match.id,
+          hostEmail: match.player1!.email,
+          guestEmail: match.player2!.email,
+          hostData: player1Data,
+          guestData: player2Data,
+          status: 'tournament_match_found',
+          message: 'Tournament match starting!'
+        };
+        
+        const allSocketIds = [...player1SocketIds, ...player2SocketIds];
+        console.log('[Tournament] Sending match data to sockets:', allSocketIds);
+        
+        if (allSocketIds.length > 0) {
+          console.log('[Tournament] Emitting TournamentMatchGameStarted to sockets:', allSocketIds);
+          io.to(allSocketIds).emit('TournamentMatchGameStarted', matchData);
+          console.log('[Tournament] TournamentMatchGameStarted event emitted successfully');
+        } else {
+          console.log('[Tournament] No socket IDs found for players, cannot emit event');
+        }
+        
+        startedMatches.push({
+          matchId: match.id,
+          gameId,
+          player1: match.player1!,
+          player2: match.player2!
+        });
+      }
+      
+      // Update tournament in Redis
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      
+      // Notify all tournament participants about match state changes
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      if (allSocketIds.length > 0) {
+        io.to(allSocketIds).emit('TournamentMatchesStarted', {
+          tournamentId,
+          matches: startedMatches,
+          tournament
+        });
+      }
+      
+      socket.emit('StartTournamentMatchesResponse', { 
+        status: 'success', 
+        message: `Started ${startedMatches.length} matches. Players have been sent to their games.`,
+        matches: startedMatches
+      });
+      
+    } catch (error) {
+      console.error('[Tournament] Error starting tournament matches:', error);
+      socket.emit('StartTournamentMatchesResponse', { status: 'error', message: 'Failed to start matches.' });
     }
   });
 };

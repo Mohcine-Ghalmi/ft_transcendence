@@ -228,7 +228,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
 
   // Handle result popup completion
   const handleResultPopupComplete = () => {
-    setShowResultPopup(false);
+    setTimeout(() => setShowResultPopup(false), 0);
     if (pendingRedirect) {
       const { isWinner, winnerName, loserName } = pendingRedirect;
       if (isWinner) {
@@ -619,7 +619,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
                 <div className="flex items-center justify-center space-x-4 mb-6">
                   <div className="text-center">
                     <img
-                      src={user?.avatar || '/avatar/Default.svg'}
+                      src={`/images/${user?.avatar}`}
                       alt={user?.username || user?.login || 'You'}
                       className="w-16 h-16 rounded-full object-cover mx-auto mb-2"
                     />
@@ -628,7 +628,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
                   <div className="text-2xl text-white">VS</div>
                   <div className="text-center">
                     <img
-                      src={opponent.avatar || '/avatar/Default.svg'}
+                      src={`/images/${opponent?.avatar}`}
                       alt={opponent.name || opponent.login || 'Opponent'}
                       className="w-16 h-16 rounded-full object-cover mx-auto mb-2"
                     />

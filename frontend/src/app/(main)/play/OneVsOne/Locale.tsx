@@ -205,7 +205,7 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
       <div className="mb-8">
         <div className="relative w-36 h-36 md:w-48 md:h-48 mx-auto mb-6">
           <img
-            src={player.avatar}
+            src={`/images/${player.avatar}`}
             alt={player.login}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
             onError={(e: any) => {
