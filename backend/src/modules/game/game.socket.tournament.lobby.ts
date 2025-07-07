@@ -243,7 +243,7 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
       
       // Notify all remaining participants
-      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allParticipantEmails = tournament.participants.map((p: any) => p.email);
       const allSocketIds = [];
       
       for (const email of allParticipantEmails) {
@@ -296,7 +296,7 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
       
       // Notify all participants that tournament is canceled
-      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allParticipantEmails = tournament.participants.map((p: any) => p.email);
       const allSocketIds = [];
       
       for (const email of allParticipantEmails) {

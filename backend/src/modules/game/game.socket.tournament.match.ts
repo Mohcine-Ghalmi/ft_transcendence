@@ -53,7 +53,7 @@ export function registerTournamentMatchHandlers(socket: Socket, io: Server) {
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
       
       // Notify all participants
-      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allParticipantEmails = tournament.participants.map((p: any) => p.email);
       const allSocketIds: string[] = [];
       
       for (const email of allParticipantEmails) {

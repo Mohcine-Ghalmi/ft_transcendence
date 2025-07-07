@@ -262,16 +262,11 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         tournament
       });
       
-      // Also emit TournamentUpdated to ensure all participants get the latest data
-      io.to(allSocketIds).emit('TournamentUpdated', {
-        tournamentId: invite.tournamentId,
-        tournament
-      });
-      
       // Check if tournament is ready to start
       if (tournament.participants.length === tournament.size) {
         // Tournament is full, notify all participants
-        io.to(allSocketIds).emit('TournamentReady', {
+        console.log('[Tournament] Tournament is full, notifying all participants');
+        io.to(allSocketIds).emit('TournamentUpdated', {
           tournamentId: invite.tournamentId,
           tournament
         });
@@ -397,7 +392,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         allSocketIds.push(...socketIds);
       }
       
-      console.log('[Tournament] Emitting TournamentStarted to all participants:', allSocketIds);
+      console.log('[Tournament] Emitting TournamentStarted to all participants:', allSocketIds, allParticipantEmails);
       io.to(allSocketIds).emit('TournamentStarted', {
         tournamentId,
         tournament,
@@ -822,6 +817,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
   socket.on('JoinTournament', async (data: { tournamentId: string; playerEmail: string }) => {
     try {
       const { tournamentId, playerEmail } = data;
+      console.log('[Tournament] JoinTournament request:', { tournamentId, playerEmail });
+      
       if (!tournamentId || !playerEmail) return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Missing info.' });
       
       // Get tournament data
@@ -829,18 +826,27 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       if (!tournamentData) return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament not found.' });
       
       const tournament: Tournament = JSON.parse(tournamentData);
+      console.log('[Tournament] Tournament data for join:', { 
+        tournamentId, 
+        status: tournament.status, 
+        participants: tournament.participants.map(p => p.email),
+        requestingPlayer: playerEmail 
+      });
       
       // Check if player is a participant
       const participant = tournament.participants.find(p => p.email === playerEmail);
       if (!participant) {
+        console.log('[Tournament] Player not found in participants, rejecting join');
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'You are not a participant in this tournament.' });
       }
       
       // Check if tournament is in a valid state
       if (tournament.status === 'completed' || tournament.status === 'canceled') {
+        console.log('[Tournament] Tournament not active, rejecting join');
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament is no longer active.' });
       }
       
+      console.log('[Tournament] Join successful, sending tournament data');
       // Send tournament data to the player
       socket.emit('TournamentJoinResponse', { 
         status: 'success', 
@@ -853,6 +859,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       });
       
     } catch (error) {
+      console.error('[Tournament] Error in JoinTournament:', error);
       socket.emit('TournamentJoinResponse', { status: 'error', message: 'Failed to join tournament.' });
     }
   });

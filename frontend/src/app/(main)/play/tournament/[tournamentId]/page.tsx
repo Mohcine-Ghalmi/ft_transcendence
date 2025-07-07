@@ -903,62 +903,7 @@ export default function TournamentGamePage() {
           </div>
         )}
 
-        {/* Debug Tools */}
-        <div className="fixed top-4 left-4 z-50 space-y-2">
-          <button
-            onClick={() => {
-              console.log('[Tournament] Testing notification system');
-              setNotification({
-                type: 'success',
-                message: '🧪 Test notification - notification system is working!'
-              });
-              setTimeout(() => setNotification(null), 3000);
-            }}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-          >
-            🧪 Test Notification
-          </button>
-          
-          <button
-            onClick={() => {
-              console.log('[Tournament] Manual start test');
-              console.log('[Tournament] Socket connected:', !!socket);
-              console.log('[Tournament] Current notification state:', notification);
-              if (socket && user?.email) {
-                console.log('[Tournament] Emitting manual test event');
-                socket.emit('StartTournament', { tournamentId, hostEmail: user.email });
-              }
-            }}
-            className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-          >
-            🔧 Manual Start Test
-          </button>
-          
-          <button
-            onClick={() => {
-              console.log('[Tournament] Testing TournamentStartResponse event');
-              if (socket) {
-                console.log('[Tournament] Emitting test TournamentStartResponse');
-                socket.emit('TournamentStartResponse', { 
-                  status: 'success', 
-                  message: 'Test response from manual trigger' 
-                });
-              }
-            }}
-            className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-          >
-            🎯 Test Response Event
-          </button>
-          
-          <div className="bg-red-900/80 text-white p-3 rounded-lg text-xs max-w-xs">
-            <div><strong>Debug Info:</strong></div>
-            <div>Socket: {socket ? '✅' : '❌'}</div>
-            <div>User: {user?.email || 'None'}</div>
-            <div>Host: {isHost ? 'Yes' : 'No'}</div>
-            <div>Starting: {isStartingGame ? 'Yes' : 'No'}</div>
-            <div>Notification: {notification ? 'Active' : 'None'}</div>
-          </div>
-        </div>
+
 
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold text-white">
@@ -1072,30 +1017,6 @@ export default function TournamentGamePage() {
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
                   >
                     Start Next Round Matches
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log('Current tournament data:', tournamentData);
-                      console.log('Current user:', user);
-                      console.log('Socket connected:', !!socket);
-                    }}
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
-                  >
-                    Debug Info
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (socket && user?.email) {
-                        console.log('[Tournament] Testing socket connection for user:', user.email);
-                        socket.emit('TestTournamentSocket', { 
-                          tournamentId, 
-                          playerEmail: user.email 
-                        });
-                      }
-                    }}
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-2 rounded-lg transition-colors"
-                  >
-                    Test Socket
                   </button>
                 </div>
                 <p className="text-gray-300 text-sm mt-2">
