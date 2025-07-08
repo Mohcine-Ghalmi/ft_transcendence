@@ -21,22 +21,18 @@ export function TournamentInviteProvider({ children }) {
 
     // Socket event listeners for tournament invites
     const handleTournamentInviteReceived = (data) => {
-      console.log('Tournament invite received:', data);
       setReceivedInvite(data);
     };
     
     const handleTournamentInviteCanceled = (data) => {
-      console.log('Tournament invite canceled:', data);
       setReceivedInvite(null);
     };
 
     const handleTournamentInviteTimeout = (data) => {
-      console.log('Tournament invite timeout:', data);
       setReceivedInvite(null);
     };
 
     const handleTournamentInviteAccepted = (data) => {
-      console.log('Tournament invite accepted:', data);
       setReceivedInvite(null);
       // Only navigate if this is the invited player (not the host)
       if (data.inviteeEmail === user.email) {
@@ -45,7 +41,6 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentInviteDeclined = (data) => {
-      console.log('Tournament invite declined:', data);
       setReceivedInvite(null);
     };
 

@@ -691,13 +691,7 @@ const TournamentBracket = ({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const validTournamentSize = (() => {
-    let size = 2
-    while (size < participants.length) {
-      size *= 2
-    }
-    return size
-  })()
+  const validTournamentSize = tournamentSize
 
   const rounds = Math.log2(tournamentSize)
 

@@ -34,15 +34,12 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
   // Invite to tournament (encrypted)
   socket.on('InviteToTournament', async (encryptedData: string) => {
     try {
-      console.log('[Tournament Invite] Received encrypted invite data');
       const key = process.env.ENCRYPTION_KEY;
       if (!key) return socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Server config error.' });
       const bytes = CryptoJS.AES.decrypt(encryptedData, key);
       const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-      console.log('[Tournament Invite] Decrypted data:', decrypted);
       if (!decrypted) return socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Invalid invite data.' });
       const { tournamentId, hostEmail, inviteeEmail } = JSON.parse(decrypted);
-      console.log('[Tournament Invite] Parsed invite data:', { tournamentId, hostEmail, inviteeEmail });
       if (!tournamentId || !hostEmail || !inviteeEmail) return socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Missing info.' });
       
       // Validate users
@@ -59,37 +56,29 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       
       // Check for existing invite and clean up if expired
       const existingInviteId = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`);
-      console.log(`[Tournament Invite] Checking existing invite for ${inviteeEmail}:`, existingInviteId);
       if (existingInviteId) {
         const existingInviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${existingInviteId}`);
-        console.log(`[Tournament Invite] Existing invite data:`, existingInviteData);
         if (existingInviteData) {
           const existingInvite = JSON.parse(existingInviteData);
-          console.log(`[Tournament Invite] Parsed existing invite:`, existingInvite);
           // Check if the existing invite is from the same tournament
           if (existingInvite.tournamentId === tournamentId) {
-            console.log(`[Tournament Invite] Already invited to same tournament`);
             return socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Already invited to this tournament.' });
           }
           // Check if existing invite is expired (older than 30 seconds)
           if (Date.now() - existingInvite.createdAt > 30000) {
-            console.log(`[Tournament Invite] Cleaning up expired invite`);
             // Clean up expired invite
             await Promise.all([
               redis.del(`${TOURNAMENT_INVITE_PREFIX}${existingInviteId}`),
               redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`)
             ]);
           } else {
-            console.log(`[Tournament Invite] User has valid pending invite`);
             return socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Already has a pending invite.' });
           }
         } else {
-          console.log(`[Tournament Invite] Cleaning up stale invite reference`);
           // Clean up stale invite reference
           await redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`);
         }
       }
-      console.log(`[Tournament Invite] No existing invite found, proceeding with new invite`);
       
       // Check if guest is online
       const guestSocketIds = await getSocketIds(inviteeEmail, 'sockets') || [];
@@ -140,7 +129,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         }
       }, 30000);
     } catch (error) {
-      console.error('[Tournament Invite] Error:', error);
       socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Failed to send tournament invite.' });
     }
   });
@@ -175,7 +163,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       socket.emit('TournamentInviteResponse', { status: 'success', message: 'Tournament invite declined.' });
       
     } catch (error) {
-      console.error('[Tournament Invite] Error declining invite:', error);
       socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to decline invite.' });
     }
   });
@@ -209,7 +196,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       socket.emit('TournamentInviteResponse', { status: 'success', message: 'Tournament invite canceled.' });
       
     } catch (error) {
-      console.error('[Tournament Invite] Error canceling invite:', error);
       socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to cancel invite.' });
     }
   });

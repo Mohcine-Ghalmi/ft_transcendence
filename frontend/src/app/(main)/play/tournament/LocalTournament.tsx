@@ -308,7 +308,7 @@ const LocalTournamentMode = () => {
     //   return;
     // }
     
-    console.log('Game ended. Winner:', winner, 'Playing match:', playingMatch);
+
     
     // Enhanced validation with better error handling
     if (!playingMatch) {
