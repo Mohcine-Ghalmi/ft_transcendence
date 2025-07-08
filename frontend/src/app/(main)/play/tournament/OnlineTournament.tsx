@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import {MATCH_STATES} from '../../../../data/mockData';
 import TournamentBracket from './TournamentBracket';
@@ -154,6 +155,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
 // Main Tournament Component
 export default function OnlineTournament() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const [tournamentState, setTournamentState] = useState('setup'); // setup, lobby, in_progress
   const [tournamentName, setTournamentName] = useState('Online Pong Championship');
   const [tournamentSize, setTournamentSize] = useState(4);
@@ -314,8 +316,9 @@ export default function OnlineTournament() {
     }
   };
 
-  // Start tournament logic
+  // Start tournament logic - only creates bracket and redirects players
   const startTournament = () => {
+    console.log('🎯 START TOURNAMENT CLICKED by host');
     if (!tournamentId || !user?.email) {
       alert('Tournament not properly initialized!');
       return;
@@ -327,14 +330,19 @@ export default function OnlineTournament() {
       return;
     }
 
-    // Emit socket event to start tournament for all participants
+    console.log('🎯 HOST: Starting tournament (creating bracket only)');
+
+    // Emit socket event to start tournament - this creates the bracket but doesn't start matches
     socket.emit('StartTournament', {
       tournamentId: tournamentId,
       hostEmail: user.email
     });
 
-    // The backend will handle bracket creation and broadcast TournamentStarted event
-    // All participants will receive the event and be redirected to the tournament page
+    // Backend will:
+    // 1. Create tournament bracket with matches in "waiting" state
+    // 2. Broadcast TournamentStarted event to all participants
+    // 3. All participants will be redirected to the tournament bracket page
+    // 4. Host will see "Start Round" buttons to begin matches
   };
 
   // Start matches for current round
@@ -569,6 +577,8 @@ export default function OnlineTournament() {
     if (!socket) return;
     
     const handleTournamentCreated = (tournament: any) => {
+      console.log('🏗️ TOURNAMENT CREATED:', tournament);
+      console.log('🏗️ Setting state to lobby - NOT redirecting yet');
       setTournamentId(tournament.tournamentId);
       setTournamentState('lobby');
       setParticipants(tournament.participants.map((p: any) => ({
@@ -613,11 +623,13 @@ export default function OnlineTournament() {
     };
 
     const handleTournamentStarted = (data: any) => {
+      console.log('🎯 TOURNAMENT STARTED EVENT RECEIVED:', data);
+      console.log('🎯 About to redirect to bracket page');
       if (data.tournamentId === tournamentId) {
         setTournamentState('in_progress');
         setMatches(data.tournament.matches);
-        // Navigate all participants to tournament game page
-        window.location.href = `/play/tournament/${tournamentId}`;
+        // Navigate all participants to tournament game page using smooth navigation
+        router.push(`/play/tournament/${tournamentId}`);
       }
     };
 

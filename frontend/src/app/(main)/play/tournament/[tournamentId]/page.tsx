@@ -104,16 +104,9 @@ export default function TournamentGamePage() {
         setTournamentData(data.tournament)
         setIsHost(data.tournament.hostEmail === user?.email)
         
-        // Check if there's a current match for this player
-        if (data.currentMatch) {
-          setCurrentMatch(data.currentMatch)
-          const otherPlayer = data.currentMatch.player1?.email === user?.email ? 
-            data.currentMatch.player2 : data.currentMatch.player1
-          if (otherPlayer) {
-            setOpponent(otherPlayer)
-            setWaitingForOpponent(true)
-          }
-        }
+        // Do NOT automatically set up matches when joining tournament room
+        // Matches should only start when host clicks "Start Round"
+        console.log('✅ PARTICIPANT: Successfully joined tournament room. Viewing bracket.');
       } else {
         setIsAuthorized(false)
         router.push('/play')
@@ -180,26 +173,9 @@ export default function TournamentGamePage() {
           setNotification(null);
         }, 5000)
         
-        // Check if current user is in the first match
-        if (data.firstMatch) {
-          const isInFirstMatch = data.firstMatch.player1?.email === user?.email || 
-                                data.firstMatch.player2?.email === user?.email
-          
-          if (isInFirstMatch) {
-            console.log('⚔️ PARTICIPANT: User is in first match, setting up game');
-            setCurrentMatch(data.firstMatch)
-            const otherPlayer = data.firstMatch.player1?.email === user?.email ? 
-              data.firstMatch.player2 : data.firstMatch.player1
-            if (otherPlayer) {
-              setOpponent(otherPlayer)
-              setWaitingForOpponent(true)
-            }
-          } else {
-            console.log('👀 PARTICIPANT: User is not in first match, will wait for their turn');
-          }
-        } else {
-          console.log('ℹ️ PARTICIPANT: No first match data provided');
-        }
+        // Do NOT set up any matches yet - participants should just see the bracket
+        // Matches will only start when the host clicks "Start Current Round"
+        console.log('🎯 PARTICIPANT: Tournament started, viewing bracket. Waiting for host to start rounds.');
       } else {
         console.log('⚠️ PARTICIPANT: Tournament ID mismatch, ignoring event:', {
           receivedId: data.tournamentId,
@@ -415,21 +391,6 @@ export default function TournamentGamePage() {
       }
     }
 
-    const handleStartNextRoundMatchesResponse = (data: any) => {
-      console.log('Start Round Response:', data)
-      if (data.status === 'success') {
-        setNotification({
-          type: 'success',
-          message: data.message || '⚔️ Round started! All matches in this round are now active.'
-        });
-      } else {
-        setNotification({
-          type: 'error',
-          message: data.message || 'Failed to start round.'
-        });
-      }
-    };
-
     const handleStartCurrentRoundResponse = (data: any) => {
       console.log('Start Current Round Response:', data)
       if (data.status === 'success') {
@@ -470,6 +431,43 @@ export default function TournamentGamePage() {
       }
     };
 
+    const handleGameFound = (data: any) => {
+      if (data.gameRoomId) {
+        console.log('🎮 Game found, redirecting to game:', data);
+        
+        // Show notification
+        setNotification({
+          type: 'success',
+          message: `🎮 Your match is starting! Redirecting to game...`
+        });
+        
+        // Redirect to the game room
+        setTimeout(() => {
+          router.push(`/play/game/${data.gameRoomId}`);
+        }, 1500);
+      }
+    };
+
+    const handleTournamentRoundStarted = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        console.log('⚔️ Tournament round started:', data);
+        
+        // Update tournament data
+        if (data.tournament) {
+          setTournamentData(data.tournament);
+        }
+        
+        // Show notification about round start
+        setNotification({
+          type: 'success',
+          message: data.message || `⚔️ Round ${data.round + 1} has started!`
+        });
+        
+        // Clear notification after 5 seconds
+        setTimeout(() => setNotification(null), 5000);
+      }
+    };
+
     // Register all event listeners
     socket.on('TournamentJoinResponse', handleTournamentJoinResponse)
     socket.on('TournamentPlayerJoined', handleTournamentPlayerJoined)
@@ -481,13 +479,12 @@ export default function TournamentGamePage() {
     socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft)
     socket.on('TournamentCanceled', handleTournamentCanceled)
     socket.on('RedirectToPlay', handleRedirectToPlay)
-    socket.on('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
-    socket.on('TournamentMatchesStarted', handleTournamentMatchesStarted)
     socket.on('TournamentNextMatchReady', handleTournamentNextMatchReady)
-    socket.on('StartNextRoundMatchesResponse', handleStartNextRoundMatchesResponse)
     socket.on('StartCurrentRoundResponse', handleStartCurrentRoundResponse)
     socket.on('TournamentStartResponse', handleTournamentStartResponse)
     socket.on('TournamentCancelResponse', handleTournamentCancelResponse)
+    socket.on('GameFound', handleGameFound)
+    socket.on('TournamentRoundStarted', handleTournamentRoundStarted)
 
     return () => {
       socket.off('TournamentJoinResponse', handleTournamentJoinResponse)
@@ -500,13 +497,12 @@ export default function TournamentGamePage() {
       socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft)
       socket.off('TournamentCanceled', handleTournamentCanceled)
       socket.off('RedirectToPlay', handleRedirectToPlay)
-      socket.off('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
-      socket.off('TournamentMatchesStarted', handleTournamentMatchesStarted)
       socket.off('TournamentNextMatchReady', handleTournamentNextMatchReady)
-      socket.off('StartNextRoundMatchesResponse', handleStartNextRoundMatchesResponse)
       socket.off('StartCurrentRoundResponse', handleStartCurrentRoundResponse)
       socket.off('TournamentStartResponse', handleTournamentStartResponse)
       socket.off('TournamentCancelResponse', handleTournamentCancelResponse)
+      socket.off('GameFound', handleGameFound)
+      socket.off('TournamentRoundStarted', handleTournamentRoundStarted)
     }
   }, [socket, tournamentId, user?.email, router, currentMatch])
 
@@ -530,22 +526,39 @@ export default function TournamentGamePage() {
     }, 10000);
   };
 
-  const handleStartNextRoundMatches = () => {
-    if (!socket || !tournamentId || !user?.email) return;
-    
-    socket.emit('StartNextRoundMatches', { tournamentId, hostEmail: user.email });
-  };
-
   const handleStartCurrentRound = () => {
     if (!socket || !tournamentId || !user?.email) return;
     
-    socket.emit('StartCurrentRound', { tournamentId, hostEmail: user.email });
-  };
-
-  const handleStartTournamentMatches = () => {
-    if (!socket || !tournamentId || !user?.email) return;
+    // Calculate the current round based on tournament data
+    const currentRound = (() => {
+      if (!tournamentData?.matches) return 0;
+      
+      // Find the current round based on matches that are waiting or in progress
+      const waitingMatches = tournamentData.matches.filter((m: any) => 
+        m.state === MATCH_STATES.WAITING || m.state === MATCH_STATES.IN_PROGRESS
+      );
+      
+      if (waitingMatches.length > 0) {
+        return Math.min(...waitingMatches.map((m: any) => m.round));
+      }
+      
+      // If no waiting matches, find the highest round with completed matches + 1
+      const completedMatches = tournamentData.matches.filter((m: any) => 
+        m.state === MATCH_STATES.PLAYER1_WIN || m.state === MATCH_STATES.PLAYER2_WIN
+      );
+      
+      if (completedMatches.length > 0) {
+        return Math.max(...completedMatches.map((m: any) => m.round)) + 1;
+      }
+      
+      return 0;
+    })();
     
-    socket.emit('StartNextRoundMatches', { tournamentId, hostEmail: user.email });
+    socket.emit('StartCurrentRound', { 
+      tournamentId, 
+      hostEmail: user.email, 
+      round: currentRound 
+    });
   };
 
   const handleLeaveTournament = () => {
@@ -920,12 +933,6 @@ export default function TournamentGamePage() {
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
                   >
                     ⚔️ Start Current Round
-                  </button>
-                  <button
-                    onClick={handleStartNextRoundMatches}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-                  >
-                    ➡️ Advance to Next Round
                   </button>
               </div>
             )}

@@ -423,18 +423,29 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         return socket.emit('TournamentStartResponse', { status: 'error', message: `Tournament needs ${tournament.size} players to start.` });
       }
       
-      // Create tournament bracket
+      console.log('🏗️ BACKEND: Creating tournament bracket (matches in waiting state)...');
+      
+      // Create tournament bracket with matches in WAITING state (don't start games yet)
       const matches = createTournamentBracket(tournament.participants, tournament.size);
       
-      // Update tournament status
+      // Set all matches to waiting state initially
+      const bracketMatches = matches.map(match => ({
+        ...match,
+        state: 'waiting' as const,
+        gameRoomId: undefined,
+        winner: undefined
+      }));
+      
+      // Update tournament status to in_progress but keep matches in waiting state
       tournament.status = 'in_progress';
-      tournament.matches = matches;
+      tournament.matches = bracketMatches;
+      tournament.currentRound = 0;
       tournament.startedAt = Date.now();
       
       // Update tournament in Redis
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
       
-      console.log('📡 BACKEND: Broadcasting TournamentStarted event...');
+      console.log('📡 BACKEND: Broadcasting TournamentStarted event (redirect to bracket)...');
       
       // Send tournament started event to all participants using socket rooms
       const tournamentRoom = `tournament:${tournamentId}`;
@@ -442,7 +453,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const eventData = {
         tournamentId,
         tournament,
-        message: 'Tournament has started!'
+        message: 'Tournament started! View the bracket and wait for the host to start rounds.'
       };
       
       // Primary method: Socket room broadcast
@@ -463,7 +474,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       console.log('✅ BACKEND: Sending success response to host...');
       socket.emit('TournamentStartResponse', { status: 'success', message: 'Tournament started successfully.' });
       
-      console.log('🎯 BACKEND: Tournament start process completed successfully');
+      console.log('🎯 BACKEND: Tournament start process completed - participants redirected to bracket');
       
     } catch (error) {
       console.error('💥 BACKEND: Error in StartTournament:', error);
@@ -471,270 +482,159 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
     }
   });
 
-  // Start next round matches (host only) - starts all matches in current round directly
-  socket.on('StartNextRoundMatches', async (data: { tournamentId: string; hostEmail: string }) => {
-    try {
-      const { tournamentId, hostEmail } = data;
-      
-      if (!tournamentId || !hostEmail) return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Missing info.' });
-      
-      // Get tournament data
-      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
-      if (!tournamentData) return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Tournament not found.' });
-      
-      const tournament: Tournament = JSON.parse(tournamentData);
-      
-      // Check if user is the host
-      if (tournament.hostEmail !== hostEmail) {
-        return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Only the host can start matches.' });
-      }
-      
-      // Check if tournament is in progress
-      if (tournament.status !== 'in_progress') {
-        return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Tournament is not in progress.' });
-      }
-      
-      // Find current round matches that are waiting
-      const currentRoundMatches = tournament.matches.filter(m => 
-        m.state === 'waiting' && m.player1 && m.player2
-      );
-      
-      if (currentRoundMatches.length === 0) {
-        return socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'No matches ready to start.' });
-      }
-      
-      // Start all matches directly without invitations
-      const startedMatches = [];
-      
-      for (const match of currentRoundMatches) {
-        // Update match state to in_progress
-        match.state = 'in_progress';
-        
-        // Create game room for this match
-        const gameId = uuidv4();
-        const gameRoom: GameRoomData = {
-          gameId,
-          hostEmail: match.player1!.email,
-          guestEmail: match.player2!.email,
-          status: 'accepted',
-          createdAt: Date.now(),
-          tournamentId: tournamentId,
-          matchId: match.id
-        };
-        
-        // Save game room to Redis
-        await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom));
-        
-        // Import gameRooms from types to add the room
-        const { gameRooms } = await import('./game.socket.types');
-        gameRooms.set(gameId, gameRoom);
-        
-        // Get socket IDs for both players
-        const [player1SocketIds, player2SocketIds] = await Promise.all([
-          getSocketIds(match.player1!.email, 'sockets') || [],
-          getSocketIds(match.player2!.email, 'sockets') || []
-        ]);
-        
-        // Get user data for both players
-        const [player1User, player2User] = await Promise.all([
-          getUserByEmail(match.player1!.email),
-          getUserByEmail(match.player2!.email)
-        ]);
-        
-        if (!player1User || !player2User) {
-          continue;
-        }
-        
-        const player1Data = getPlayerData(player1User);
-        const player2Data = getPlayerData(player2User);
-        
-        // Send match data to both players
-        const matchData = {
-          gameId,
-          tournamentId,
-          matchId: match.id,
-          hostEmail: match.player1!.email,
-          guestEmail: match.player2!.email,
-          hostData: player1Data,
-          guestData: player2Data,
-          status: 'tournament_match_found',
-          message: 'Tournament match starting!'
-        };
-        
-        const allSocketIds = [...player1SocketIds, ...player2SocketIds];
-        
-        if (allSocketIds.length > 0) {
-          io.to(allSocketIds).emit('TournamentMatchGameStarted', matchData);
-        }
-        
-        startedMatches.push({
-          matchId: match.id,
-          gameId,
-          player1: match.player1!,
-          player2: match.player2!
-        });
-      }
-      
-      // Update tournament in Redis
-      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
-      
-      // Notify all tournament participants about match state changes using socket rooms
-      const tournamentRoom = `tournament:${tournamentId}`;
-      io.to(tournamentRoom).emit('TournamentMatchesStarted', {
-        tournamentId,
-        matches: startedMatches,
-        tournament
-      });
-      
-      socket.emit('StartNextRoundMatchesResponse', { 
-        status: 'success', 
-        message: `Started ${startedMatches.length} matches. Players have been sent to their games.`,
-        matches: startedMatches
-      });
-      
-    } catch (error) {
-      console.error('[Tournament] Error starting next round matches:', error);
-      socket.emit('StartNextRoundMatchesResponse', { status: 'error', message: 'Failed to start matches.' });
-    }
-  });
+  // NOTE: Removed StartNextRoundMatches handler - use StartCurrentRound instead
+  // The StartCurrentRound handler properly creates game rooms and sends GameFound events
 
-  // Start current round (host only) - alias for StartNextRoundMatches to be more explicit
-  socket.on('StartCurrentRound', async (data: { tournamentId: string; hostEmail: string }) => {
+  // START CURRENT ROUND - Host starts matches in current round
+  socket.on('StartCurrentRound', async (data: { tournamentId: string; hostEmail: string; round: number }) => {
+    console.log('⚔️ BACKEND: StartCurrentRound event received:', {
+      data,
+      socketId: socket.id,
+      timestamp: new Date().toISOString()
+    });
+    
     try {
-      const { tournamentId, hostEmail } = data;
+      const { tournamentId, hostEmail, round } = data;
       
-      if (!tournamentId || !hostEmail) return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Missing info.' });
+      if (!tournamentId || !hostEmail || round === undefined) {
+        console.error('❌ BACKEND: Missing required data for StartCurrentRound:', { tournamentId, hostEmail, round });
+        return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Missing required data.' });
+      }
       
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
-      if (!tournamentData) return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Tournament not found.' });
+      if (!tournamentData) {
+        console.error('❌ BACKEND: Tournament not found:', tournamentId);
+        return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Tournament not found.' });
+      }
       
       const tournament: Tournament = JSON.parse(tournamentData);
       
       // Check if user is the host
       if (tournament.hostEmail !== hostEmail) {
+        console.error('❌ BACKEND: Only host can start rounds:', {
+          tournamentHost: tournament.hostEmail,
+          requestingHost: hostEmail
+        });
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Only the host can start rounds.' });
       }
       
-      // Check if tournament is in progress
-      if (tournament.status !== 'in_progress') {
-        return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Tournament is not in progress.' });
-      }
-      
-      // Find current round matches that are waiting
-      const currentRoundMatches = tournament.matches.filter(m => 
-        m.state === 'waiting' && m.player1 && m.player2
+      // Get current round matches that are waiting
+      const currentRoundMatches = tournament.matches.filter(match => 
+        match.round === round && match.state === 'waiting' && match.player1 && match.player2
       );
       
       if (currentRoundMatches.length === 0) {
-        return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'No matches ready to start in current round.' });
+        console.error('❌ BACKEND: No matches ready to start in round:', round);
+        return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'No matches ready to start in this round.' });
       }
-
-      // Determine which round we're starting
-      const currentRound = Math.min(...currentRoundMatches.map(m => m.round));
-      const maxRound = Math.max(...tournament.matches.map(m => m.round));
-      const roundName = currentRound === 0 ? 'First Round' : 
-                       currentRound === maxRound ? 'Finals' :
-                       `Round ${currentRound + 1}`;
       
-      // Start all matches directly without invitations (same logic as StartNextRoundMatches)
-      const startedMatches = [];
+      console.log(`🎮 BACKEND: Starting ${currentRoundMatches.length} matches in round ${round}`);
+      
+      // Create game rooms for each match and redirect players
+      const updatedMatches: TournamentMatch[] = [];
       
       for (const match of currentRoundMatches) {
-        // Update match state to in_progress
-        match.state = 'in_progress';
+        if (!match.player1 || !match.player2) {
+          console.error('❌ BACKEND: Match missing players:', match.id);
+          continue;
+        }
         
-        // Create game room
-        const gameId = uuidv4();
-        match.gameRoomId = gameId;
+        // Create game room ID
+        const gameRoomId = uuidv4();
         
-        const gameRoom: GameRoomData = {
-          gameId,
-          hostEmail: match.player1!.email,
-          guestEmail: match.player2!.email,
-          status: 'accepted',
+        // Create game room data (same structure as matchmaking)
+        const gameRoom = {
+          gameRoomId,
+          player1: {
+            email: match.player1.email,
+            nickname: match.player1.nickname,
+            avatar: match.player1.avatar
+          },
+          player2: {
+            email: match.player2.email,
+            nickname: match.player2.nickname,
+            avatar: match.player2.avatar
+          },
+          state: 'waiting',
           createdAt: Date.now(),
+          isTournament: true,
           tournamentId: tournamentId,
           matchId: match.id
         };
         
         // Save game room to Redis
-        await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom));
+        await redis.setex(`gameRoom:${gameRoomId}`, 3600, JSON.stringify(gameRoom));
         
-        // Import gameRooms from types to add the room
-        const { gameRooms } = await import('./game.socket.types');
-        gameRooms.set(gameId, gameRoom);
-        
-        // Get socket IDs for both players
-        const [player1SocketIds, player2SocketIds] = await Promise.all([
-          getSocketIds(match.player1!.email, 'sockets') || [],
-          getSocketIds(match.player2!.email, 'sockets') || []
-        ]);
-        
-        // Get user data for both players
-        const [player1User, player2User] = await Promise.all([
-          getUserByEmail(match.player1!.email),
-          getUserByEmail(match.player2!.email)
-        ]);
-        
-        if (!player1User || !player2User) {
-          continue;
-        }
-        
-        const player1Data = getPlayerData(player1User);
-        const player2Data = getPlayerData(player2User);
-        
-        // Send match data to both players
-        const matchData = {
-          gameId,
-          tournamentId,
-          matchId: match.id,
-          hostEmail: match.player1!.email,
-          guestEmail: match.player2!.email,
-          hostData: player1Data,
-          guestData: player2Data,
-          status: 'tournament_match_found',
-          message: `${roundName} match starting!`
+        // Update match state
+        const updatedMatch: TournamentMatch = {
+          ...match,
+          state: 'in_progress',
+          gameRoomId: gameRoomId
         };
         
-        const allSocketIds = [...player1SocketIds, ...player2SocketIds];
+        updatedMatches.push(updatedMatch);
         
-        if (allSocketIds.length > 0) {
-          io.to(allSocketIds).emit('TournamentMatchGameStarted', matchData);
-        }
+        console.log(`🎮 BACKEND: Created game room ${gameRoomId} for match ${match.id} (${match.player1.nickname} vs ${match.player2.nickname})`);
         
-        startedMatches.push({
-          matchId: match.id,
-          gameId,
-          player1: match.player1!,
-          player2: match.player2!
+        // Get socket IDs for both players
+        const player1Sockets = await getSocketIds(match.player1.email, 'sockets') || [];
+        const player2Sockets = await getSocketIds(match.player2.email, 'sockets') || [];
+        
+        console.log(`📡 BACKEND: Found sockets - Player1: ${player1Sockets.length}, Player2: ${player2Sockets.length}`);
+        
+        // Send GameFound event to both players (same as matchmaking)
+        [...player1Sockets, ...player2Sockets].forEach(socketId => {
+          const isPlayer1 = player1Sockets.includes(socketId);
+          const opponent = isPlayer1 ? match.player2 : match.player1;
+          
+          if (opponent) {
+            io.to(socketId).emit('GameFound', {
+              gameRoomId: gameRoomId,
+              opponent: opponent,
+              gameRoom: gameRoom,
+              isTournament: true,
+              tournamentId: tournamentId,
+              matchId: match.id
+            });
+            
+            console.log(`📤 BACKEND: Sent GameFound to ${socketId} (opponent: ${opponent.nickname})`);
+          }
         });
       }
       
-      // Update tournament in Redis
+      // Update tournament with new match states
+      tournament.matches = tournament.matches.map(match => {
+        const updatedMatch = updatedMatches.find(um => um.id === match.id);
+        return updatedMatch || match;
+      });
+      
+      // Save updated tournament
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
       
-      // Notify all tournament participants about match state changes using socket rooms
+      // Notify all tournament participants about round start
       const tournamentRoom = `tournament:${tournamentId}`;
-      io.to(tournamentRoom).emit('TournamentMatchesStarted', {
-        tournamentId,
-        matches: startedMatches,
-        tournament,
-        round: currentRound,
-        roundName
+      io.to(tournamentRoom).emit('TournamentRoundStarted', {
+        tournamentId: tournamentId,
+        round: round,
+        matches: updatedMatches,
+        tournament: tournament,
+        message: `Round ${round + 1} has started! Players are being redirected to their matches.`
       });
       
+      console.log('📡 BACKEND: TournamentRoundStarted event broadcast to room');
+      
+      // Send success response to host
       socket.emit('StartCurrentRoundResponse', { 
         status: 'success', 
-        message: `Started ${roundName}! ${startedMatches.length} matches are now active.`,
-        matches: startedMatches,
-        round: currentRound,
-        roundName
+        message: `Round ${round + 1} started successfully. ${updatedMatches.length} matches in progress.` 
       });
       
+      console.log(`✅ BACKEND: Round ${round} started successfully with ${updatedMatches.length} matches`);
+      
     } catch (error) {
-      console.error('[Tournament] Error starting current round:', error);
-      socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Failed to start current round.' });
+      console.error('💥 BACKEND: Error in StartCurrentRound:', error);
+      socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Failed to start round.' });
     }
   });
 

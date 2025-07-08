@@ -115,6 +115,7 @@ export interface Tournament {
   startedAt?: number;
   endedAt?: number;
   winner?: TournamentParticipant;
+  currentRound?: number;
 }
 
 export interface TournamentParticipant {
