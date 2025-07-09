@@ -43,9 +43,18 @@ export async function processTournamentMatchResult(io: Server, data: {
       return;
     }
     
-    // Update match result
-    match.state = 'completed';
-    match.winner = tournament.participants.find(p => p.email === winnerEmail);
+    // Update match result - set correct winner state instead of 'completed'
+    if (match.player1?.email === winnerEmail) {
+      match.state = 'player1_win';
+      match.winner = match.player1;
+    } else if (match.player2?.email === winnerEmail) {
+      match.state = 'player2_win';
+      match.winner = match.player2;
+    } else {
+      console.error('[Tournament] Winner email does not match either player');
+      return;
+    }
+    
     match.loser = tournament.participants.find(p => p.email === loserEmail);
     
     // Mark loser as eliminated
@@ -104,7 +113,7 @@ export async function processTournamentMatchResult(io: Server, data: {
     const totalRounds = Math.log2(tournament.size);
     const finalMatch = tournament.matches.find(m => m.round === totalRounds - 1);
     
-    if (finalMatch && finalMatch.state === 'completed' && finalMatch.winner) {
+    if (finalMatch && (finalMatch.state === 'player1_win' || finalMatch.state === 'player2_win') && finalMatch.winner) {
       // Tournament is complete
       tournament.status = 'completed';
       tournament.endedAt = Date.now();

@@ -122,7 +122,7 @@ export function isTournamentComplete(tournament: Tournament): boolean {
   const finalRoundMatches = tournament.matches.filter(m => m.round === totalRounds - 1);
   
   return finalRoundMatches.length > 0 && 
-         finalRoundMatches.every(m => m.state === 'completed' && m.winner);
+         finalRoundMatches.every(m => (m.state === 'player1_win' || m.state === 'player2_win') && m.winner);
 }
 
 // Helper function to get tournament winner
@@ -153,13 +153,13 @@ export function getNextRoundMatches(tournament: Tournament): TournamentMatch[] {
 // Helper function to check if all matches in a round are completed
 export function isRoundComplete(tournament: Tournament, round: number): boolean {
   const roundMatches = tournament.matches.filter(m => m.round === round);
-  return roundMatches.length > 0 && roundMatches.every(m => m.state === 'completed');
+  return roundMatches.length > 0 && roundMatches.every(m => m.state === 'player1_win' || m.state === 'player2_win');
 }
 
 // Helper function to get tournament statistics
 export function getTournamentStats(tournament: Tournament) {
   const totalMatches = tournament.matches.length;
-  const completedMatches = tournament.matches.filter(m => m.state === 'completed').length;
+  const completedMatches = tournament.matches.filter(m => m.state === 'player1_win' || m.state === 'player2_win').length;
   const inProgressMatches = tournament.matches.filter(m => m.state === 'in_progress').length;
   const waitingMatches = tournament.matches.filter(m => m.state === 'waiting').length;
   
@@ -282,8 +282,16 @@ export function handleTournamentPlayerForfeit(tournament: Tournament, playerEmai
     : currentMatch.player1;
 
   if (!advancingPlayer) {
-    // Edge case: no opponent (bye situation), just mark match as complete
-    currentMatch.state = 'completed';
+    // Edge case: no opponent (bye situation), just mark as forfeit win
+    if (currentMatch.player1?.email === playerEmail) {
+      // Player 1 forfeited, no player 2 to advance (shouldn't happen in normal tournament)
+      currentMatch.state = 'player2_win';
+      currentMatch.winner = currentMatch.player2;
+    } else {
+      // Player 2 forfeited, player 1 wins by default  
+      currentMatch.state = 'player1_win';
+      currentMatch.winner = currentMatch.player1;
+    }
     return { updatedTournament: tournament, affectedMatch: currentMatch, forfeitedPlayer, advancingPlayer: null };
   }
 
