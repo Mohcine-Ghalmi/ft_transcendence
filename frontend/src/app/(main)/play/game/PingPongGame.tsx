@@ -107,10 +107,15 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           setScores({ p1: 0, p2: 0 });
         }
         
-        // Add 1-second delay before game is ready to play
-        setTimeout(() => {
+        // Set game ready immediately for tournament games, add delay for regular games
+        if (isTournamentMode) {
           setGameReady(true);
-        }, 0);
+        } else {
+          // Add 1-second delay before game is ready to play for regular games
+          setTimeout(() => {
+            setGameReady(true);
+          }, 0);
+        }
       }
     };
 
@@ -121,18 +126,18 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
   }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost]);
 
-  // Auto-start for remote games after 2 seconds to prevent performance issues
+  // Auto-start for remote games - but NOT for tournament games
   useEffect(() => {
-    if (isRemoteGame && socket && gameId && !gameStarted) {
+    if (isRemoteGame && socket && gameId && !gameStarted && !isTournamentMode) {
       const autoStartTimer = setTimeout(() => {
         if (!gameStarted && socket && gameId) {
           socket.emit('StartGame', { gameId });
         }
-      }, 1000); // 2 second delay
+      }, 1000); // 1 second delay for regular games
 
       return () => clearTimeout(autoStartTimer);
     }
-  }, [isRemoteGame, socket, gameId, gameStarted]);
+  }, [isRemoteGame, socket, gameId, gameStarted, isTournamentMode]);
 
   // Validate players have required properties
   const safePlayer1 = {

@@ -109,11 +109,14 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     gameId: string;
     hostEmail: string;
     guestEmail: string;
+    isTournament?: boolean;
+    tournamentId?: string;
   } | null>(null);
   const [opponent, setOpponent] = useState<any>(null);
   const [isHost, setIsHost] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showCleanupOption, setShowCleanupOption] = useState(false);
+  const [isTournamentMatch, setIsTournamentMatch] = useState(false);
   
   const { user } = useAuthStore();
   const socket = getSocketInstance();
@@ -160,9 +163,16 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     };
 
     const handleMatchFound = (data: any) => {
-      setMatchData(data);
+      setMatchData({
+        gameId: data.gameId,
+        hostEmail: data.hostEmail,
+        guestEmail: data.guestEmail,
+        isTournament: !!data.isTournament,
+        tournamentId: data.tournamentId
+      });
       setGameId(data.gameId);
       setIsHost(data.hostEmail === user.email);
+      setIsTournamentMatch(!!data.isTournament);
       setOpponent({
         name: data.hostEmail === user.email ? data.guestEmail : data.hostEmail,
         email: data.hostEmail === user.email ? data.guestEmail : data.hostEmail,
@@ -277,9 +287,17 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   const handleGameEnd = () => {
     setMatchmakingStatus('idle');
     setGameId(null);
+    
+    // For tournament matches, redirect back to tournament
+    if (isTournamentMatch && matchData?.tournamentId) {
+      window.location.href = `/play/tournament/${matchData.tournamentId}`;
+      return;
+    }
+    
     setMatchData(null);
     setOpponent(null);
     setIsHost(false);
+    setIsTournamentMatch(false);
     onBack();
   };
 
@@ -304,6 +322,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
           socket={socket}
           isHost={isHost}
           opponent={opponent}
+          isTournamentMode={isTournamentMatch}
         />
         </div>
         </div>

@@ -23,6 +23,7 @@ export default function GamePage() {
   const [authorizationChecked, setAuthorizationChecked] = useState(false)
   const [isStartingGame, setIsStartingGame] = useState(false)
   const [currentPath, setCurrentPath] = useState('');
+  const [isTournamentMatch, setIsTournamentMatch] = useState(false);
   
   // Use refs to track the latest state in event handlers
   const gameStartedRef = useRef(gameStarted)
@@ -45,20 +46,23 @@ export default function GamePage() {
   useEffect(() => {
     if (!socket || !gameId || !user?.email) return
 
+    console.log(`[FRONTEND] Checking authorization for game: ${gameId} for user: ${user.email}`);
+
     // Emit a check to see if user is authorized for this game
     socket.emit('CheckGameAuthorization', { 
       gameId, 
       playerEmail: user.email 
     })
     
-    // Set a timeout for authorization check
+    // Set a timeout for authorization check - extended for tournament matches
     const authTimeout = setTimeout(() => {
       if (!authorizationChecked && !isStartingGameRef.current) {
+        console.log(`[FRONTEND] Authorization timeout - no response for game ${gameId}`);
         setIsAuthorized(false)
         setAuthorizationChecked(true)
         setTimeout(() => {router.push("/play")}, 0);
       }
-    }, 1000) // 3 second timeout
+    }, 3000) // 3 second timeout - increased for tournament redirects
 
     return () => {
       clearTimeout(authTimeout)
@@ -67,6 +71,135 @@ export default function GamePage() {
 
   useEffect(() => {
     if (!socket || !gameId) return
+
+    // Add global event listener to debug all events
+    const handleAnyEvent = (eventName: string, data: any) => {
+      if (eventName.includes('Match') || eventName.includes('Game') || eventName.includes('Tournament')) {
+        console.log(`[FRONTEND] Received event: ${eventName}`, data);
+      }
+    };
+
+    // Listen to all events for debugging
+    socket.onAny(handleAnyEvent);
+
+    // Handle MatchFound event (for tournament and regular matches)
+    const handleMatchFound = (data: any) => {
+      console.log('[FRONTEND] Received MatchFound event:', data);
+      console.log('[FRONTEND] Current gameId:', gameId);
+      console.log('[FRONTEND] Event gameId:', data.gameId);
+      console.log('[FRONTEND] Event gameRoomId:', data.gameRoomId);
+      
+      if (data.gameId === gameId || data.gameRoomId === gameId) {
+        console.log('[FRONTEND] Game ID matches - processing MatchFound');
+        // Match found - set up the game
+        setIsAuthorized(true);
+        setAuthorizationChecked(true);
+        setGameAccepted(true);
+        
+        // Check if this is a tournament match
+        if (data.isTournament || data.tournamentId) {
+          setIsTournamentMatch(true);
+          console.log('[FRONTEND] Tournament match found - will auto-start when GameStarting is received');
+        }
+        
+        // Set opponent data
+        if (data.hostData && data.guestData) {
+          const isCurrentUserHost = data.hostEmail === user?.email;
+          const opponentData = isCurrentUserHost ? data.guestData : data.hostData;
+          
+          setOpponent({
+            email: opponentData.email,
+            username: opponentData.username || opponentData.login || opponentData.email,
+            avatar: opponentData.avatar || '/avatar/Default.svg',
+            login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
+          });
+          
+          setIsHost(isCurrentUserHost);
+          console.log('[FRONTEND] Opponent set:', opponentData.email);
+        }
+        
+        console.log('[FRONTEND] Match setup complete, waiting for GameStarted or GameStarting');
+      } else {
+        console.log('[FRONTEND] Game ID does not match - ignoring MatchFound event');
+      }
+    };
+
+    // Handle game found event (for tournament matches)
+    const handleGameFound = (data: any) => {
+      console.log('[FRONTEND] Received GameFound event:', data);
+      if (data.gameId === gameId || data.gameRoomId === gameId) {
+        // Tournament match found - set up the game
+        setIsAuthorized(true);
+        setAuthorizationChecked(true);
+        setGameAccepted(true);
+        
+        // Set opponent data
+        if (data.opponent) {
+          setOpponent({
+            email: data.opponent.email,
+            username: data.opponent.username || data.opponent.login || data.opponent.email,
+            avatar: data.opponent.avatar || '/avatar/Default.svg',
+            login: data.opponent.login || data.opponent.nickname || data.opponent.username || data.opponent.email
+          });
+        }
+        
+        // Set host status based on game room
+        if (data.gameRoom) {
+          setIsHost(data.gameRoom.hostEmail === user?.email);
+        }
+        
+        console.log('[FRONTEND] Tournament match setup complete, waiting for GameStarted');
+      }
+    };
+
+    // Handle GameStarting event (for immediate game start - tournament matches)
+    const handleGameStarting = (data: any) => {
+      console.log('[FRONTEND] Received GameStarting event:', data);
+      console.log('[FRONTEND] Current gameId:', gameId);
+      console.log('[FRONTEND] Event gameId:', data.gameId);
+      
+      if (data.gameId === gameId) {
+        console.log('[FRONTEND] Game ID matches - processing GameStarting');
+        // Set up the game immediately for tournament matches
+        setIsAuthorized(true);
+        setAuthorizationChecked(true);
+        setGameAccepted(true);
+        setGameStarted(true);
+        setGameData(data);
+        
+        // Check if this is a tournament match
+        if (data.isTournament || data.tournamentId) {
+          setIsTournamentMatch(true);
+        }
+        
+        // Set opponent data using the hostData and guestData from the event
+        if (data.hostData && data.guestData) {
+          const isCurrentUserHost = data.hostEmail === user?.email;
+          const opponentData = isCurrentUserHost ? data.guestData : data.hostData;
+          
+          setOpponent({
+            email: opponentData.email,
+            username: opponentData.username || opponentData.login || opponentData.email,
+            avatar: opponentData.avatar || '/avatar/Default.svg',
+            login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
+          });
+          
+          setIsHost(isCurrentUserHost);
+          console.log('[FRONTEND] Opponent set from GameStarting:', opponentData.email);
+        }
+        
+        // Clear any starting game timeouts
+        if (startGameTimeout) {
+          clearTimeout(startGameTimeout);
+          setStartGameTimeout(null);
+        }
+        setIsStartingGame(false);
+        
+        console.log('[FRONTEND] Game starting immediately for tournament match - redirecting to PingPongGame');
+      } else {
+        console.log('[FRONTEND] Game ID does not match - ignoring GameStarting event');
+      }
+    };
 
     const handleGameInviteAccepted = (data: any) => {
       if (data.gameId === gameId && data.status === 'ready_to_start') {
@@ -119,6 +252,11 @@ export default function GamePage() {
         setGameStarted(true)
         setGameData(data)
         
+        // Check if this is a tournament match
+        if (data.isTournament || data.tournamentId) {
+          setIsTournamentMatch(true);
+        }
+        
         // Clear the starting game flag
         setIsStartingGame(false)
         
@@ -130,7 +268,7 @@ export default function GamePage() {
         
         // Set opponent data using the hostData and guestData from the event
         if (data.hostData && data.guestData) {
-          const isCurrentUserHost = data.players.host === user?.email
+          const isCurrentUserHost = data.players?.host === user?.email || data.hostEmail === user?.email;
           const opponentData = isCurrentUserHost ? data.guestData : data.hostData
           
           setOpponent({
@@ -158,6 +296,8 @@ export default function GamePage() {
             setIsHost(true)
           }
         }
+        
+        console.log('[FRONTEND] Game started successfully');
       }
     }
 
@@ -185,7 +325,7 @@ export default function GamePage() {
         // Only show alert and redirect if we're not the one leaving
         if (!isLeavingGameRef.current) {
           // For tournament matches, redirect back to tournament
-          if (data.isTournamentMatch) {
+          if (data.isTournament || data.isTournamentMatch) {
             // Winner goes back to tournament
             router.push(`/play/tournament/${data.tournamentId}`);
           } else {
@@ -203,7 +343,7 @@ export default function GamePage() {
       if (data.gameId === gameId) {
         
         // For tournament matches, handle differently
-        if (data.isTournamentMatch) {
+        if (data.isTournament || data.isTournamentMatch) {
           const isWinner = data.winner === user?.email;
           const isHost = data.tournamentHostEmail === user?.email;
           
@@ -244,27 +384,104 @@ export default function GamePage() {
 
     // Handle game authorization response
     const handleGameAuthorizationResponse = (data: any) => {
+      console.log('[FRONTEND] Authorization response:', data);
       setAuthorizationChecked(true)
       
       if (data.status === 'success' && data.authorized) {
+        console.log('[FRONTEND] Game access authorized');
         setIsAuthorized(true)
         
         // Check if game is in a valid state
         if (data.gameStatus === 'canceled' || data.gameStatus === 'completed') {
-          // alert('This game is no longer active.')
+          console.log('[FRONTEND] Game is not active:', data.gameStatus);
           setTimeout(() => {router.push("/play")}, 0);
           return
         }
+        
+        // Handle ongoing tournament match - set up game immediately
+        if ((data.gameStatus === 'playing' || data.gameStatus === 'accepted' || data.gameStatus === 'waiting') && 
+            (data.isTournament || data.tournamentId) && data.gameRoom) {
+          console.log('[FRONTEND] Tournament match detected - setting up game. Status:', data.gameStatus);
+          
+          // Set tournament match flag
+          setIsTournamentMatch(true);
+          
+          // Set game as accepted
+          setGameAccepted(true);
+          
+          // If game has already started or has game state, set it as started
+          if (data.gameStatus === 'playing' || data.gameState) {
+            console.log('[FRONTEND] Tournament match already in progress - starting immediately');
+            setGameStarted(true);
+          }
+          
+          // Set host status
+          setIsHost(data.isHost || data.gameRoom.hostEmail === user?.email);
+          
+          // Set opponent data
+          const opponentEmail = data.isHost 
+            ? data.gameRoom.guestEmail 
+            : data.gameRoom.hostEmail;
+          
+          // Try to get opponent data from response or use email as fallback
+          const opponentData = data.opponent || {};
+          setOpponent({
+            email: opponentEmail,
+            username: opponentData.username || opponentData.login || opponentEmail.split('@')[0],
+            avatar: opponentData.avatar || '/avatar/Default.svg',
+            login: opponentData.login || opponentData.username || opponentEmail.split('@')[0]
+          });
+          
+          // Set the game data if we have state or create basic data
+          if (data.gameState || data.gameStatus === 'playing') {
+            setGameData({
+              gameId: data.gameRoom.gameId || gameId,
+              isTournament: data.isTournament || !!data.tournamentId,
+              tournamentId: data.tournamentId,
+              matchId: data.matchId,
+              gameState: data.gameState,
+              players: {
+                host: data.gameRoom.hostEmail,
+                guest: data.gameRoom.guestEmail
+              },
+              hostData: {
+                email: data.gameRoom.hostEmail,
+                username: data.gameRoom.hostEmail.split('@')[0],
+                avatar: '/avatar/Default.svg',
+                login: data.gameRoom.hostEmail.split('@')[0]
+              },
+              guestData: {
+                email: data.gameRoom.guestEmail,
+                username: data.gameRoom.guestEmail.split('@')[0],
+                avatar: '/avatar/Default.svg',
+                login: data.gameRoom.guestEmail.split('@')[0]
+              }
+            });
+          }
+          
+          console.log('[FRONTEND] Tournament match setup complete');
+          return;
+        }
+        
       } else {
+        console.log('[FRONTEND] Game access denied:', data.message);
         setIsAuthorized(false)
-        // Don't redirect if we're in the process of starting the game
+        // Don't redirect if we're in the process of starting the game or if this might be a tournament match
         if (!isStartingGameRef.current) {
-          // alert(data.message || 'You do not have access to this game.')
-          setTimeout(() => {router.push("/play")}, 0);
+          // Give more time for tournament matches to set up
+          setTimeout(() => {
+            if (!gameAccepted && !gameStarted) {
+              console.log('[FRONTEND] No game activity detected, redirecting to play');
+              router.push("/play");
+            }
+          }, 2000);
         }
       }
     }
 
+    socket.on('MatchFound', handleMatchFound)
+    socket.on('GameFound', handleGameFound)
+    socket.on('GameStarting', handleGameStarting)
     socket.on('GameInviteAccepted', handleGameInviteAccepted)
     socket.on('GameStarted', handleGameStarted)
     socket.on('GameStateUpdate', handleGameStateUpdate)
@@ -275,6 +492,10 @@ export default function GamePage() {
     socket.on('GameAuthorizationResponse', handleGameAuthorizationResponse)
 
     return () => {
+      socket.offAny(handleAnyEvent);
+      socket.off('MatchFound', handleMatchFound)
+      socket.off('GameFound', handleGameFound)
+      socket.off('GameStarting', handleGameStarting)
       socket.off('GameInviteAccepted', handleGameInviteAccepted)
       socket.off('GameStarted', handleGameStarted)
       socket.off('GameStateUpdate', handleGameStateUpdate)
@@ -371,9 +592,13 @@ export default function GamePage() {
   const handleCancelGame = () => {
     if (socket && gameId && !isLeavingGame) {
       setTimeout(() => {setIsLeavingGame(true), 0});
-      socket.emit('LeaveGame', { gameId, playerEmail: user?.email })
+      // Include tournament information if this is a tournament match
+      socket.emit('LeaveGame', { 
+        gameId, 
+        playerEmail: user?.email,
+        reason: 'player_cancelled_game'
+      })
     }
-    // setTimeout(() => {router.push("/play")}, 0);
   }
 
   const handleGameEnd = () => {
@@ -575,6 +800,7 @@ export default function GamePage() {
             socket={socket}
             isHost={isHost}
             opponent={opponent}
+            isTournamentMode={isTournamentMatch || gameData?.isTournament || gameData?.tournamentId ? true : false}
           />
         </div>
       </div>
@@ -586,7 +812,9 @@ export default function GamePage() {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-4xl text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-12 text-white">Game Ready!</h1>
+          <h1 className="text-4xl md:text-5xl font-bold mb-12 text-white">
+            {isTournamentMatch ? "Tournament Match Ready!" : "Game Ready!"}
+          </h1>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12">
             {/* Player 1 - Current User */}
@@ -633,12 +861,17 @@ export default function GamePage() {
           <div className="mb-8">
             <p className="text-xl text-green-400 mb-4">🎮 Both players are ready!</p>
             <p className="text-gray-300">
-              {isHost ? "You are the host. You can start the game when ready." : "Waiting for host to start the game..."}
+              {isTournamentMatch 
+                ? "Tournament match starting automatically..."
+                : isHost 
+                ? "You are the host. You can start the game when ready." 
+                : "Waiting for host to start the game..."
+              }
             </p>
           </div>
           
           <div className="flex justify-center space-x-4">
-            {isHost && (
+            {!isTournamentMatch && isHost && (
               <button
                 onClick={handleStartGame}
                 disabled={isLeavingGame}
@@ -701,6 +934,19 @@ export default function GamePage() {
         <h1 className="text-4xl font-bold text-white mb-8">Waiting for game to start...</h1>
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mx-auto"></div>
         <p className="text-gray-400 mt-4">Please wait while the game is being set up...</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <p>Debug info:</p>
+          <p>Game ID: {gameId}</p>
+          <p>Socket connected: {socket ? 'Yes' : 'No'}</p>
+          <p>User: {user?.email}</p>
+          <p>Authorized: {isAuthorized ? 'Yes' : 'No'}</p>
+          <p>Auth Checked: {authorizationChecked ? 'Yes' : 'No'}</p>
+          <p>Game Accepted: {gameAccepted ? 'Yes' : 'No'}</p>
+          <p>Game Started: {gameStarted ? 'Yes' : 'No'}</p>
+          <p>Opponent: {opponent ? 'Set' : 'Not set'}</p>
+          <p>Is Tournament: {isTournamentMatch ? 'Yes' : 'No'}</p>
+          <p>Is Leaving: {isLeavingGame ? 'Yes' : 'No'}</p>
+        </div>
       </div>
     </div>
   )

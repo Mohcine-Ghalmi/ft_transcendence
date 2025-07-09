@@ -393,6 +393,19 @@ export default function TournamentGamePage() {
       }
     };
 
+    const handleGameStarting = (data: any) => {
+      const gameId = data.gameId || data.gameRoomId; // Support both field names for compatibility
+      if (gameId) {
+        setNotification({
+          type: 'success',
+          message: `🎮 Your tournament match is starting! Redirecting to game...`
+        });
+        
+        // Redirect to the game room immediately for tournament matches
+        router.push(`/play/game/${gameId}`);
+      }
+    };
+
     const handleTournamentRoundStarted = (data: any) => {
       if (data.tournamentId === tournamentId) {
         // Update tournament data
@@ -427,6 +440,7 @@ export default function TournamentGamePage() {
     socket.on('TournamentStartResponse', handleTournamentStartResponse)
     socket.on('TournamentCancelResponse', handleTournamentCancelResponse)
     socket.on('GameFound', handleGameFound)
+    socket.on('GameStarting', handleGameStarting)
     socket.on('TournamentRoundStarted', handleTournamentRoundStarted)
     socket.on('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
 
@@ -446,6 +460,7 @@ export default function TournamentGamePage() {
       socket.off('TournamentStartResponse', handleTournamentStartResponse)
       socket.off('TournamentCancelResponse', handleTournamentCancelResponse)
       socket.off('GameFound', handleGameFound)
+      socket.off('GameStarting', handleGameStarting)
       socket.off('TournamentRoundStarted', handleTournamentRoundStarted)
       socket.off('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
     }
@@ -498,6 +513,12 @@ export default function TournamentGamePage() {
       
       return 0;
     })();
+    
+    console.log('[FRONTEND] Starting round:', currentRound, 'with tournament data:', {
+      matches: tournamentData?.matches?.length,
+      waitingMatches: tournamentData?.matches?.filter((m: any) => m.state === MATCH_STATES.WAITING).length,
+      inProgressMatches: tournamentData?.matches?.filter((m: any) => m.state === MATCH_STATES.IN_PROGRESS).length
+    });
     
     socket.emit('StartCurrentRound', { 
       tournamentId, 
