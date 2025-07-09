@@ -255,16 +255,37 @@ export function handleTournamentPlayerForfeit(tournament: Tournament, playerEmai
   updatedTournament: Tournament, 
   affectedMatch: TournamentMatch | null,
   forfeitedPlayer: TournamentParticipant | null,
-  advancingPlayer: TournamentParticipant | null
+  advancingPlayer: TournamentParticipant | null,
+  isAutoWin: boolean
 } {
   // Find the participant who is forfeiting
   const forfeitedPlayer = tournament.participants.find(p => p.email === playerEmail);
   if (!forfeitedPlayer) {
-    return { updatedTournament: tournament, affectedMatch: null, forfeitedPlayer: null, advancingPlayer: null };
+    return { updatedTournament: tournament, affectedMatch: null, forfeitedPlayer: null, advancingPlayer: null, isAutoWin: false };
   }
 
   // Mark the forfeiting player as eliminated
   forfeitedPlayer.status = 'eliminated';
+
+  // Check if only one player remains active
+  const activeParticipants = tournament.participants.filter(p => p.status !== 'eliminated');
+  
+  if (activeParticipants.length === 1) {
+    // Auto-win scenario
+    const winner = activeParticipants[0];
+    tournament.status = 'completed';
+    tournament.endedAt = Date.now();
+    tournament.winner = winner;
+    winner.status = 'winner';
+    
+    return { 
+      updatedTournament: tournament, 
+      affectedMatch: null, 
+      forfeitedPlayer, 
+      advancingPlayer: winner,
+      isAutoWin: true
+    };
+  }
 
   // Find the current match involving this player
   const currentMatch = tournament.matches.find(m => 
@@ -273,7 +294,7 @@ export function handleTournamentPlayerForfeit(tournament: Tournament, playerEmai
   );
 
   if (!currentMatch) {
-    return { updatedTournament: tournament, affectedMatch: null, forfeitedPlayer, advancingPlayer: null };
+    return { updatedTournament: tournament, affectedMatch: null, forfeitedPlayer, advancingPlayer: null, isAutoWin: false };
   }
 
   // Determine the advancing player (opponent)
@@ -292,7 +313,7 @@ export function handleTournamentPlayerForfeit(tournament: Tournament, playerEmai
       currentMatch.state = 'player1_win';
       currentMatch.winner = currentMatch.player1;
     }
-    return { updatedTournament: tournament, affectedMatch: currentMatch, forfeitedPlayer, advancingPlayer: null };
+    return { updatedTournament: tournament, affectedMatch: currentMatch, forfeitedPlayer, advancingPlayer: null, isAutoWin: false };
   }
 
   // Update match result - the remaining player wins by forfeit
@@ -337,6 +358,7 @@ export function handleTournamentPlayerForfeit(tournament: Tournament, playerEmai
     updatedTournament: tournament, 
     affectedMatch: currentMatch, 
     forfeitedPlayer, 
-    advancingPlayer 
+    advancingPlayer,
+    isAutoWin: false
   };
 }

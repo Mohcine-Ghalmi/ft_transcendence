@@ -583,15 +583,16 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
           
           io.to(socketId).emit('MatchFound', {
             gameId: gameRoomId,
-            hostEmail: match.player1!.email,
-            guestEmail: match.player2!.email,
-            hostData: player1Data,
-            guestData: player2Data,
+            hostEmail: match.player1!.email, // Always player1 as host for consistency
+            guestEmail: match.player2!.email, // Always player2 as guest
+            hostData: player1Data, // Player1 data as host
+            guestData: player2Data, // Player2 data as guest
             status: 'match_found',
             message: 'Tournament match found! Game will start immediately.',
             isTournament: true,
             tournamentId: tournamentId,
-            matchId: match.id
+            matchId: match.id,
+            playerPosition: isPlayer1 ? 'player1' : 'player2' // Add position info
           });
         });
         
@@ -599,25 +600,30 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         if (match.player1 && match.player2) {
           // Emit GameStarting to redirect players to game page (like matchmaking)
           allSockets.forEach(socketId => {
+            const isPlayer1 = player1Sockets.includes(socketId);
+            
             io.to(socketId).emit('GameStarting', {
               gameId: gameRoomId,
-              hostEmail: match.player1!.email,
+              hostEmail: match.player1!.email, // Consistent host assignment
               guestEmail: match.player2!.email,
               hostData: player1Data,
               guestData: player2Data,
               startedAt: gameRoom.startedAt,
               isTournament: true,
               tournamentId: tournamentId,
-              matchId: match.id
+              matchId: match.id,
+              playerPosition: isPlayer1 ? 'player1' : 'player2' // Add position info
             });
           });
 
           // Also emit GameStarted immediately for tournament matches to ensure the game fully starts
           setTimeout(() => {
             allSockets.forEach(socketId => {
+              const isPlayer1 = player1Sockets.includes(socketId);
+              
               io.to(socketId).emit('GameStarted', {
                 gameId: gameRoomId,
-                hostEmail: match.player1!.email,
+                hostEmail: match.player1!.email, // Consistent host assignment
                 guestEmail: match.player2!.email,
                 hostData: player1Data,
                 guestData: player2Data,
@@ -628,7 +634,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
                 startedAt: gameRoom.startedAt,
                 isTournament: true,
                 tournamentId: tournamentId,
-                matchId: match.id
+                matchId: match.id,
+                playerPosition: isPlayer1 ? 'player1' : 'player2' // Add position info
               });
             });
           }, 100); // Small delay to ensure GameStarting is processed first

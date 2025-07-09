@@ -315,14 +315,18 @@ export default function TournamentGamePage() {
         const opponentData = data.hostEmail === user?.email ? data.guestData : data.hostData;
         const opponentName = opponentData?.nickname || opponentData?.login || opponentEmail || 'your opponent';
         
+        // Determine player position for tournament consistency
+        const isPlayer1 = data.hostEmail === user?.email;
+        const positionText = isPlayer1 ? 'Player 1 (Left)' : 'Player 2 (Right)';
+        
         setNotification({ 
-          message: `🎮 Your tournament match against ${opponentName} is starting! Redirecting to game room...`, 
+          message: `🎮 Your tournament match against ${opponentName} is starting! You are ${positionText}. Redirecting to game room...`, 
           type: 'success' 
         });
 
-        // Redirect to the game room (like matchmaking - no host/guest distinction)
+        // Redirect to the game room with position info
         setTimeout(() => {
-          router.push(`/play/game/${data.gameId}`);
+          router.push(`/play/game/${data.gameId}?tournament=true&position=${isPlayer1 ? 'player1' : 'player2'}`);
         }, 1500);
       }
     }

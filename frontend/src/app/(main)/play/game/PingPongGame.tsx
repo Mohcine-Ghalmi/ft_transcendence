@@ -70,6 +70,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   useEffect(() => {
     setIsRemoteGame(!!gameId && !!socket);
     if (gameId && socket) {
+      // For ALL remote games (tournament and matchmaking), maintain consistent positioning
+      // Host is always Player 1 (left), Guest is always Player 2 (right)
       setIsPlayer1(isHost);
       setIsGameHost(isHost);
     }
@@ -160,24 +162,19 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     }
   }, [isRemoteGame, socket, gameId, gameStarted, isTournamentMode]);
 
-  // Validate players have required properties
+  // Validate players have required properties - Fix for consistent positioning
   const safePlayer1 = {
-    id: user?.id || crypto.randomUUID(),
-    name: user?.username,
-    avatar: user?.avatar || '/avatar/Default.svg',
-    nickname: user?.login || 'Player 1'
+    id: isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id) || crypto.randomUUID(),
+    name: isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username),
+    avatar: isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar) || '/avatar/Default.svg',
+    nickname: isRemoteGame && isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : user?.login) || 'Player 1'
   };
 
-  const safePlayer2 = isRemoteGame ? {
-    id: opponent?.id || crypto.randomUUID(),
-    name: opponent?.username || opponent?.name,
-    avatar: opponent?.avatar || '/avatar/Default.svg',
-    nickname: opponent?.login || opponent?.nickname || 'Player 2'
-  } : {
-    id: player2?.id || crypto.randomUUID(),
-    name: player2?.username || player2?.name,
-    avatar: player2?.avatar || '/avatar/Default.svg',
-    nickname: player2?.login || player2?.nickname || 'Player 2'
+  const safePlayer2 = {
+    id: isRemoteGame && !isHost ? user?.id : (isRemoteGame ? opponent?.id : player2?.id) || crypto.randomUUID(),
+    name: isRemoteGame && !isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : player2?.username || player2?.name),
+    avatar: isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar) || '/avatar/Default.svg',
+    nickname: isRemoteGame && !isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : player2?.login || player2?.nickname) || 'Player 2'
   };
 
   // Paddle positions: player1 left, player2 right
@@ -355,9 +352,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     const update = () => {
       // Move paddles - only for local player in remote game
       if (isRemoteGame) {
-        // Only control your own paddle
-        if (isPlayer1) {
-          // Player 1 (Host) controls left paddle (paddle1)
+        // Host always controls left paddle (player1), Guest always controls right paddle (player2)
+        if (isHost) {
+          // Host controls left paddle (paddle1)
           if (!mobile) {
             if (keys.current["w"] && paddle1Y.current > 0) {
               paddle1Y.current -= PADDLE_SPEED;
@@ -366,7 +363,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
               paddle1Y.current += PADDLE_SPEED;
             }
           } else {
-            // Mobile controls for Player 1
             if (paddle1Move === "up" && paddle1Y.current > 0) {
               paddle1Y.current -= PADDLE_SPEED;
             }
@@ -375,12 +371,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             }
           }
         } else {
-          // Player 2 (Guest) controls right paddle (paddle2)
+          // Guest controls right paddle (paddle2)
           if (!mobile) {
             if (keys.current["arrowup"] && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
             if (keys.current["arrowdown"] && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
           } else {
-            // Mobile controls for Player 2
             if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
             if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
           }
@@ -552,12 +547,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       // Send paddle position updates from guest player to host
       if (isRemoteGame && !isGameHost && socket && gameId) {
         const currentTime = Date.now();
-        // Send paddle updates more frequently for responsive controls
-        if (currentTime - lastUpdateTime.current >= 16) { // 60fps for paddle updates
+        if (currentTime - lastUpdateTime.current >= 16) {
           const paddleUpdate = {
             gameId,
-            paddleY: isPlayer1 ? paddle1Y.current : paddle2Y.current,
-            playerType: isPlayer1 ? 'p1' : 'p2'
+            paddleY: isHost ? paddle1Y.current : paddle2Y.current,
+            playerType: isHost ? 'p1' : 'p2'
           };
           
           socket.emit('PaddleUpdate', paddleUpdate);
@@ -598,21 +592,22 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
   }, [gameStarted, paused, gameReady]); // Add gameReady to dependencies
 
-  // Win condition - Updated for tournament mode with better winner object
+  // Win condition - Fixed for consistent scoring
   useEffect(() => {
     if (scores.p1 >= 7 || scores.p2 >= 7) {
       setGameStarted(false);
       setPaused(true);
       
+      // Winner determination based on scores (p1 = left player, p2 = right player)
       const winner = scores.p1 >= 7 ? safePlayer1 : safePlayer2;
       
       if (isRemoteGame && socket && gameId) {
         // Only the host should emit GameEnd event to prevent duplicates
         if (isGameHost) {
-          // Send game end event to server
+          // Send game end event to server with correct winner/loser emails
           const finalScore = { p1: scores.p1, p2: scores.p2 };
-          const winnerEmail = scores.p1 >= 7 ? user?.email : opponent?.email;
-          const loserEmail = scores.p1 >= 7 ? opponent?.email : user?.email;
+          const winnerEmail = scores.p1 >= 7 ? safePlayer1.email || user?.email : safePlayer2.email || opponent?.email;
+          const loserEmail = scores.p1 >= 7 ? safePlayer2.email || opponent?.email : safePlayer1.email || user?.email;
           
           socket.emit('GameEnd', {
             gameId,
@@ -634,15 +629,17 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         const winnerName = winner.name;
         const loserName = scores.p1 >= 7 ? safePlayer2.name : safePlayer1.name;
         
-        // Check if current user won (assuming player1 is always the user in 1v1 mode)
-        if (scores.p1 >= 7) {
+        // Check if current user won by comparing with their position
+        const currentUserWon = (isHost && scores.p1 >= 7) || (!isHost && scores.p2 >= 7);
+        
+        if (currentUserWon) {
           router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         } else {
           router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         }
       }
     }
-  }, [scores.p1, scores.p2, safePlayer1, safePlayer2, onExit, isTournamentMode, isRemoteGame, socket, gameId, user?.email, opponent?.email, isGameHost]);
+  }, [scores.p1, scores.p2, safePlayer1, safePlayer2, onExit, isTournamentMode, isRemoteGame, socket, gameId, isGameHost, isHost, opponent?.email, user?.email]);
 
   // UI helpers
   const gameOver = scores.p1 >= 7 || scores.p2 >= 7;
@@ -675,18 +672,18 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       ball.current.dx = data.gameState.ballDx;
       ball.current.dy = data.gameState.ballDy;
       
-      // Update scores immediately for both host and guest
+      // Update scores - ALWAYS use server scores as-is (no swapping)
       if (data.gameState.scores) {
         currentScores.current = data.gameState.scores;
         setScores(data.gameState.scores);
       }
       
       // Only update opponent's paddle position, not your own
-      if (isPlayer1) {
-        // Player 1 controls left paddle, so only update right paddle (opponent)
+      if (isHost) {
+        // Host controls left paddle, so only update right paddle (guest's paddle)
         paddle2Y.current = data.gameState.paddle2Y;
       } else {
-        // Player 2 controls right paddle, so only update left paddle (opponent)
+        // Guest controls right paddle, so only update left paddle (host's paddle)
         paddle1Y.current = data.gameState.paddle1Y;
       }
       
@@ -694,7 +691,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         handleGameEnd(data.gameState.winner);
       }
     }
-  }, [gameId, isPlayer1, handleGameEnd]);
+  }, [gameId, isHost, handleGameEnd]);
 
   const handlePaddleUpdate = useCallback((data: any) => {
     if (data.gameId === gameId && isGameHost) {
@@ -713,10 +710,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       setGameStarted(false);
       setPaused(true);
       
-      // Determine winner and loser based on server data
+      // Determine winner based on user's email, not position
       const isWinner = data.winner === user?.email;
-      const winnerName = isWinner ? safePlayer1.name : safePlayer2.name;
-      const loserName = isWinner ? safePlayer2.name : safePlayer1.name;
+      const winnerName = isWinner ? 
+        (user?.username || user?.login || 'You') : 
+        (isHost ? safePlayer2.name : safePlayer1.name);
+      const loserName = isWinner ? 
+        (isHost ? safePlayer2.name : safePlayer1.name) : 
+        (user?.username || user?.login || 'You');
       
       // Navigate to appropriate result page
       if (isWinner) {
@@ -725,7 +726,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
       }
     }
-  }, [gameId, user?.email, safePlayer1.name, safePlayer2.name, router]);
+  }, [gameId, user?.email, safePlayer1.name, safePlayer2.name, router, isHost]);
 
   const handlePlayerLeft = useCallback((data: any) => {
     if (data.gameId === gameId) {
@@ -734,14 +735,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       setPaused(true);
       
       // Current player wins when opponent leaves
-      const isWinner = true; // Current player is always the winner when opponent leaves
-      const winnerName = safePlayer1.name;
-      const loserName = safePlayer2.name;
+      const winnerName = user?.username || user?.login || 'You';
+      const loserName = data.playerWhoLeft || 'Opponent';
       
       // Navigate to winner page
       router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
     }
-  }, [gameId, safePlayer1.name, safePlayer2.name, router]);
+  }, [gameId, user?.username, user?.login, router]);
 
   // Socket event listeners for remote game
   useEffect(() => {
@@ -856,8 +856,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Mobile Controls */}
             {mobile && isGameActive && (
               <>
-                {/* Player 1 controls (left side) - only show if player 1 or local game */}
-                {(!isRemoteGame || isPlayer1) && (
+                {/* Player controls based on actual position */}
+                {(!isRemoteGame || isHost) && (
                   <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
                     <button
                       className="w-12 h-12 bg-blue-700/80 hover:bg-blue-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg"
@@ -875,8 +875,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                     </button>
                   </div>
                 )}
-                {/* Player 2 controls (right side) - only show if player 2 or local game */}
-                {(!isRemoteGame || !isPlayer1) && (
+                {(!isRemoteGame || !isHost) && (
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
                     <button
                       className="w-12 h-12 bg-red-700/80 hover:bg-red-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg"
@@ -899,26 +898,26 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Desktop Controls Overlay */}
             {!mobile && isGameActive && (
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 flex gap-8 bg-black/60 rounded-xl px-6 py-3 border border-gray-700 shadow-lg">
-                {/* Player 1 Controls */}
-                {(!isRemoteGame || isPlayer1) && (
+                {/* Player 1 Controls - only show if controlling left paddle */}
+                {(!isRemoteGame || isHost) && (
                   <div className="flex flex-col items-center">
                     <div className="flex gap-2 items-center mb-1">
                       <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">W</span>
                       <span className="text-white font-semibold">/</span>
                       <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">S</span>
                     </div>
-                    <span className="text-xs text-blue-200 font-semibold">Player 1</span>
+                    <span className="text-xs text-blue-200 font-semibold">Left Paddle</span>
                   </div>
                 )}
-                {/* Player 2 Controls */}
-                {(!isRemoteGame || !isPlayer1) && (
+                {/* Player 2 Controls - only show if controlling right paddle */}
+                {(!isRemoteGame || !isHost) && (
                   <div className="flex flex-col items-center">
                     <div className="flex gap-2 items-center mb-1">
                       <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↑</span>
                       <span className="text-white font-semibold">/</span>
                       <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↓</span>
                     </div>
-                    <span className="text-xs text-red-200 font-semibold">Player 2</span>
+                    <span className="text-xs text-red-200 font-semibold">Right Paddle</span>
                   </div>
                 )}
               </div>

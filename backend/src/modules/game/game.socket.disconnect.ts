@@ -217,6 +217,38 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
         
         const tournament = JSON.parse(tournamentData);
         
+        // Check if disconnecting user is the host
+        if (tournament.hostEmail === userEmail && tournament.status !== 'completed' && tournament.status !== 'canceled') {
+          // Host disconnected - cancel tournament and kick all players
+          tournament.status = 'canceled';
+          tournament.endedAt = Date.now();
+          
+          const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
+          await redis.setex(key, 3600, JSON.stringify(tournament));
+          
+          // Notify all participants
+          const allParticipantEmails = tournament.participants.map((p: any) => p.email);
+          const allSocketIds: string[] = [];
+          
+          for (const email of allParticipantEmails) {
+            const socketIds = await getSocketIds(email, 'sockets') || [];
+            allSocketIds.push(...socketIds);
+          }
+          
+          io.to(allSocketIds).emit('TournamentCanceled', {
+            tournamentId,
+            tournament,
+            reason: 'Host disconnected'
+          });
+          
+          io.to(allSocketIds).emit('RedirectToPlay', {
+            message: 'Tournament canceled because host disconnected.',
+            tournamentId
+          });
+          
+          continue;
+        }
+        
         // Check if user is in this tournament and it's active
         const isParticipant = tournament.participants.some((p: any) => p.email === userEmail);
         
@@ -224,14 +256,14 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
           // Handle disconnect as tournament forfeit
           const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
           
-          const { updatedTournament, affectedMatch, forfeitedPlayer, advancingPlayer } = 
+          const { updatedTournament, affectedMatch, forfeitedPlayer, advancingPlayer, isAutoWin } = 
             handleTournamentPlayerForfeit(tournament, userEmail);
           
           // Save updated tournament
           const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
           await redis.setex(key, 3600, JSON.stringify(updatedTournament));
           
-          // Notify all tournament participants about the forfeit
+          // Notify all tournament participants
           const allParticipantEmails = updatedTournament.participants.map((p: any) => p.email);
           const allSocketIds: string[] = [];
           
@@ -240,14 +272,27 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
             allSocketIds.push(...socketIds);
           }
           
-          io.to(allSocketIds).emit('TournamentPlayerForfeited', {
-            tournamentId,
-            forfeitedPlayer,
-            advancingPlayer,
-            affectedMatch,
-            tournament: updatedTournament,
-            message: `${forfeitedPlayer?.nickname} has disconnected and forfeited the tournament. ${advancingPlayer?.nickname} advances to the next round.`
-          });
+          if (isAutoWin) {
+            // Tournament completed due to auto-win
+            io.to(allSocketIds).emit('TournamentCompleted', {
+              tournamentId,
+              tournament: updatedTournament,
+              winner: advancingPlayer,
+              winnerEmail: advancingPlayer?.email,
+              autoWin: true,
+              message: `${advancingPlayer?.nickname} wins the tournament by default!`
+            });
+          } else {
+            // Regular forfeit
+            io.to(allSocketIds).emit('TournamentPlayerForfeited', {
+              tournamentId,
+              forfeitedPlayer,
+              advancingPlayer,
+              affectedMatch,
+              tournament: updatedTournament,
+              message: `${forfeitedPlayer?.nickname} has disconnected and forfeited the tournament. ${advancingPlayer?.nickname} advances to the next round.`
+            });
+          }
         }
       }
     } catch (error) {

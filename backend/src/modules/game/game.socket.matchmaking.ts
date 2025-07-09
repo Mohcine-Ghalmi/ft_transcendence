@@ -348,7 +348,28 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       message: 'Match found! Game will start shortly.'
     }
 
-    io.to([...player1SocketIds, ...player2SocketIds]).emit('MatchFound', matchData)
+    // Always assign host as player1 and guest as player2 for consistency
+    io.to(player1SocketIds).emit('MatchFound', {
+      gameId,
+      hostEmail: player1.email,
+      guestEmail: player2.email,
+      hostData: player1Data,
+      guestData: player2Data,
+      status: 'match_found',
+      message: 'Match found! You are Player 1 (Left Paddle).',
+      playerPosition: 'player1'
+    });
+
+    io.to(player2SocketIds).emit('MatchFound', {
+      gameId,
+      hostEmail: player1.email,
+      guestEmail: player2.email,
+      hostData: player1Data,
+      guestData: player2Data,
+      status: 'match_found',
+      message: 'Match found! You are Player 2 (Right Paddle).',
+      playerPosition: 'player2'
+    });
 
     // Wait a moment for players to prepare, then start the game
     setTimeout(async () => {
@@ -368,4 +389,4 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       })
     }, 3000) // 3 second delay before starting
   }
-} 
+}
