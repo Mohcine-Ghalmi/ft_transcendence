@@ -2,6 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 
 // Ping Pong Table Illustration Component
@@ -73,11 +74,15 @@ const GameModeCard = ({ title, description, subDescription, illustration, button
 
 // Local Games Component
 export const LocalGames = () => {
-  const handleGameClick = (gameType: string, difficulty: string | null = null) => {
-    if (difficulty) {
-      console.log(`Game Type: Local ${gameType} - Difficulty: ${difficulty}`);
+  const router = useRouter();
+
+  const handleLocalGame = (gameType: string, difficulty?: string) => {
+    if (gameType === 'tournament') {
+      router.push('/play/tournament');
+    } else if (gameType === 'one-vs-one') {
+      router.push('/play/OneVsOne');
     } else {
-      console.log(`Game Type: Local ${gameType}`);
+      router.push(`/play/game/local/${gameType}${difficulty ? `/${difficulty}` : ''}`);
     }
   };
 
@@ -92,7 +97,7 @@ export const LocalGames = () => {
         buttons={
           <Link href={`/play/OneVsOne?mode=Local`}>
             <button 
-              onClick={() => handleGameClick('1v1 Match')}
+              onClick={() => handleLocalGame('1v1 Match')}
               className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Local Game
@@ -110,7 +115,7 @@ export const LocalGames = () => {
         buttons={
         <Link href="/play/tournament?mode=Local">
           <button 
-              onClick={() => handleGameClick('Tournament')}
+              onClick={() => handleLocalGame('Tournament')}
               className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Create Tournament
@@ -128,19 +133,19 @@ export const LocalGames = () => {
         buttons={
           <>
             <button 
-              onClick={() => handleGameClick('AI', 'Easy')}
+              onClick={() => handleLocalGame('AI', 'Easy')}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Easy
             </button>
             <button 
-              onClick={() => handleGameClick('AI', 'Medium')}
+              onClick={() => handleLocalGame('AI', 'Medium')}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Medium
             </button>
             <button 
-              onClick={() => handleGameClick('AI', 'Hard')}
+              onClick={() => handleLocalGame('AI', 'Hard')}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Hard
@@ -154,13 +159,15 @@ export const LocalGames = () => {
 
 // Online Games Component
 export const OnlineGames = () => {
-  const handleGameClick = (gameType, action = null, difficulty = null) => {
-    if (difficulty) {
-      console.log(`Game Type: Online ${gameType} - Difficulty: ${difficulty}`);
-    } else if (action) {
-      console.log(`Game Type: Online ${gameType} - Action: ${action}`);
+  const router = useRouter();
+
+  const handleOnlineGame = (gameType: string, difficulty?: string, action?: string) => {
+    if (gameType === 'tournament') {
+      router.push('/play/tournament');
+    } else if (gameType === 'one-vs-one') {
+      router.push('/play/OneVsOne');
     } else {
-      console.log(`Game Type: Online ${gameType}`);
+      router.push(`/play/game/online/${gameType}${difficulty ? `/${difficulty}` : ''}${action ? `/${action}` : ''}`);
     }
   };
 
@@ -176,7 +183,7 @@ export const OnlineGames = () => {
           <>
             <Link href={`/play/OneVsOne?mode=Online`}>
               <button 
-                onClick={() => handleGameClick('1v1 Match', 'Invite')}
+                onClick={() => handleOnlineGame('1v1 Match', null, 'Invite')}
                 className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
               >
                 Invite Friend
@@ -184,7 +191,7 @@ export const OnlineGames = () => {
             </Link>
             <Link href={`/play/OneVsOne?mode=Online&matchmaking=true`}>
               <button 
-                onClick={() => handleGameClick('1v1 Match', 'Matchmaking')}
+                onClick={() => handleOnlineGame('1v1 Match', null, 'Matchmaking')}
                 className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
               >
                 Random Matchmaking
@@ -203,14 +210,14 @@ export const OnlineGames = () => {
         buttons={
           <>
             <button 
-              onClick={() => handleGameClick('Tournament', 'Join')}
+              onClick={() => handleOnlineGame('Tournament', null, 'Join')}
               className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Join an Online Tournament
             </button>
             <Link href="/play/tournament?mode=Online">
               <button 
-                onClick={() => handleGameClick('Tournament', 'Create')}
+                onClick={() => handleOnlineGame('Tournament', null, 'Create')}
                 className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
               >
                 Create One
@@ -229,19 +236,19 @@ export const OnlineGames = () => {
         buttons={
           <>
             <button 
-              onClick={() => handleGameClick('AI', null, 'Easy')}
+              onClick={() => handleOnlineGame('AI', 'Easy', null)}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Easy
             </button>
             <button 
-              onClick={() => handleGameClick('AI', null, 'Medium')}
+              onClick={() => handleOnlineGame('AI', 'Medium', null)}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Medium
             </button>
             <button 
-              onClick={() => handleGameClick('AI', null, 'Hard')}
+              onClick={() => handleOnlineGame('AI', 'Hard', null)}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Hard

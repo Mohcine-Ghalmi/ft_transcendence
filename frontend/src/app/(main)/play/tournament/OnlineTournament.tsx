@@ -85,9 +85,8 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends }
   );
 };
 
-const ParticipantItem = ({ player, removeParticipant, isHost }: {
+const ParticipantItem = ({ player, isHost }: {
   player: any;
-  removeParticipant: (nickname: string) => void;
   isHost: boolean;
 }) => {
   return (
@@ -110,16 +109,6 @@ const ParticipantItem = ({ player, removeParticipant, isHost }: {
           <div className="text-blue-400 text-xs">Host</div>
         )}
       </div>
-      {!player.isHost && isHost && (
-        <button 
-          onClick={() => removeParticipant(player.login)}
-          className="ml-2 text-red-400 hover:text-red-300 transition-colors p-1 rounded-lg hover:bg-red-400/10"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-          </svg>
-        </button>
-      )}
     </div>
   );
 };
@@ -318,75 +307,38 @@ export default function OnlineTournament() {
 
   // Start tournament logic - only creates bracket and redirects players
   const startTournament = () => {
-    console.log('🎯 START TOURNAMENT CLICKED by host');
-    if (!tournamentId || !user?.email) {
-      alert('Tournament not properly initialized!');
+    if (!tournamentId) {
       return;
     }
-
     socket = getSocketInstance();
     if (!socket) {
-      alert('Socket not connected!');
       return;
     }
-
-    console.log('🎯 HOST: Starting tournament (creating bracket only)');
-
-    // Emit socket event to start tournament - this creates the bracket but doesn't start matches
-    socket.emit('StartTournament', {
-      tournamentId: tournamentId,
-      hostEmail: user.email
-    });
-
-    // Backend will:
-    // 1. Create tournament bracket with matches in "waiting" state
-    // 2. Broadcast TournamentStarted event to all participants
-    // 3. All participants will be redirected to the tournament bracket page
-    // 4. Host will see "Start Round" buttons to begin matches
+    socket.emit('StartTournament', { tournamentId, hostEmail: user.email });
   };
 
   // Start matches for current round
   const startCurrentRoundMatches = () => {
-    const currentRoundMatches = matches.filter(m => 
-      m.round === currentRound && 
-      m.state === MATCH_STATES.WAITING && 
-      m.player1 && 
-      m.player2
-    );
-    
-    if (currentRoundMatches.length === 0) {
-      alert('No matches ready to start in the current round.');
+    if (!tournamentId) {
       return;
     }
-    
-    // For online tournaments, we would typically send socket events to start matches
-    // For now, we'll just simulate starting the first match
-    const firstMatch = currentRoundMatches[0];
-
-    
-    // Update match state to in_progress
-    setMatches(prevMatches => 
-      prevMatches.map(match => 
-        match.id === firstMatch.id 
-          ? { ...match, state: MATCH_STATES.IN_PROGRESS }
-          : match
-      )
-    );
+    socket = getSocketInstance();
+    if (!socket) {
+      return;
+    }
+    socket.emit('StartCurrentRound', { tournamentId, hostEmail: user.email });
   };
 
   // Tournament invite handler (encrypt and emit)
   const handleInvitePlayer = async (player: Player) => {
     if (participants.length >= tournamentSize) {
-      alert('Tournament is full!');
       return;
     }
     if (!tournamentId) {
-      alert('Tournament not created yet!');
       return;
     }
     socket = getSocketInstance();
     if (!socket) {
-      alert('Socket not connected!');
       return;
     }
     setIsInviting(true);
@@ -395,7 +347,6 @@ export default function OnlineTournament() {
     setWaitTime(30);
     setInviteId(null);
     if (!process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
-      alert('Encryption key not found');
       setIsInviting(false);
       setWaitingForResponse(false);
       return;
@@ -435,7 +386,6 @@ export default function OnlineTournament() {
       if (data.status === 'success' && data.type === 'invite_sent') {
         setInviteId(data.inviteId);
       } else if (data.status === 'error') {
-        alert(data.message);
         setIsInviting(false);
         setWaitingForResponse(false);
         setInvitedPlayer(null);
@@ -448,8 +398,10 @@ export default function OnlineTournament() {
         setWaitingForResponse(false);
         setInvitedPlayer(null);
         setInviteId(null);
-        alert('Tournament invite accepted!');
-        // TODO: Add participant to tournament state
+        // Add the accepted player to the participants list immediately
+        if (data.newParticipant) {
+          setParticipants(prev => [...prev, data.newParticipant]);
+        }
       }
     };
     const handleInviteDeclined = (data: any) => {
@@ -458,7 +410,6 @@ export default function OnlineTournament() {
         setWaitingForResponse(false);
         setInvitedPlayer(null);
         setInviteId(null);
-        alert('Tournament invite declined.');
       }
     };
     const handleInviteTimeout = (data: any) => {
@@ -467,7 +418,6 @@ export default function OnlineTournament() {
         setWaitingForResponse(false);
         setInvitedPlayer(null);
         setInviteId(null);
-        alert('Tournament invite timed out.');
       }
     };
     const handleInviteCanceled = (data: any) => {
@@ -476,7 +426,6 @@ export default function OnlineTournament() {
         setWaitingForResponse(false);
         setInvitedPlayer(null);
         setInviteId(null);
-        alert('Tournament invite canceled.');
       }
     };
     socket.on('InviteToTournamentResponse', handleInviteResponse);
@@ -526,10 +475,9 @@ export default function OnlineTournament() {
     setChampion(null);
   };
 
-  // Remove participant (host only)
+  // Remove participant (host only) - REMOVED: Players can no longer be removed from tournaments
   const removeParticipant = (playerNickname: string) => {
-    if (playerNickname === user.nickname) return; // Can't remove host
-    setParticipants(prev => prev.filter(p => p.nickname !== playerNickname));
+    // Functionality removed - players cannot be removed from tournaments
   };
 
   // Reset tournament
@@ -559,7 +507,6 @@ export default function OnlineTournament() {
     if (!tournamentName || tournamentName.trim().length === 0) return;
     socket = getSocketInstance();
     if (!socket) {
-      alert('Socket not connected!');
       return;
     }
     socket.emit('CreateTournament', {
@@ -572,28 +519,16 @@ export default function OnlineTournament() {
   };
 
   // Handle tournament creation response
-  useEffect(() => {0
+  useEffect(() => {
     socket = getSocketInstance();
     if (!socket) return;
-    
     const handleTournamentCreated = (tournament: any) => {
-      console.log('🏗️ TOURNAMENT CREATED:', tournament);
-      console.log('🏗️ Setting state to lobby - NOT redirecting yet');
       setTournamentId(tournament.tournamentId);
       setTournamentState('lobby');
-      setParticipants(tournament.participants.map((p: any) => ({
-        id: p.email,
-        login: p.nickname,
-        avatar: p.avatar,
-        nickname: p.nickname,
-        isHost: p.isHost
-      })));
     };
-    
     const handleTournamentError = (error: any) => {
-      // Tournament creation error handled silently
+      // Handle tournament creation error
     };
-
     const handleTournamentUpdated = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setParticipants(data.tournament.participants.map((p: any) => ({
@@ -601,58 +536,32 @@ export default function OnlineTournament() {
           login: p.nickname,
           avatar: p.avatar,
           nickname: p.nickname,
-          isHost: p.isHost
+          isHost: p.isHost,
+          email: p.email
         })));
       }
     };
-
     const handleTournamentReady = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        setParticipants(data.tournament.participants.map((p: any) => ({
-          id: p.email,
-          login: p.nickname,
-          avatar: p.avatar,
-          nickname: p.nickname,
-          isHost: p.isHost
-        })));
-        // Tournament is full and ready to start
-        if (data.tournament.hostEmail === user?.email) {
-          // Host can start the tournament
-        }
+        setTournamentState('ready');
       }
     };
-
     const handleTournamentStarted = (data: any) => {
-      console.log('🎯 TOURNAMENT STARTED EVENT RECEIVED:', data);
-      console.log('🎯 About to redirect to bracket page');
       if (data.tournamentId === tournamentId) {
         setTournamentState('in_progress');
-        setMatches(data.tournament.matches);
-        // Navigate all participants to tournament game page using smooth navigation
         router.push(`/play/tournament/${tournamentId}`);
       }
     };
-
     const handleTournamentStartResponse = (data: any) => {
       if (data.status === 'error') {
-        alert(`Failed to start tournament: ${data.message}`);
+        // Handle tournament start error
       }
-      // Success will be handled by TournamentStarted event
     };
-
     const handleTournamentParticipantLeft = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        setParticipants(data.tournament.participants.map((p: any) => ({
-          id: p.email,
-          login: p.nickname,
-          avatar: p.avatar,
-          nickname: p.nickname,
-          isHost: p.isHost
-        })));
-        const leftPlayerName = data.leftPlayer?.nickname || data.leftPlayer?.email || 'Unknown';
+        setParticipants(prev => prev.filter(p => p.id !== data.playerEmail));
       }
     };
-    
     socket.on('TournamentCreated', handleTournamentCreated);
     socket.on('TournamentError', handleTournamentError);
     socket.on('TournamentUpdated', handleTournamentUpdated);
@@ -660,7 +569,6 @@ export default function OnlineTournament() {
     socket.on('TournamentStarted', handleTournamentStarted);
     socket.on('TournamentStartResponse', handleTournamentStartResponse);
     socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
-    
     return () => {
       socket.off('TournamentCreated', handleTournamentCreated);
       socket.off('TournamentError', handleTournamentError);
@@ -670,7 +578,7 @@ export default function OnlineTournament() {
       socket.off('TournamentStartResponse', handleTournamentStartResponse);
       socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
     };
-  }, [tournamentId, user?.email]);
+  }, [tournamentId, user?.email, router]);
 
   return (
     <div className="h-full w-full text-white">
@@ -758,7 +666,6 @@ export default function OnlineTournament() {
                       <ParticipantItem
                         key={player.id || player.nickname || player.login || `participant-${index}`}
                         player={player}
-                        removeParticipant={removeParticipant}
                         isHost={true}
                       />
                     ))}

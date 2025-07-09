@@ -195,7 +195,6 @@ const Settings = () => {
         toast.success('Image uploaded successfully')
         return res.data.filename
       } catch (err: any) {
-        console.log(err)
         toast.warning(err.response.data.message)
         return null
       }
@@ -226,9 +225,8 @@ const Settings = () => {
           avatar: avatarUrl ? avatarUrl : user.avatar,
         })
       }
-      console.log(res)
     } catch (error) {
-      console.error('Error updating user data:', error)
+      // Handle error silently
     }
   }
 

@@ -18,8 +18,118 @@ interface TournamentGameRoomData {
   createdAt: number;
 }
 
+// Exported function to process tournament match results
+export async function processTournamentMatchResult(io: Server, data: {
+  tournamentId: string;
+  matchId: string;
+  winnerEmail: string;
+  loserEmail: string;
+  playerEmail: string;
+}) {
+  try {
+    const { tournamentId, matchId, winnerEmail, loserEmail } = data;
+    
+    const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+    if (!tournamentData) {
+      console.error('[Tournament] Tournament not found:', tournamentId);
+      return;
+    }
+    
+    const tournament: Tournament = JSON.parse(tournamentData);
+    const match = tournament.matches.find(m => m.id === matchId);
+    
+    if (!match) {
+      console.error('[Tournament] Match not found:', matchId);
+      return;
+    }
+    
+    // Update match result
+    match.state = 'completed';
+    match.winner = tournament.participants.find(p => p.email === winnerEmail);
+    match.loser = tournament.participants.find(p => p.email === loserEmail);
+    
+    // Mark loser as eliminated
+    const loser = tournament.participants.find(p => p.email === loserEmail);
+    if (loser) {
+      loser.status = 'eliminated';
+    }
+    
+    // Advance winner to next round
+    const nextRound = match.round + 1;
+    const nextMatchIndex = Math.floor(match.matchIndex / 2);
+    const nextMatch = tournament.matches.find(m => m.round === nextRound && m.matchIndex === nextMatchIndex);
+    
+    if (nextMatch && match.winner) {
+      // Determine if winner goes to player1 or player2 slot
+      if (match.matchIndex % 2 === 0) {
+        // Even match index -> winner goes to player1 slot
+        nextMatch.player1 = match.winner;
+      } else {
+        // Odd match index -> winner goes to player2 slot
+        nextMatch.player2 = match.winner;
+      }
+      
+      // Check if next match is ready (both players assigned)
+      if (nextMatch.player1 && nextMatch.player2) {
+        nextMatch.state = 'waiting';
+      }
+      
+
+    }
+    
+    // Update tournament in Redis
+    await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+    
+    // Notify all participants
+    const allParticipantEmails = tournament.participants.map((p: any) => p.email);
+    const allSocketIds: string[] = [];
+    
+    for (const email of allParticipantEmails) {
+      const socketIds = await getSocketIds(email, 'sockets') || [];
+      allSocketIds.push(...socketIds);
+    }
+    
+    io.to(allSocketIds).emit('TournamentMatchCompleted', {
+      tournamentId,
+      match,
+      tournament,
+      winnerEmail,
+      loserEmail,
+      winner: match.winner,
+      loser: match.loser,
+      message: `${match.winner?.nickname} defeated ${match.loser?.nickname}`
+    });
+    
+    // Check if tournament is complete
+    const totalRounds = Math.log2(tournament.size);
+    const finalMatch = tournament.matches.find(m => m.round === totalRounds - 1);
+    
+    if (finalMatch && finalMatch.state === 'completed' && finalMatch.winner) {
+      // Tournament is complete
+      tournament.status = 'completed';
+      tournament.endedAt = Date.now();
+      tournament.winner = finalMatch.winner;
+      
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+      
+      io.to(allSocketIds).emit('TournamentCompleted', {
+        tournamentId,
+        tournament,
+        winnerEmail: finalMatch.winner.email,
+        winner: finalMatch.winner,
+        message: `Tournament completed! ${finalMatch.winner.nickname} is the champion!`
+      });
+    }
+    
+
+    
+  } catch (error) {
+    console.error('[Tournament] Error processing match result:', error);
+  }
+}
+
 export function registerTournamentMatchHandlers(socket: Socket, io: Server) {
-  // Handle tournament match results
+  // Handle tournament match results (manual)
   socket.on('TournamentMatchResult', async (data: {
     tournamentId: string;
     matchId: string;
@@ -27,71 +137,7 @@ export function registerTournamentMatchHandlers(socket: Socket, io: Server) {
     loserEmail: string;
     playerEmail: string;
   }) => {
-    try {
-      const { tournamentId, matchId, winnerEmail, loserEmail, playerEmail } = data;
-      
-      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
-      if (!tournamentData) return;
-      
-      const tournament: Tournament = JSON.parse(tournamentData);
-      const match = tournament.matches.find(m => m.id === matchId);
-      
-      if (!match) return;
-      
-      // Update match result
-      match.state = 'completed';
-      match.winner = tournament.participants.find(p => p.email === winnerEmail);
-      match.loser = tournament.participants.find(p => p.email === loserEmail);
-      
-      // Mark loser as eliminated
-      const loser = tournament.participants.find(p => p.email === loserEmail);
-      if (loser) {
-        loser.status = 'eliminated';
-      }
-      
-      // Update tournament in Redis
-      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
-      
-      // Notify all participants
-      const allParticipantEmails = tournament.participants.map((p: any) => p.email);
-      const allSocketIds: string[] = [];
-      
-      for (const email of allParticipantEmails) {
-        const socketIds = await getSocketIds(email, 'sockets') || [];
-        allSocketIds.push(...socketIds);
-      }
-      
-      io.to(allSocketIds).emit('TournamentMatchCompleted', {
-        tournamentId,
-        match,
-        tournament,
-        winner: match.winner,
-        loser: match.loser,
-        message: `${match.winner?.nickname} defeated ${match.loser?.nickname}`
-      });
-      
-      // Check if tournament is complete
-      const totalRounds = Math.log2(tournament.size);
-      const finalMatch = tournament.matches.find(m => m.round === totalRounds - 1);
-      
-      if (finalMatch && finalMatch.state === 'completed' && finalMatch.winner) {
-        // Tournament is complete
-        tournament.status = 'completed';
-        tournament.endedAt = Date.now();
-        tournament.winner = finalMatch.winner;
-        
-        await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
-        
-        io.to(allSocketIds).emit('TournamentCompleted', {
-          tournamentId,
-          tournament,
-          winner: finalMatch.winner,
-          message: `Tournament completed! ${finalMatch.winner.nickname} is the champion!`
-        });
-      }
-      
-    } catch (error) {
-      console.error('[Tournament] Error handling match result:', error);
-    }
+
+    await processTournamentMatchResult(io, data);
   });
 } 

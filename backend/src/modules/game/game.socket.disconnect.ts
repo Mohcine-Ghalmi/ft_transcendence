@@ -23,7 +23,7 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
     const userEmail = socket.data?.userEmail || (socket as any).userEmail
     if (!userEmail) return
 
-    console.log(`User ${userEmail} disconnected`)
+
 
     // Find all games this user is in
     const userGames = Array.from(activeGames.entries()).filter(([gameId, gameState]) => {

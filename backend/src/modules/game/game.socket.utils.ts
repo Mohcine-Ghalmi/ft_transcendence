@@ -22,7 +22,7 @@ export async function cleanupGame(gameId: string, reason: 'normal_end' | 'player
   setTimeout(async () => {
     try {
       await redis.del(`game_room:${gameId}`);
-      console.log(`Cleaned up game room ${gameId} from Redis`);
+
     } catch (error) {
       console.error(`Error deleting game room ${gameId} from Redis:`, error);
     }
@@ -46,7 +46,7 @@ export async function saveMatchHistory(
     const existing = existingStmt.get(gameId) as { id: number } | undefined
     
     if (existing) {
-      console.log(`Match history already exists for game ${gameId}, skipping duplicate save`)
+
       return
     }
 

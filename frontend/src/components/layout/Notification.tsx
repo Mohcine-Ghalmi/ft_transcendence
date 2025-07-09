@@ -36,8 +36,8 @@ export const NotificationItem = ({
     return null
   }
 
-  const handleAction = (action: 'accept' | 'decline') => {
-    onAction(notification.id, action)
+  const handleAction = (action: string, id: string) => {
+    // Handle notification action
   }
 
   return (
@@ -87,13 +87,13 @@ export const NotificationItem = ({
             notification.status !== 'declined' && (
               <div className="flex gap-2 mt-3">
                 <button
-                  onClick={() => handleAction('accept')}
+                  onClick={() => handleAction('accept', notification.id)}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors"
                 >
                   Accept
                 </button>
                 <button
-                  onClick={() => handleAction('decline')}
+                  onClick={() => handleAction('decline', notification.id)}
                   className="px-4 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded-md transition-colors"
                 >
                   Decline
@@ -155,7 +155,6 @@ export const NotificationDropdown = ({
 
   const handleNotificationAction = (id: string | number, action: string) => {
     // Handle notification actions here
-    console.log(`${action} notification ${id}`)
     // You can add logic to update the notification status
     // or make API calls here
   }

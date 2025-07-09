@@ -8,6 +8,7 @@ import {
   GameSocketHandler 
 } from './game.socket.types'
 import { cleanupGame, saveMatchHistory, emitToUsers } from './game.socket.utils'
+import { getTournamentHostEmail } from './game.socket.tournament'
 
 // Track games that are currently being processed to prevent duplicate GameEnd events
 const processingGames = new Set<string>();
@@ -26,13 +27,13 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       const { gameId, finalScore, reason = 'normal_end' } = data
       const gameRoom = gameRooms.get(gameId);
       if (!gameRoom) {
-        console.log(`Game room not found for game ${gameId}`)
+
         return
       }
       
       // Check if game is already being processed or completed
       if (processingGames.has(gameId) || gameRoom.status === 'completed') {
-        console.log(`Game ${gameId} is already being processed or completed, ignoring duplicate GameEnd event`)
+
         return
       }
       
@@ -41,7 +42,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       if (redisGameData) {
         const redisGameRoom = JSON.parse(redisGameData)
         if (redisGameRoom.status === 'completed') {
-          console.log(`Game ${gameId} is already completed in Redis, ignoring duplicate GameEnd event`)
+
           return
         }
       }
@@ -49,7 +50,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       // Mark game as being processed
       processingGames.add(gameId);
       
-      console.log(`Game ${gameId} ending with reason: ${reason}`)
+
       
       // Determine winner and loser based on score
       let winner, loser;
@@ -74,6 +75,21 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       // Save match history
       await saveMatchHistory(gameId, gameRoom, winner, loser, finalScore, reason);
       
+      // Handle tournament match result automatically if this is a tournament game
+      if (gameRoom.tournamentId && gameRoom.matchId) {
+
+        
+        // Import and call tournament match handler
+        const { processTournamentMatchResult } = await import('./game.socket.tournament.match');
+        await processTournamentMatchResult(io, {
+          tournamentId: gameRoom.tournamentId,
+          matchId: gameRoom.matchId,
+          winnerEmail: winner,
+          loserEmail: loser,
+          playerEmail: winner // Could be either player
+        });
+      }
+      
       // Clean up game
       await cleanupGame(gameId, reason);
       
@@ -87,10 +103,14 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
           ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
           : 0,
         reason,
-        message: reason === 'normal_end' ? 'Game completed!' : 'Game ended due to player leaving.'
+        message: reason === 'normal_end' ? 'Game completed!' : 'Game ended due to player leaving.',
+        // Add tournament information if this is a tournament game
+        tournamentId: gameRoom.tournamentId,
+        isTournament: !!gameRoom.tournamentId,
+        tournamentHostEmail: gameRoom.tournamentId ? await getTournamentHostEmail(gameRoom.tournamentId) : null
       })
       
-      console.log(`Game ${gameId} ended successfully. Winner: ${winner}, Loser: ${loser}`)
+
       
       // Remove from processing set after a delay to ensure cleanup is complete
       setTimeout(() => {
@@ -125,7 +145,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       
       // Check if game is already being processed or completed
       if (processingGames.has(gameId) || gameRoom.status === 'completed') {
-        console.log(`Game ${gameId} is already being processed or completed, ignoring duplicate LeaveGame event`)
+
         return socket.emit('GameResponse', {
           status: 'success',
           message: 'Game already ended.',
@@ -137,7 +157,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       if (redisGameData) {
         const redisGameRoom = JSON.parse(redisGameData)
         if (redisGameRoom.status === 'completed') {
-          console.log(`Game ${gameId} is already completed in Redis, ignoring duplicate LeaveGame event`)
+
           return socket.emit('GameResponse', {
             status: 'success',
             message: 'Game already ended.',
@@ -148,7 +168,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       // Mark game as being processed
       processingGames.add(gameId);
       
-      console.log(`Player ${playerEmail} leaving game ${gameId}`)
+
       
       // Get current game state for final score
       const currentGameState = activeGames.get(gameId)
@@ -168,6 +188,21 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       // Save match history
       await saveMatchHistory(gameId, gameRoom, winner, loser, finalScore, 'player_left');
       
+      // Handle tournament match result automatically if this is a tournament game
+      if (gameRoom.tournamentId && gameRoom.matchId) {
+
+        
+        // Import and call tournament match handler
+        const { processTournamentMatchResult } = await import('./game.socket.tournament.match');
+        await processTournamentMatchResult(io, {
+          tournamentId: gameRoom.tournamentId,
+          matchId: gameRoom.matchId,
+          winnerEmail: winner,
+          loserEmail: loser,
+          playerEmail: winner // Could be either player
+        });
+      }
+      
       // Clean up game
       await cleanupGame(gameId, 'player_left');
       
@@ -181,7 +216,11 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
           ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
           : 0,
         reason: 'player_left',
-        message: 'Opponent left the game. You win!'
+        message: 'Opponent left the game. You win!',
+        // Add tournament information if this is a tournament game
+        tournamentId: gameRoom.tournamentId,
+        isTournament: !!gameRoom.tournamentId,
+        tournamentHostEmail: gameRoom.tournamentId ? await getTournamentHostEmail(gameRoom.tournamentId) : null
       })
       
       // Notify the other player specifically
@@ -189,7 +228,11 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       io.to(otherPlayerSocketIds).emit('PlayerLeft', {
         gameId,
         playerWhoLeft: playerEmail,
-        reason: 'player_left'
+        reason: 'player_left',
+        // Add tournament information if this is a tournament game
+        tournamentId: gameRoom.tournamentId,
+        isTournamentMatch: !!gameRoom.tournamentId,
+        tournamentHostEmail: gameRoom.tournamentId ? await getTournamentHostEmail(gameRoom.tournamentId) : null
       })
       
       socket.emit('GameResponse', {
@@ -197,7 +240,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         message: 'Left game successfully.',
       })
       
-      console.log(`Player ${playerEmail} left game ${gameId}. Winner: ${winner}`)
+
       
       // Remove from processing set after a delay
       setTimeout(() => {
@@ -237,7 +280,7 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
 
       // Check if game is already being processed
       if (processingGames.has(gameId)) {
-        console.log(`Game ${gameId} is already being processed, ignoring duplicate CancelGame event`)
+
         return socket.emit('GameResponse', {
           status: 'success',
           message: 'Game already being canceled.',
@@ -310,6 +353,79 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
         })
       }
 
+      // Check if game is already in progress
+      if (gameRoom.status === 'in_progress') {
+        // For tournament games, automatically accept if in progress
+        if (gameRoom.tournamentId) {
+
+          
+          // Get game state
+          const gameState = activeGames.get(gameId);
+          if (!gameState) {
+            console.error(`No game state found for tournament game ${gameId}`);
+            return socket.emit('GameAuthorizationResponse', { 
+              status: 'error', 
+              message: 'Game state not found.',
+              authorized: false 
+            });
+          }
+          
+          // Send authorization success with game state
+          socket.emit('GameAuthorizationResponse', {
+            status: 'success',
+            authorized: true,
+            isHost: gameRoom.hostEmail === playerEmail,
+            gameRoom: gameRoom,
+            gameStatus: gameState.gameStatus,
+            gameState: gameState,
+            isTournament: true,
+            tournamentId: gameRoom.tournamentId,
+            matchId: gameRoom.matchId
+          });
+          
+          // Join the game room
+          socket.join(`game:${gameId}`);
+
+          return;
+        }
+        
+        // For regular games, check if user is part of the game
+        if (gameRoom.hostEmail !== playerEmail && gameRoom.guestEmail !== playerEmail) {
+          console.error(`User ${playerEmail} not authorized for game ${gameId}`);
+          return socket.emit('GameAuthorizationResponse', { 
+            status: 'error', 
+            message: 'You are not authorized for this game.',
+            authorized: false 
+          });
+        }
+        
+        // Get game state
+        const gameState = activeGames.get(gameId);
+        if (!gameState) {
+          console.error(`No game state found for game ${gameId}`);
+          return socket.emit('GameAuthorizationResponse', { 
+            status: 'error', 
+            message: 'Game state not found.',
+            authorized: false 
+          });
+        }
+        
+        // Send authorization success with game state
+        socket.emit('GameAuthorizationResponse', {
+          status: 'success',
+          authorized: true,
+          isHost: gameRoom.hostEmail === playerEmail,
+          gameRoom: gameRoom,
+          gameStatus: gameState.gameStatus,
+          gameState: gameState
+        });
+        
+        // Join the game room
+        socket.join(`game:${gameId}`);
+
+        return;
+      }
+
       // Check if game room is in a valid state
       if (gameRoom.status === 'canceled' || gameRoom.status === 'completed') {
         return socket.emit('GameAuthorizationResponse', {
@@ -322,12 +438,23 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       // Check if user is part of this game (host or guest)
       const isAuthorized = gameRoom.hostEmail === playerEmail || gameRoom.guestEmail === playerEmail
 
+      // For tournament games, automatically accept and start the game
+      if (gameRoom.tournamentId && isAuthorized) {
+        // Tournament games should be automatically accepted and ready to start
+        if (gameRoom.status === 'waiting') {
+          gameRoom.status = 'accepted';
+          await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom));
+          gameRooms.set(gameId, gameRoom);
+        }
+      }
+
       socket.emit('GameAuthorizationResponse', {
         status: 'success',
         message: isAuthorized ? 'User authorized for this game.' : 'User not authorized for this game.',
         authorized: isAuthorized,
         gameStatus: gameRoom.status,
-        isHost: gameRoom.hostEmail === playerEmail
+        isHost: gameRoom.hostEmail === playerEmail,
+        gameRoom: gameRoom // Include game room data for tournament handling
       })
 
     } catch (error) {

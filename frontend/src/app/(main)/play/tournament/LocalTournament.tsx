@@ -357,13 +357,20 @@ const LocalTournamentMode = () => {
     );
     
     if (currentRoundMatches.length === 0) {
-      alert('No matches ready to start in the current round.');
       return;
     }
     
-    // Start the first available match
+    // For local tournaments, we'll just simulate starting the first match
     const firstMatch = currentRoundMatches[0];
-    setPlayingMatch(firstMatch);
+    
+    // Update match state to in_progress
+    setMatches(prevMatches => 
+      prevMatches.map(match => 
+        match.id === firstMatch.id 
+          ? { ...match, state: MATCH_STATES.IN_PROGRESS }
+          : match
+      )
+    );
   };
 
   return (

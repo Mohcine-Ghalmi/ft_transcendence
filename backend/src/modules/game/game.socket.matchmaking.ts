@@ -77,7 +77,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       const playerInQueue = matchmakingQueue.find(p => p.socketId === socket.id)
       if (playerInQueue) {
         const { email } = playerInQueue
-        console.log(`User ${email} disconnected, cleaning up game data...`)
+
         
         // Remove from queue
         removeFromQueueByEmail(email)
@@ -92,7 +92,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       
       for (const player of stalePlayers) {
         removeFromQueueByEmail(player.email)
-        console.log(`Removed stale player ${player.email} from matchmaking queue on disconnect`)
+
       }
       
     } catch (error) {
@@ -123,7 +123,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       // Always clean up any stale game data first
       const { cleanedCount } = await cleanupUserGameData(email)
       if (cleanedCount > 0) {
-        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email}`)
+
       }
 
       // Clean up any stale queue entries (older than 2 minutes)
@@ -132,7 +132,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       
       for (const player of stalePlayers) {
         removeFromQueueByEmail(player.email)
-        console.log(`Removed stale player ${player.email} from matchmaking queue when joining`)
+
       }
 
       // Check if user is still in an active game after cleanup
@@ -210,7 +210,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       // Clean up any stale game data when leaving matchmaking
       const { cleanedCount } = await cleanupUserGameData(email)
       if (cleanedCount > 0) {
-        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email} when leaving matchmaking`)
+
       }
 
       // Also clean up any stale queue entries (older than 2 minutes)
@@ -219,7 +219,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       
       for (const player of stalePlayers) {
         removeFromQueueByEmail(player.email)
-        console.log(`Removed stale player ${player.email} from matchmaking queue when leaving`)
+
       }
 
       socket.emit('MatchmakingResponse', {

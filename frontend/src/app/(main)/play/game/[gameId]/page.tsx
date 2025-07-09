@@ -181,16 +181,19 @@ export default function GamePage() {
     // Handle when a player leaves the game - FIXED
     const handlePlayerLeft = (data: any) => {
       if (data.gameId === gameId) {
-        console.log('Player left:', data)
         
         // Only show alert and redirect if we're not the one leaving
         if (!isLeavingGameRef.current) {
-          // Current player wins when opponent leaves
-          const winnerName = user?.username || user?.login || 'You';
-          const loserName = data.playerWhoLeft || 'Opponent';
-          
-          // Navigate to winner page
-          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+          // For tournament matches, redirect back to tournament
+          if (data.isTournamentMatch) {
+            // Winner goes back to tournament
+            router.push(`/play/tournament/${data.tournamentId}`);
+          } else {
+            // Regular match - navigate to winner page
+            const winnerName = user?.username || user?.login || 'You';
+            const loserName = data.playerWhoLeft || 'Opponent';
+            router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+          }
         }
       }
     }
@@ -198,18 +201,31 @@ export default function GamePage() {
     // Handle game ended - FIXED
     const handleGameEnded = (data: any) => {
       if (data.gameId === gameId) {
-        console.log('Game ended:', data)
         
-        // Determine winner and loser
-        const isWinner = data.winner === user?.email;
-        const winnerName = isWinner ? (user?.username || user?.login || 'You') : (data.winner || 'Opponent');
-        const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.login || 'You');
-        
-        // Navigate to appropriate result page
-        if (isWinner) {
-          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+        // For tournament matches, handle differently
+        if (data.isTournamentMatch) {
+          const isWinner = data.winner === user?.email;
+          const isHost = data.tournamentHostEmail === user?.email;
+          
+          // Host always goes back to tournament, winner goes back to tournament
+          if (isHost || isWinner) {
+            router.push(`/play/tournament/${data.tournamentId}`);
+          } else {
+            // Loser goes to play page (unless they're the host)
+            router.push('/play');
+          }
         } else {
-          router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+          // Regular match logic
+          const isWinner = data.winner === user?.email;
+          const winnerName = isWinner ? (user?.username || user?.login || 'You') : (data.winner || 'Opponent');
+          const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.login || 'You');
+          
+          // Navigate to appropriate result page
+          if (isWinner) {
+            router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+          } else {
+            router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+          }
         }
       }
     }

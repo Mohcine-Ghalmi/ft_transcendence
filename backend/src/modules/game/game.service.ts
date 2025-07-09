@@ -10,7 +10,7 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
     const existing = existingStmt.get(match.gameId) as { id: number } | undefined
     
     if (existing) {
-      console.log(`Match history already exists for game ${match.gameId}, skipping duplicate entry`)
+
       return {
         id: existing.id,
         ...match
@@ -48,12 +48,12 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
     
     // If it's a UNIQUE constraint error, try to get the existing record
     if (error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      console.log(`UNIQUE constraint error for game ${match.gameId}, attempting to retrieve existing record`)
+
       const existingStmt = db.prepare('SELECT * FROM match_history WHERE game_id = ?')
       const existing = existingStmt.get(match.gameId) as MatchHistory | undefined
       
       if (existing) {
-        console.log(`Found existing match history for game ${match.gameId}`)
+
         return existing
       }
     }
