@@ -46,8 +46,6 @@ export default function GamePage() {
   useEffect(() => {
     if (!socket || !gameId || !user?.email) return
 
-    console.log(`[FRONTEND] Checking authorization for game: ${gameId} for user: ${user.email}`);
-
     // Emit a check to see if user is authorized for this game
     socket.emit('CheckGameAuthorization', { 
       gameId, 
@@ -57,7 +55,6 @@ export default function GamePage() {
     // Set a timeout for authorization check - extended for tournament matches
     const authTimeout = setTimeout(() => {
       if (!authorizationChecked && !isStartingGameRef.current) {
-        console.log(`[FRONTEND] Authorization timeout - no response for game ${gameId}`);
         setIsAuthorized(false)
         setAuthorizationChecked(true)
         setTimeout(() => {router.push("/play")}, 0);
@@ -72,25 +69,9 @@ export default function GamePage() {
   useEffect(() => {
     if (!socket || !gameId) return
 
-    // Add global event listener to debug all events
-    const handleAnyEvent = (eventName: string, data: any) => {
-      if (eventName.includes('Match') || eventName.includes('Game') || eventName.includes('Tournament')) {
-        console.log(`[FRONTEND] Received event: ${eventName}`, data);
-      }
-    };
-
-    // Listen to all events for debugging
-    socket.onAny(handleAnyEvent);
-
     // Handle MatchFound event (for tournament and regular matches)
     const handleMatchFound = (data: any) => {
-      console.log('[FRONTEND] Received MatchFound event:', data);
-      console.log('[FRONTEND] Current gameId:', gameId);
-      console.log('[FRONTEND] Event gameId:', data.gameId);
-      console.log('[FRONTEND] Event gameRoomId:', data.gameRoomId);
-      
       if (data.gameId === gameId || data.gameRoomId === gameId) {
-        console.log('[FRONTEND] Game ID matches - processing MatchFound');
         // Match found - set up the game
         setIsAuthorized(true);
         setAuthorizationChecked(true);
@@ -99,7 +80,6 @@ export default function GamePage() {
         // Check if this is a tournament match
         if (data.isTournament || data.tournamentId) {
           setIsTournamentMatch(true);
-          console.log('[FRONTEND] Tournament match found - will auto-start when GameStarting is received');
         }
         
         // Set opponent data
@@ -115,18 +95,12 @@ export default function GamePage() {
           });
           
           setIsHost(isCurrentUserHost);
-          console.log('[FRONTEND] Opponent set:', opponentData.email);
         }
-        
-        console.log('[FRONTEND] Match setup complete, waiting for GameStarted or GameStarting');
-      } else {
-        console.log('[FRONTEND] Game ID does not match - ignoring MatchFound event');
       }
     };
 
     // Handle game found event (for tournament matches)
     const handleGameFound = (data: any) => {
-      console.log('[FRONTEND] Received GameFound event:', data);
       if (data.gameId === gameId || data.gameRoomId === gameId) {
         // Tournament match found - set up the game
         setIsAuthorized(true);
@@ -147,19 +121,12 @@ export default function GamePage() {
         if (data.gameRoom) {
           setIsHost(data.gameRoom.hostEmail === user?.email);
         }
-        
-        console.log('[FRONTEND] Tournament match setup complete, waiting for GameStarted');
       }
     };
 
     // Handle GameStarting event (for immediate game start - tournament matches)
     const handleGameStarting = (data: any) => {
-      console.log('[FRONTEND] Received GameStarting event:', data);
-      console.log('[FRONTEND] Current gameId:', gameId);
-      console.log('[FRONTEND] Event gameId:', data.gameId);
-      
       if (data.gameId === gameId) {
-        console.log('[FRONTEND] Game ID matches - processing GameStarting');
         // Set up the game immediately for tournament matches
         setIsAuthorized(true);
         setAuthorizationChecked(true);
@@ -185,7 +152,6 @@ export default function GamePage() {
           });
           
           setIsHost(isCurrentUserHost);
-          console.log('[FRONTEND] Opponent set from GameStarting:', opponentData.email);
         }
         
         // Clear any starting game timeouts
@@ -194,10 +160,6 @@ export default function GamePage() {
           setStartGameTimeout(null);
         }
         setIsStartingGame(false);
-        
-        console.log('[FRONTEND] Game starting immediately for tournament match - redirecting to PingPongGame');
-      } else {
-        console.log('[FRONTEND] Game ID does not match - ignoring GameStarting event');
       }
     };
 
@@ -296,8 +258,6 @@ export default function GamePage() {
             setIsHost(true)
           }
         }
-        
-        console.log('[FRONTEND] Game started successfully');
       }
     }
 
@@ -325,7 +285,8 @@ export default function GamePage() {
         // Only show alert and redirect if we're not the one leaving
         if (!isLeavingGameRef.current) {
           // For tournament matches, redirect back to tournament
-          if (data.isTournament || data.isTournamentMatch) {
+          if (data.isTournament || data.isTournamentMatch || isTournamentMatch) {
+            // Show different message for tournament
             // Winner goes back to tournament
             router.push(`/play/tournament/${data.tournamentId}`);
           } else {
@@ -344,20 +305,12 @@ export default function GamePage() {
         
         // For tournament matches, handle differently
         if (data.isTournament || data.isTournamentMatch || isTournamentMatch) {
-          console.log('[FRONTEND] Tournament match ended - redirecting to tournament');
           const isWinner = data.winner === user?.email;
           const isTournamentHost = data.tournamentHostEmail === user?.email;
           
           // Tournament host ALWAYS goes back to tournament
           // Winner ALWAYS goes back to tournament 
           // Loser ALSO goes back to tournament (changed from going to /play)
-          
-          // Show a brief notification before redirecting
-          if (isWinner) {
-            console.log('[FRONTEND] User won - redirecting to tournament');
-          } else {
-            console.log('[FRONTEND] User lost - redirecting to tournament');
-          }
           
           // Always redirect to tournament for tournament matches
           setTimeout(() => {
@@ -394,16 +347,13 @@ export default function GamePage() {
 
     // Handle game authorization response
     const handleGameAuthorizationResponse = (data: any) => {
-      console.log('[FRONTEND] Authorization response:', data);
       setAuthorizationChecked(true)
       
       if (data.status === 'success' && data.authorized) {
-        console.log('[FRONTEND] Game access authorized');
         setIsAuthorized(true)
         
         // Check if game is in a valid state
         if (data.gameStatus === 'canceled' || data.gameStatus === 'completed') {
-          console.log('[FRONTEND] Game is not active:', data.gameStatus);
           setTimeout(() => {router.push("/play")}, 0);
           return
         }
@@ -411,7 +361,6 @@ export default function GamePage() {
         // Handle ongoing tournament match - set up game immediately
         if ((data.gameStatus === 'playing' || data.gameStatus === 'accepted' || data.gameStatus === 'waiting') && 
             (data.isTournament || data.tournamentId) && data.gameRoom) {
-          console.log('[FRONTEND] Tournament match detected - setting up game. Status:', data.gameStatus);
           
           // Set tournament match flag
           setIsTournamentMatch(true);
@@ -421,7 +370,6 @@ export default function GamePage() {
           
           // If game has already started or has game state, set it as started
           if (data.gameStatus === 'playing' || data.gameState) {
-            console.log('[FRONTEND] Tournament match already in progress - starting immediately');
             setGameStarted(true);
           }
           
@@ -469,25 +417,39 @@ export default function GamePage() {
             });
           }
           
-          console.log('[FRONTEND] Tournament match setup complete');
           return;
         }
         
       } else {
-        console.log('[FRONTEND] Game access denied:', data.message);
         setIsAuthorized(false)
         // Don't redirect if we're in the process of starting the game or if this might be a tournament match
         if (!isStartingGameRef.current) {
           // Give more time for tournament matches to set up
           setTimeout(() => {
             if (!gameAccepted && !gameStarted) {
-              console.log('[FRONTEND] No game activity detected, redirecting to play');
               router.push("/play");
             }
           }, 2000);
         }
       }
     }
+
+    // Handle tournament player forfeit
+    const handleTournamentPlayerForfeited = (data: any) => {
+      if (data.tournamentId && (isTournamentMatch || gameData?.tournamentId === data.tournamentId)) {
+        // If the current user was in this match, redirect to tournament
+        const userWasInMatch = data.affectedMatch && 
+          (data.affectedMatch.player1?.email === user?.email || 
+           data.affectedMatch.player2?.email === user?.email);
+        
+        if (userWasInMatch) {
+          // Small delay to allow for any state updates
+          setTimeout(() => {
+            router.push(`/play/tournament/${data.tournamentId}`);
+          }, 1000);
+        }
+      }
+    };
 
     socket.on('MatchFound', handleMatchFound)
     socket.on('GameFound', handleGameFound)
@@ -500,9 +462,9 @@ export default function GamePage() {
     socket.on('GameEnded', handleGameEnded)
     socket.on('GameCanceled', handleGameCanceled)
     socket.on('GameAuthorizationResponse', handleGameAuthorizationResponse)
+    socket.on('TournamentPlayerForfeited', handleTournamentPlayerForfeited)
 
     return () => {
-      socket.offAny(handleAnyEvent);
       socket.off('MatchFound', handleMatchFound)
       socket.off('GameFound', handleGameFound)
       socket.off('GameStarting', handleGameStarting)
@@ -514,6 +476,7 @@ export default function GamePage() {
       socket.off('GameEnded', handleGameEnded)
       socket.off('GameCanceled', handleGameCanceled)
       socket.off('GameAuthorizationResponse', handleGameAuthorizationResponse)
+      socket.off('TournamentPlayerForfeited', handleTournamentPlayerForfeited)
       
       // Clean up timeout
       if (startGameTimeout) {
@@ -531,16 +494,29 @@ export default function GamePage() {
       if (socket && gameId && user?.email && !isLeavingGameRef.current && !hasUnloaded) {
         hasUnloaded = true
         setIsLeavingGame(true)
-        socket.emit('LeaveGame', { 
+        
+        // For tournament matches, include tournament information
+        const leaveData = {
           gameId, 
-          playerEmail: user.email 
-        })
+          playerEmail: user.email,
+          reason: 'page_refresh'
+        };
+        
+        if (isTournamentMatch && gameData?.tournamentId) {
+          (leaveData as any).tournamentId = gameData.tournamentId;
+          (leaveData as any).isTournamentMatch = true;
+        }
+        
+        socket.emit('LeaveGame', leaveData)
         
         // Show confirmation dialog if game is in progress
         if (gameStartedRef.current) {
           e.preventDefault()
-          e.returnValue = 'Are you sure you want to leave the game? This will result in a loss.'
-          return 'Are you sure you want to leave the game? This will result in a loss.'
+          const message = isTournamentMatch 
+            ? 'Are you sure you want to leave the tournament match? You will be eliminated and your opponent will advance.'
+            : 'Are you sure you want to leave the game? This will result in a loss.';
+          e.returnValue = message
+          return message
         }
       }
     }
@@ -550,10 +526,19 @@ export default function GamePage() {
       if (document.visibilityState === 'hidden' && hasUnloaded) {
         if (socket && gameId && user?.email && !isLeavingGameRef.current) {
           setIsLeavingGame(true)
-          socket.emit('LeaveGame', { 
+          
+          const leaveData = {
             gameId, 
-            playerEmail: user.email 
-          })
+            playerEmail: user.email,
+            reason: 'tab_change'
+          };
+          
+          if (isTournamentMatch && gameData?.tournamentId) {
+            (leaveData as any).tournamentId = gameData.tournamentId;
+            (leaveData as any).isTournamentMatch = true;
+          }
+          
+          socket.emit('LeaveGame', leaveData)
         }
       }
     }
@@ -602,12 +587,20 @@ export default function GamePage() {
   const handleCancelGame = () => {
     if (socket && gameId && !isLeavingGame) {
       setTimeout(() => {setIsLeavingGame(true), 0});
+      
       // Include tournament information if this is a tournament match
-      socket.emit('LeaveGame', { 
+      const leaveData = {
         gameId, 
         playerEmail: user?.email,
         reason: 'player_cancelled_game'
-      })
+      };
+      
+      if (isTournamentMatch && gameData?.tournamentId) {
+        (leaveData as any).tournamentId = gameData.tournamentId;
+        (leaveData as any).isTournamentMatch = true;
+      }
+      
+      socket.emit('LeaveGame', leaveData)
     }
   }
 
@@ -637,20 +630,39 @@ export default function GamePage() {
       if (currentPath && newPath !== currentPath) {
         if (gameId && socket && user?.email) {
           handleCancelGame();
+          
           // Player left during active game - mark as lost
-          socket.emit('LeaveGame', { 
+          const leaveData = {
             gameId, 
             playerEmail: user.email,
             reason: 'player_left_page'
-          });
+          };
+          
+          if (isTournamentMatch && gameData?.tournamentId) {
+            (leaveData as any).tournamentId = gameData.tournamentId;
+            (leaveData as any).isTournamentMatch = true;
+          }
+          
+          socket.emit('LeaveGame', leaveData);
         } else if (gameAccepted && gameId && socket && user?.email) {
           // Player left while waiting to start - emit appropriate event for both host and guest
+          const leaveData = {
+            gameId, 
+            playerEmail: user.email,
+            reason: 'player_left_waiting_page'
+          };
+          
+          if (isTournamentMatch && gameData?.tournamentId) {
+            (leaveData as any).tournamentId = gameData.tournamentId;
+            (leaveData as any).isTournamentMatch = true;
+          }
+          
           if (isHost) {
             // Host leaving - emit both events to ensure guest gets notified
             socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('LeaveGame', leaveData);
           } else {
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('LeaveGame', leaveData);
           }
         }
       }
@@ -663,24 +675,45 @@ export default function GamePage() {
       if (gameId && socket && user?.email) {
         // Show confirmation dialog for active games
         e.preventDefault();
-        e.returnValue = 'Are you sure you want to leave the game? This will result in a loss.';
+        const message = isTournamentMatch 
+          ? 'Are you sure you want to leave the tournament match? You will be eliminated and your opponent will advance.'
+          : 'Are you sure you want to leave the game? This will result in a loss.';
+        e.returnValue = message;
         
-        // Emit leave event
-        socket.emit('LeaveGame', { 
+        // Emit leave event with tournament info
+        const leaveData = {
           gameId, 
           playerEmail: user.email,
           reason: 'player_closed_page'
-        });
+        };
         
-        return 'Are you sure you want to leave the game? This will result in a loss.';
+        if (isTournamentMatch && gameData?.tournamentId) {
+          (leaveData as any).tournamentId = gameData.tournamentId;
+          (leaveData as any).isTournamentMatch = true;
+        }
+        
+        socket.emit('LeaveGame', leaveData);
+        
+        return message;
       } else if (gameAccepted && gameId && socket && user?.email) {
         // Both host and guest should emit appropriate events when leaving waiting room
+        const leaveData = {
+          gameId, 
+          playerEmail: user.email,
+          reason: 'player_closed_waiting_room'
+        };
+        
+        if (isTournamentMatch && gameData?.tournamentId) {
+          (leaveData as any).tournamentId = gameData.tournamentId;
+          (leaveData as any).isTournamentMatch = true;
+        }
+        
         if (isHost) {
           // Host leaving - emit both events to ensure guest gets notified
           socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          socket.emit('LeaveGame', leaveData);
         } else {
-          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          socket.emit('LeaveGame', leaveData);
         }
       }
     };
@@ -691,21 +724,40 @@ export default function GamePage() {
         if (gameId && socket && user?.email) {
           // Player left during active game - mark as lost
           handleCancelGame();
-          socket.emit('LeaveGame', { 
+          
+          const leaveData = {
             gameId, 
             playerEmail: user.email,
             reason: 'player_changed_tab'
-          });
+          };
+          
+          if (isTournamentMatch && gameData?.tournamentId) {
+            (leaveData as any).tournamentId = gameData.tournamentId;
+            (leaveData as any).isTournamentMatch = true;
+          }
+          
+          socket.emit('LeaveGame', leaveData);
         } else if (gameAccepted && gameId && socket && user?.email) {
           // Both host and guest should emit appropriate events when leaving waiting room
+          handleCancelGame();
+          
+          const leaveData = {
+            gameId, 
+            playerEmail: user.email,
+            reason: 'player_changed_tab_waiting'
+          };
+          
+          if (isTournamentMatch && gameData?.tournamentId) {
+            (leaveData as any).tournamentId = gameData.tournamentId;
+            (leaveData as any).isTournamentMatch = true;
+          }
+          
           if (isHost) {
             // Host leaving - emit both events to ensure guest gets notified
-            handleCancelGame();
             socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('LeaveGame', leaveData);
           } else {
-            handleCancelGame();
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('LeaveGame', leaveData);
           }
         }
       }
@@ -890,13 +942,15 @@ export default function GamePage() {
                 Start Game
               </button>
             )}
-            <button
-              onClick={handleCancelGame}
-              disabled={isLeavingGame}
-              className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white px-8 py-3 rounded-lg transition-colors"
-            >
-              Leave Game
-            </button>
+            {!isTournamentMatch && (
+              <button
+                onClick={handleCancelGame}
+                disabled={isLeavingGame}
+                className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white px-8 py-3 rounded-lg transition-colors"
+              >
+                Leave Game
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -248,4 +248,87 @@ export function getPlayerCurrentMatch(tournament: Tournament, playerEmail: strin
 // Helper function to check if player is in tournament
 export function isPlayerInTournament(tournament: Tournament, playerEmail: string): boolean {
   return tournament.participants.some(p => p.email === playerEmail);
-} 
+}
+
+// Helper function to handle player forfeit in tournament
+export function handleTournamentPlayerForfeit(tournament: Tournament, playerEmail: string): { 
+  updatedTournament: Tournament, 
+  affectedMatch: TournamentMatch | null,
+  forfeitedPlayer: TournamentParticipant | null,
+  advancingPlayer: TournamentParticipant | null
+} {
+  // Find the participant who is forfeiting
+  const forfeitedPlayer = tournament.participants.find(p => p.email === playerEmail);
+  if (!forfeitedPlayer) {
+    return { updatedTournament: tournament, affectedMatch: null, forfeitedPlayer: null, advancingPlayer: null };
+  }
+
+  // Mark the forfeiting player as eliminated
+  forfeitedPlayer.status = 'eliminated';
+
+  // Find the current match involving this player
+  const currentMatch = tournament.matches.find(m => 
+    (m.player1?.email === playerEmail || m.player2?.email === playerEmail) && 
+    (m.state === 'waiting' || m.state === 'in_progress')
+  );
+
+  if (!currentMatch) {
+    return { updatedTournament: tournament, affectedMatch: null, forfeitedPlayer, advancingPlayer: null };
+  }
+
+  // Determine the advancing player (opponent)
+  const advancingPlayer = currentMatch.player1?.email === playerEmail 
+    ? currentMatch.player2 
+    : currentMatch.player1;
+
+  if (!advancingPlayer) {
+    // Edge case: no opponent (bye situation), just mark match as complete
+    currentMatch.state = 'completed';
+    return { updatedTournament: tournament, affectedMatch: currentMatch, forfeitedPlayer, advancingPlayer: null };
+  }
+
+  // Update match result - the remaining player wins by forfeit
+  if (currentMatch.player1?.email === advancingPlayer.email) {
+    currentMatch.state = 'player1_win';
+    currentMatch.winner = currentMatch.player1;
+  } else if (currentMatch.player2?.email === advancingPlayer.email) {
+    currentMatch.state = 'player2_win';
+    currentMatch.winner = currentMatch.player2;
+  }
+
+  // Mark the advancing player as accepted (still in tournament)
+  if (advancingPlayer) {
+    const advancingParticipant = tournament.participants.find(p => p.email === advancingPlayer.email);
+    if (advancingParticipant) {
+      advancingParticipant.status = 'accepted';
+    }
+  }
+
+  // Advance winner to next round if next round exists
+  const nextRound = currentMatch.round + 1;
+  const nextMatchIndex = Math.floor(currentMatch.matchIndex / 2);
+  const nextMatch = tournament.matches.find(m => m.round === nextRound && m.matchIndex === nextMatchIndex);
+
+  if (nextMatch && currentMatch.winner) {
+    // Determine if winner goes to player1 or player2 slot
+    if (currentMatch.matchIndex % 2 === 0) {
+      // Even match index -> winner goes to player1 slot
+      nextMatch.player1 = currentMatch.winner;
+    } else {
+      // Odd match index -> winner goes to player2 slot
+      nextMatch.player2 = currentMatch.winner;
+    }
+
+    // Check if next match is ready (both players assigned)
+    if (nextMatch.player1 && nextMatch.player2) {
+      nextMatch.state = 'waiting';
+    }
+  }
+
+  return { 
+    updatedTournament: tournament, 
+    affectedMatch: currentMatch, 
+    forfeitedPlayer, 
+    advancingPlayer 
+  };
+}

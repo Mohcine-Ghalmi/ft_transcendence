@@ -190,8 +190,6 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
       
       // Handle tournament match result automatically if this is a tournament game
       if (gameRoom.tournamentId && gameRoom.matchId) {
-
-        
         // Import and call tournament match handler
         const { processTournamentMatchResult } = await import('./game.socket.tournament.match');
         await processTournamentMatchResult(io, {
@@ -201,6 +199,41 @@ export const handleGameManagement: GameSocketHandler = (socket: Socket, io: Serv
           loserEmail: loser,
           playerEmail: winner // Could be either player
         });
+        
+        // Also handle forfeit logic specifically for tournaments
+        const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
+        
+        try {
+          const tournamentData = await redis.get(`tournament:${gameRoom.tournamentId}`);
+          if (tournamentData) {
+            const tournament = JSON.parse(tournamentData);
+            const { updatedTournament, affectedMatch, forfeitedPlayer, advancingPlayer } = 
+              handleTournamentPlayerForfeit(tournament, loser);
+            
+            // Save updated tournament
+            await redis.setex(`tournament:${gameRoom.tournamentId}`, 3600, JSON.stringify(updatedTournament));
+            
+            // Notify all tournament participants about the forfeit
+            const allParticipantEmails = updatedTournament.participants.map((p: any) => p.email);
+            const allSocketIds: string[] = [];
+            
+            for (const email of allParticipantEmails) {
+              const socketIds = await getSocketIds(email, 'sockets') || [];
+              allSocketIds.push(...socketIds);
+            }
+            
+            io.to(allSocketIds).emit('TournamentPlayerForfeited', {
+              tournamentId: gameRoom.tournamentId,
+              forfeitedPlayer,
+              advancingPlayer,
+              affectedMatch,
+              tournament: updatedTournament,
+              message: `${forfeitedPlayer?.nickname} has forfeited. ${advancingPlayer?.nickname} advances to the next round.`
+            });
+          }
+        } catch (error) {
+          console.error('Error handling tournament forfeit:', error);
+        }
       }
       
       // Clean up game

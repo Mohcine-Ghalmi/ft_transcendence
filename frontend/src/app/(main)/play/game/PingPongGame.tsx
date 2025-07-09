@@ -709,8 +709,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   const handleGameEnded = useCallback((data: any) => {
     if (data.gameId === gameId) {
-      console.log('Game ended:', data);
-      
       // Set game state to ended
       setGameStarted(false);
       setPaused(true);
@@ -731,8 +729,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   const handlePlayerLeft = useCallback((data: any) => {
     if (data.gameId === gameId) {
-      console.log('Opponent left:', data);
-      
       // Set game state to ended
       setGameStarted(false);
       setPaused(true);

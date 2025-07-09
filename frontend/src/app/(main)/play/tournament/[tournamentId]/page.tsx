@@ -28,19 +28,26 @@ export default function TournamentGamePage() {
   useEffect(() => {
     if (!socket || !tournamentId || !user?.email) return;
 
+    // First, try to get tournament data to check if it's completed
+    socket.emit('GetTournamentData', { 
+      tournamentId, 
+      playerEmail: user.email 
+    })
+
+    // Also emit JoinTournament for live tournaments
     socket.emit('JoinTournament', { 
       tournamentId, 
       playerEmail: user.email 
     })
     
-    // Set a timeout for authorization check
+    // Set a timeout for authorization check - increased for completed tournaments
     const authTimeout = setTimeout(() => {
       if (!authorizationChecked) {
         setIsAuthorized(false)
         setAuthorizationChecked(true)
         router.push('/play')
       }
-    }, 5000)
+    }, 8000) // Increased to 8 seconds for completed tournament data
 
     return () => {
       clearTimeout(authTimeout)
@@ -97,6 +104,39 @@ export default function TournamentGamePage() {
         // Do NOT automatically set up matches when joining tournament room
         // Matches should only start when host clicks "Start Round"
       } else {
+        // If join failed, still try to get tournament data for completed tournaments
+        if (data.message && data.message.includes('completed')) {
+          // Tournament is completed, allow viewing
+          setIsAuthorized(true)
+          if (data.tournament) {
+            setTournamentData(data.tournament)
+            setIsHost(data.tournament.hostEmail === user?.email)
+          }
+        } else {
+          setIsAuthorized(false)
+          router.push('/play')
+        }
+      }
+    }
+
+    // Handle tournament data response (for completed tournaments)
+    const handleTournamentDataResponse = (data: any) => {
+      setAuthorizationChecked(true)
+      if (data.status === 'success' && data.tournament) {
+        setIsAuthorized(true)
+        setTournamentData(data.tournament)
+        setIsHost(data.tournament.hostEmail === user?.email)
+        
+        // Show notification for completed tournaments
+        if (data.tournament.status === 'completed') {
+          setNotification({ 
+            message: '🏆 This tournament has been completed. Viewing final results.', 
+            type: 'info' 
+          })
+          setTimeout(() => setNotification(null), 5000)
+        }
+      } else if (!isAuthorized) {
+        // Only redirect if we haven't been authorized yet
         setIsAuthorized(false)
         router.push('/play')
       }
@@ -424,8 +464,64 @@ export default function TournamentGamePage() {
       }
     };
 
+    const handleTournamentPlayerForfeited = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        // Update tournament data
+        if (data.tournament) {
+          setTournamentData(data.tournament)
+        }
+        
+        // Show notification about the forfeit
+        const forfeitedPlayerName = data.forfeitedPlayer?.nickname || 'A player'
+        const advancingPlayerName = data.advancingPlayer?.nickname || 'opponent'
+        
+        if (data.forfeitedPlayer?.email === user?.email) {
+          setNotification({
+            message: '❌ You have forfeited the tournament match.',
+            type: 'error'
+          })
+        } else if (data.advancingPlayer?.email === user?.email) {
+          setNotification({
+            message: `🎉 Your opponent ${forfeitedPlayerName} forfeited. You advance to the next round!`,
+            type: 'success'
+          })
+        } else {
+          setNotification({
+            message: `⚠️ ${forfeitedPlayerName} forfeited. ${advancingPlayerName} advances to the next round.`,
+            type: 'info'
+          })
+        }
+        
+        // Clear notification after 5 seconds
+        setTimeout(() => setNotification(null), 5000)
+      }
+    }
+
+    const handleTournamentLeaveResponse = (data: any) => {
+      if (data.status === 'success') {
+        setNotification({
+          type: 'success',
+          message: data.message || 'Left tournament successfully'
+        });
+        
+        // Redirect to play page after leaving
+        setTimeout(() => {
+          router.push('/play');
+        }, 2000);
+      } else {
+        setNotification({
+          type: 'error',
+          message: data.message || 'Failed to leave tournament'
+        });
+      }
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => setNotification(null), 3000);
+    };
+
     // Register all event listeners
     socket.on('TournamentJoinResponse', handleTournamentJoinResponse)
+    socket.on('TournamentDataResponse', handleTournamentDataResponse)
     socket.on('TournamentPlayerJoined', handleTournamentPlayerJoined)
     socket.on('TournamentUpdated', handleTournamentUpdated)
     socket.on('TournamentInviteAccepted', handleTournamentInviteAccepted)
@@ -443,9 +539,12 @@ export default function TournamentGamePage() {
     socket.on('GameStarting', handleGameStarting)
     socket.on('TournamentRoundStarted', handleTournamentRoundStarted)
     socket.on('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
+    socket.on('TournamentPlayerForfeited', handleTournamentPlayerForfeited)
+    socket.on('TournamentLeaveResponse', handleTournamentLeaveResponse)
 
     return () => {
       socket.off('TournamentJoinResponse', handleTournamentJoinResponse)
+      socket.off('TournamentDataResponse', handleTournamentDataResponse)
       socket.off('TournamentPlayerJoined', handleTournamentPlayerJoined)
       socket.off('TournamentUpdated', handleTournamentUpdated)
       socket.off('TournamentInviteAccepted', handleTournamentInviteAccepted)
@@ -463,6 +562,8 @@ export default function TournamentGamePage() {
       socket.off('GameStarting', handleGameStarting)
       socket.off('TournamentRoundStarted', handleTournamentRoundStarted)
       socket.off('TournamentMatchGameStarted', handleTournamentMatchGameStarted)
+      socket.off('TournamentPlayerForfeited', handleTournamentPlayerForfeited)
+      socket.off('TournamentLeaveResponse', handleTournamentLeaveResponse)
     }
   }, [socket, tournamentId, user?.email, router])
 
@@ -514,26 +615,12 @@ export default function TournamentGamePage() {
       return 0;
     })();
     
-    console.log('[FRONTEND] Starting round:', currentRound, 'with tournament data:', {
-      matches: tournamentData?.matches?.length,
-      waitingMatches: tournamentData?.matches?.filter((m: any) => m.state === MATCH_STATES.WAITING).length,
-      inProgressMatches: tournamentData?.matches?.filter((m: any) => m.state === MATCH_STATES.IN_PROGRESS).length
-    });
-    
     socket.emit('StartCurrentRound', { 
       tournamentId, 
       hostEmail: user.email, 
       round: currentRound 
     });
   };
-
-  const handleLeaveTournament = () => {
-    if (!socket || !tournamentId) return
-
-    isLeavingGameRef.current = true
-    socket.emit('LeaveTournament', { tournamentId, playerEmail: user?.email })
-    router.push('/play')
-  }
 
   // Add after main hooks
   useEffect(() => {
@@ -603,9 +690,7 @@ export default function TournamentGamePage() {
     
     socket.emit('CancelTournament', { tournamentId, hostEmail: user?.email });
     setNotification({ message: 'Canceling tournament...', type: 'info' });
-  };
-
-
+  }
 
   // Loading state
   if (!authorizationChecked) {
@@ -670,17 +755,6 @@ export default function TournamentGamePage() {
                tournamentData?.status === 'in_progress' ? 'In Progress' :
                'Completed'}
             </span>
-            {/* Only show Leave Tournament button when tournament is in lobby OR when user is eliminated */}
-            {(tournamentData?.status === 'lobby' || 
-              (tournamentData?.status === 'in_progress' && 
-               tournamentData?.participants?.find(p => p.email === user?.email)?.status === 'eliminated')) && (
-              <button
-                onClick={handleLeaveTournament}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Leave Tournament
-              </button>
-            )}
           </div>
         </div>
 

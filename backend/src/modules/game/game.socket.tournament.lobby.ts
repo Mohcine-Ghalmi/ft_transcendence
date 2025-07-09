@@ -221,30 +221,72 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         return socket.emit('TournamentLeaveResponse', { status: 'error', message: 'Host cannot leave. Cancel the tournament instead.' });
       }
       
-      // Remove participant from tournament
-      const leftPlayer = tournament.participants[participantIndex];
-      tournament.participants.splice(participantIndex, 1);
-      
-      // Update tournament in Redis
-      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
-      
-      // Notify all remaining participants
-      const allParticipantEmails = tournament.participants.map((p: any) => p.email);
-      const allSocketIds = [];
-      
-      for (const email of allParticipantEmails) {
-        const socketIds = await getSocketIds(email, 'sockets') || [];
-        allSocketIds.push(...socketIds);
+      // Handle different tournament states
+      if (tournament.status === 'lobby') {
+        // Simple leave for lobby tournaments
+        const leftPlayer = tournament.participants[participantIndex];
+        tournament.participants.splice(participantIndex, 1);
+        
+        // Update tournament in Redis
+        await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
+        
+        // Notify all remaining participants
+        const allParticipantEmails = tournament.participants.map((p: any) => p.email);
+        const allSocketIds = [];
+        
+        for (const email of allParticipantEmails) {
+          const socketIds = await getSocketIds(email, 'sockets') || [];
+          allSocketIds.push(...socketIds);
+        }
+        
+        io.to(allSocketIds).emit('TournamentParticipantLeft', {
+          tournamentId,
+          tournament,
+          leftPlayer,
+          message: `${leftPlayer.nickname || leftPlayer.email} left the tournament.`
+        });
+        
+        socket.emit('TournamentLeaveResponse', { status: 'success', message: 'Left tournament successfully.' });
+        
+      } else if (tournament.status === 'in_progress') {
+        // Handle forfeit for active tournaments
+        const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
+        
+        const { updatedTournament, affectedMatch, forfeitedPlayer, advancingPlayer } = 
+          handleTournamentPlayerForfeit(tournament, playerEmail);
+        
+        // Save updated tournament
+        await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(updatedTournament));
+        
+        // Notify all tournament participants about the forfeit
+        const allParticipantEmails = updatedTournament.participants.map((p: any) => p.email);
+        const allSocketIds: string[] = [];
+        
+        for (const email of allParticipantEmails) {
+          const socketIds = await getSocketIds(email, 'sockets') || [];
+          allSocketIds.push(...socketIds);
+        }
+        
+        io.to(allSocketIds).emit('TournamentPlayerForfeited', {
+          tournamentId,
+          forfeitedPlayer,
+          advancingPlayer,
+          affectedMatch,
+          tournament: updatedTournament,
+          message: `${forfeitedPlayer?.nickname} has forfeited the tournament. ${advancingPlayer?.nickname} advances to the next round.`
+        });
+        
+        socket.emit('TournamentLeaveResponse', { 
+          status: 'success', 
+          message: 'You have forfeited the tournament.' 
+        });
+        
+      } else {
+        return socket.emit('TournamentLeaveResponse', { 
+          status: 'error', 
+          message: 'Cannot leave tournament in current state.' 
+        });
       }
-      
-      io.to(allSocketIds).emit('TournamentParticipantLeft', {
-        tournamentId,
-        tournament,
-        leftPlayer,
-        message: `${leftPlayer.nickname || leftPlayer.email} left the tournament.`
-      });
-      
-      socket.emit('TournamentLeaveResponse', { status: 'success', message: 'Left tournament successfully.' });
       
     } catch (error) {
       console.error('[Tournament] Error leaving tournament:', error);
