@@ -107,14 +107,14 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           setScores({ p1: 0, p2: 0 });
         }
         
-        // Set game ready immediately for tournament games, add delay for regular games
+        // Tournament games should be ready immediately with no delay
         if (isTournamentMode) {
           setGameReady(true);
         } else {
-          // Add 1-second delay before game is ready to play for regular games
+          // Add small delay for regular games
           setTimeout(() => {
             setGameReady(true);
-          }, 0);
+          }, 500);
         }
       }
     };
@@ -124,9 +124,30 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     return () => {
       socket.off('GameStarted', handleGameStarted);
     };
-  }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost]);
+  }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost, isTournamentMode]);
 
-  // Auto-start for remote games - but NOT for tournament games
+  // Auto-start for tournament games immediately when component mounts
+  useEffect(() => {
+    if (isRemoteGame && isTournamentMode && !gameStarted) {
+      // For tournament games, start immediately without waiting for events
+      setGameStarted(true);
+      setPaused(false);
+      gameStartTime.current = Date.now();
+      
+      // Initialize with default values for tournament
+      ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
+      ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
+      ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+      ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+      paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      paddle2Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      currentScores.current = { p1: 0, p2: 0 };
+      setScores({ p1: 0, p2: 0 });
+      setGameReady(true);
+    }
+  }, [isRemoteGame, isTournamentMode, gameStarted]);
+
+  // Regular game auto-start logic (only for non-tournament games)
   useEffect(() => {
     if (isRemoteGame && socket && gameId && !gameStarted && !isTournamentMode) {
       const autoStartTimer = setTimeout(() => {
@@ -812,8 +833,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
               }}
             />
             
-            {/* Start Button Overlay */}
-            {!gameStarted && (
+            {/* Start Button Overlay - Only show for non-tournament games */}
+            {!gameStarted && !isTournamentMode && (
               <div className="absolute inset-0 z-20 flex items-center justify-center">
                 <button
                   onClick={handleStart}
@@ -823,6 +844,16 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                     <polygon points="8,6 19,12 8,18" />
                   </svg>
                 </button>
+              </div>
+            )}
+            
+            {/* Tournament Game Loading Overlay */}
+            {!gameStarted && isTournamentMode && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent mx-auto mb-4"></div>
+                  <p className="text-white text-lg font-semibold">Tournament Match Starting...</p>
+                </div>
               </div>
             )}
 

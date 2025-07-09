@@ -343,17 +343,27 @@ export default function GamePage() {
       if (data.gameId === gameId) {
         
         // For tournament matches, handle differently
-        if (data.isTournament || data.isTournamentMatch) {
+        if (data.isTournament || data.isTournamentMatch || isTournamentMatch) {
+          console.log('[FRONTEND] Tournament match ended - redirecting to tournament');
           const isWinner = data.winner === user?.email;
-          const isHost = data.tournamentHostEmail === user?.email;
+          const isTournamentHost = data.tournamentHostEmail === user?.email;
           
-          // Host always goes back to tournament, winner goes back to tournament
-          if (isHost || isWinner) {
-            router.push(`/play/tournament/${data.tournamentId}`);
+          // Tournament host ALWAYS goes back to tournament
+          // Winner ALWAYS goes back to tournament 
+          // Loser ALSO goes back to tournament (changed from going to /play)
+          
+          // Show a brief notification before redirecting
+          if (isWinner) {
+            console.log('[FRONTEND] User won - redirecting to tournament');
           } else {
-            // Loser goes to play page (unless they're the host)
-            router.push('/play');
+            console.log('[FRONTEND] User lost - redirecting to tournament');
           }
+          
+          // Always redirect to tournament for tournament matches
+          setTimeout(() => {
+            router.push(`/play/tournament/${data.tournamentId}`);
+          }, 1000); // Small delay to allow any final state updates
+          
         } else {
           // Regular match logic
           const isWinner = data.winner === user?.email;

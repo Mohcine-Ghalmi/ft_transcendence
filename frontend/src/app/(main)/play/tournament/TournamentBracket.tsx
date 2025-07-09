@@ -732,11 +732,17 @@ const TournamentBracket = ({
       (match.state === MATCH_STATES.PLAYER1_WIN && !isPlayer1) ||
       (match.state === MATCH_STATES.PLAYER2_WIN && isPlayer1)
 
-    if (won) return 'text-green-400 font-bold'
-    if (lost) return 'text-red-400 line-through'
+    if (won) {
+      return 'text-green-400 font-bold'
+    }
+    if (lost) {
+      return 'text-red-400 line-through'
+    }
 
-    if (match.state === MATCH_STATES.IN_PROGRESS)
+    if (match.state === MATCH_STATES.IN_PROGRESS) {
       return 'text-yellow-300 italic'
+    }
+    
     return 'text-gray-300'
   }
 
