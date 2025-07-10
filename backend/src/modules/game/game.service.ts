@@ -39,6 +39,10 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
       match.status
     )
     
+    // Update XP for both players based on the result
+    await updateUserXP(match.winner, true)  // Winner gets +30 XP
+    await updateUserXP(match.loser, false)  // Loser gets -15 XP
+    
     return {
       id: result.lastInsertRowid as number,
       ...match
@@ -168,4 +172,33 @@ export async function initializeMatchHistoryTable(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_match_history_ended_at ON match_history(ended_at);
     CREATE INDEX IF NOT EXISTS idx_match_history_winner ON match_history(winner);
   `)
-} 
+}
+
+// Function to update user XP based on game result
+export async function updateUserXP(userEmail: string, isWinner: boolean): Promise<void> {
+  const db = getDatabase()
+  
+  try {
+    const xpChange = isWinner ? 30 : -15
+    
+    const getUserStmt = db.prepare('SELECT id, xp, level FROM User WHERE email = ?')
+    const user = getUserStmt.get(userEmail) as { id: number; xp: number; level: number } | undefined
+    
+    if (!user) {
+      console.error(`User not found for XP update: ${userEmail}`)
+      return
+    }
+    
+    const newXP = Math.max(0, user.xp + xpChange)
+    
+    const newLevel = Math.floor(newXP / 100)
+    
+    const updateStmt = db.prepare('UPDATE User SET xp = ?, level = ? WHERE email = ?')
+    updateStmt.run(newXP, newLevel, userEmail)
+    
+    console.log(`Updated XP for ${userEmail}: ${user.xp} -> ${newXP} (${isWinner ? 'WIN' : 'LOSS'}: ${xpChange > 0 ? '+' : ''}${xpChange}), Level: ${user.level} -> ${newLevel}`)
+    
+  } catch (error) {
+    console.error(`Error updating XP for user ${userEmail}:`, error)
+  }
+}

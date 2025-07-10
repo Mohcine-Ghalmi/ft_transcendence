@@ -821,13 +821,6 @@ export default function GamePage() {
           <h1 className="text-4xl font-bold text-white mb-8">Checking Game Access...</h1>
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mx-auto"></div>
           <p className="text-gray-400 mt-4">Verifying your access to this game...</p>
-          <div className="mt-4 text-sm text-gray-500">
-            <p>Debug info:</p>
-            <p>Game ID: {gameId}</p>
-            <p>User: {user?.email}</p>
-            <p>Socket connected: {socket ? 'Yes' : 'No'}</p>
-            <p>Current path: {window.location.pathname}</p>
-          </div>
         </div>
       </div>
     )
@@ -965,15 +958,6 @@ export default function GamePage() {
           <h1 className="text-4xl font-bold text-white mb-8">Game Starting...</h1>
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mx-auto"></div>
           <p className="text-gray-400 mt-4">Setting up the game...</p>
-          <div className="mt-4 text-sm text-gray-500">
-            <p>Debug info:</p>
-            <p>Game ID: {gameId}</p>
-            <p>Socket connected: {socket ? 'Yes' : 'No'}</p>
-            <p>User: {user?.email}</p>
-            <p>Game Started: {gameStarted ? 'Yes' : 'No'}</p>
-            <p>Opponent: {opponent ? 'Set' : 'Not set'}</p>
-            <p>Is Leaving: {isLeavingGame ? 'Yes' : 'No'}</p>
-          </div>
         </div>
       </div>
     )
@@ -998,19 +982,6 @@ export default function GamePage() {
         <h1 className="text-4xl font-bold text-white mb-8">Waiting for game to start...</h1>
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mx-auto"></div>
         <p className="text-gray-400 mt-4">Please wait while the game is being set up...</p>
-        <div className="mt-4 text-sm text-gray-500">
-          <p>Debug info:</p>
-          <p>Game ID: {gameId}</p>
-          <p>Socket connected: {socket ? 'Yes' : 'No'}</p>
-          <p>User: {user?.email}</p>
-          <p>Authorized: {isAuthorized ? 'Yes' : 'No'}</p>
-          <p>Auth Checked: {authorizationChecked ? 'Yes' : 'No'}</p>
-          <p>Game Accepted: {gameAccepted ? 'Yes' : 'No'}</p>
-          <p>Game Started: {gameStarted ? 'Yes' : 'No'}</p>
-          <p>Opponent: {opponent ? 'Set' : 'Not set'}</p>
-          <p>Is Tournament: {isTournamentMatch ? 'Yes' : 'No'}</p>
-          <p>Is Leaving: {isLeavingGame ? 'Yes' : 'No'}</p>
-        </div>
       </div>
     </div>
   )
