@@ -306,7 +306,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     const handleMatchFound = (data: any) => {
       // Check if user is being matched with themselves
       if (data.hostEmail === data.guestEmail) {
-        console.error('Self-match detected:', data);
         setErrorMessage('Matchmaking error: Cannot match with yourself. Please try again.');
         setMatchmakingStatus('idle');
         return;
@@ -335,7 +334,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     };
 
     const handleGameEnded = (data: any) => {
-      console.log('Game ended:', data);
       setShowResultPopup(true);
       
       // Set pending redirect data
@@ -347,7 +345,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     };
 
     const handleMatchmakingPlayerLeft = (data: any) => {
-      console.log('Opponent left during matchmaking:', data);
       setErrorMessage('Opponent disconnected before the game started.');
       setMatchmakingStatus('idle');
       setGameId(null);
@@ -490,7 +487,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       
       // If it's been less than 5 minutes, automatically retry
       if (timeSinceLastMatchmaking < 5 * 60 * 1000) {
-        console.log('User was previously in matchmaking, automatically retrying...');
         setMatchmakingStatus('preparing');
         setRoomPreparationCountdown(5);
       } else {
@@ -516,8 +512,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     if (!socket) return;
 
     const handleConnect = () => {
-      console.log('Socket reconnected, checking matchmaking status...');
-      
       // If user was in matchmaking, retry joining
       if (user?.email && matchmakingStatus === 'searching') {
         socket.emit('JoinMatchmaking', { email: user.email });

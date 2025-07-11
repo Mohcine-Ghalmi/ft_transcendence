@@ -336,9 +336,8 @@ export default function GamePage() {
     // Handle game canceled - FIXED
     const handleGameCanceled = (data: any) => {
       if (data.gameId === gameId) {
-        // Only show alert and redirect if we're not the one canceling
+        // Only redirect if we're not the one canceling
         if (!isLeavingGameRef.current) {
-          // alert('The game was canceled.')
           setIsLeavingGame(true)
           setTimeout(() => {router.push("/play")}, 0);
         }

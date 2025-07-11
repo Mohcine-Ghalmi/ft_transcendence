@@ -53,9 +53,13 @@ export function TournamentInviteProvider({ children }) {
           router.push(`/play/tournament/${data.tournamentId}`);
         }, 300);
       } else if (data.status === 'error') {
-        console.error('Failed to accept tournament invite:', data.message);
         setReceivedInvite(null);
       }
+    };
+
+    const handleTournamentCancelled = (data) => {
+      // Clear any pending invites if the tournament was cancelled
+      setReceivedInvite(null);
     };
 
     // Add event listeners
@@ -65,6 +69,7 @@ export function TournamentInviteProvider({ children }) {
     socket.on("TournamentInviteAccepted", handleTournamentInviteAccepted);
     socket.on("TournamentInviteDeclined", handleTournamentInviteDeclined);
     socket.on("TournamentInviteResponse", handleTournamentInviteResponse);
+    socket.on("TournamentCancelled", handleTournamentCancelled);
 
     // Cleanup event listeners on unmount
     return () => {
@@ -74,6 +79,7 @@ export function TournamentInviteProvider({ children }) {
       socket.off("TournamentInviteAccepted", handleTournamentInviteAccepted);
       socket.off("TournamentInviteDeclined", handleTournamentInviteDeclined);
       socket.off("TournamentInviteResponse", handleTournamentInviteResponse);
+      socket.off("TournamentCancelled", handleTournamentCancelled);
     };
   }, [socket, user?.email, router]);
 

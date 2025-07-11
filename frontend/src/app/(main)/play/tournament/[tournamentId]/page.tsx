@@ -287,11 +287,11 @@ export default function TournamentGamePage() {
       }
     }
 
-    const handleTournamentCanceled = (data: any) => {
+    const handleTournamentCancelled = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setNotification({
           type: 'error',
-          message: `Tournament canceled: ${data.reason}`
+          message: data.message || `Tournament "${data.tournamentName}" has been cancelled by the host.`
         });
         
         // Redirect to play page after a short delay
@@ -539,7 +539,7 @@ export default function TournamentGamePage() {
     socket.on('TournamentMatchCompleted', handleTournamentMatchCompleted)
     socket.on('TournamentCompleted', handleTournamentCompleted)
     socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft)
-    socket.on('TournamentCanceled', handleTournamentCanceled)
+    socket.on('TournamentCancelled', handleTournamentCancelled)
     socket.on('RedirectToPlay', handleRedirectToPlay)
     socket.on('TournamentNextMatchReady', handleTournamentNextMatchReady)
     socket.on('StartCurrentRoundResponse', handleStartCurrentRoundResponse)
@@ -562,7 +562,7 @@ export default function TournamentGamePage() {
       socket.off('TournamentMatchCompleted', handleTournamentMatchCompleted)
       socket.off('TournamentCompleted', handleTournamentCompleted)
       socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft)
-      socket.off('TournamentCanceled', handleTournamentCanceled)
+      socket.off('TournamentCancelled', handleTournamentCancelled)
       socket.off('RedirectToPlay', handleRedirectToPlay)
       socket.off('TournamentNextMatchReady', handleTournamentNextMatchReady)
       socket.off('StartCurrentRoundResponse', handleStartCurrentRoundResponse)

@@ -512,7 +512,7 @@ export default function OnlineMatch() {
           setShowGame(true);
         }
       } else {
-        alert(`Failed to start game: ${data.message}`);
+        // Game start failed - could add user feedback here if needed
       }
     };
 
@@ -683,7 +683,6 @@ export default function OnlineMatch() {
 
   const handleInvite = async (player) => {
     if (!socket) {
-      alert('Not connected to server');
       return;
     }
     
@@ -725,8 +724,6 @@ export default function OnlineMatch() {
       }, 1000);
       
     } catch (error) {
-      console.error('Error sending invite:', error);
-      alert('Failed to send invitation');
       setIsInviting(false);
       resetGameState();
     }
@@ -746,9 +743,8 @@ export default function OnlineMatch() {
   const handleStartGame = () => {
     if (socket && gameId) {
       socket.emit('StartGame', { gameId });
-    } else {
-      alert('Cannot start game - missing connection or game ID');
     }
+    // If no socket or gameId, the button should be disabled anyway
   };
 
   const handleCancelGame = () => {

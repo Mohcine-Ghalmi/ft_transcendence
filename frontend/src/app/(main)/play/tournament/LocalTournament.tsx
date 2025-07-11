@@ -312,7 +312,6 @@ const LocalTournamentMode = () => {
     
     // Enhanced validation with better error handling
     if (!playingMatch) {
-      console.error('No playing match found');
       return;
     }
 
@@ -324,7 +323,6 @@ const LocalTournamentMode = () => {
     
     // Ensure winner has required properties
     if (!winner.id) {
-      console.error('Winner missing id property');
       return;
     }
     

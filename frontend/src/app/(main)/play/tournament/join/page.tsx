@@ -173,22 +173,6 @@ const EmptyState = ({ isLoading, onCreateTest }: { isLoading: boolean; onCreateT
           : 'There are no tournaments available to join right now.'
         }
       </p>
-      {!isLoading && (
-        <div className="space-x-4">
-          <button
-            onClick={() => window.location.href = '/play/tournament?mode=Online'}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-          >
-            Create New Tournament
-          </button>
-          <button
-            onClick={onCreateTest}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-          >
-            Create Test Tournament
-          </button>
-        </div>
-      )}
     </div>
   );
 };
@@ -216,8 +200,6 @@ export default function JoinTournamentPage() {
 
     // Listen for tournament list
     const handleTournamentList = (data: any[]) => {
-      console.log('Received tournament list:', data);
-      
       // Transform backend tournament data to match frontend interface
       // Only show tournaments that are in lobby state (joinable)
       const transformedTournaments = (data || [])
@@ -241,7 +223,6 @@ export default function JoinTournamentPage() {
           }))
         }));
       
-      console.log('Transformed tournaments:', transformedTournaments);
       setTournaments(transformedTournaments);
       setIsLoading(false);
     };
@@ -260,9 +241,9 @@ export default function JoinTournamentPage() {
       setIsJoining(null);
     };
 
-    // Listen for tournament canceled events
-    const handleTournamentCanceled = (data: { tournamentId: string; reason: string }) => {
-      setNotification({ message: `Tournament canceled: ${data.reason}`, type: 'error' });
+    // Listen for tournament cancelled events
+    const handleTournamentCancelled = (data: { tournamentId: string; tournamentName: string; message: string }) => {
+      setNotification({ message: data.message || `Tournament "${data.tournamentName}" has been cancelled by the host.`, type: 'error' });
       // Refresh the tournament list
       socketInstance.emit('ListTournaments');
     };
@@ -284,7 +265,7 @@ export default function JoinTournamentPage() {
 
     socketInstance.on('TournamentList', handleTournamentList);
     socketInstance.on('TournamentJoinResponse', handleJoinResponse);
-    socketInstance.on('TournamentCanceled', handleTournamentCanceled);
+    socketInstance.on('TournamentCancelled', handleTournamentCancelled);
     socketInstance.on('RedirectToPlay', handleRedirectToPlay);
     socketInstance.on('TournamentUpdated', handleTournamentUpdated);
 
@@ -295,7 +276,7 @@ export default function JoinTournamentPage() {
     return () => {
       socketInstance.off('TournamentList', handleTournamentList);
       socketInstance.off('TournamentJoinResponse', handleJoinResponse);
-      socketInstance.off('TournamentCanceled', handleTournamentCanceled);
+      socketInstance.off('TournamentCancelled', handleTournamentCancelled);
       socketInstance.off('RedirectToPlay', handleRedirectToPlay);
       socketInstance.off('TournamentUpdated', handleTournamentUpdated);
     };
@@ -323,13 +304,6 @@ export default function JoinTournamentPage() {
 
   // Handle joining a tournament
   const handleJoinTournament = (tournamentId: string) => {
-    console.log('Attempting to join tournament:', { 
-      tournamentId, 
-      user: user, 
-      userEmail: user?.email, 
-      socket: !!socket 
-    });
-    
     if (!user || !socket) {
       setNotification({ message: 'Please log in to join tournaments', type: 'error' });
       return;
@@ -339,7 +313,6 @@ export default function JoinTournamentPage() {
     const playerEmail = user.email || user.login || user.username;
     
     if (!playerEmail) {
-      console.error('No email found in user object:', user);
       setNotification({ message: 'User email not found. Please log in again.', type: 'error' });
       return;
     }
@@ -356,52 +329,7 @@ export default function JoinTournamentPage() {
       playerEmail
     };
     
-    console.log('Sending JoinTournamentAsNewParticipant event with data:', joinData);
     socket.emit('JoinTournamentAsNewParticipant', joinData);
-  };
-
-  // Handle creating a test tournament
-  const handleCreateTestTournament = () => {
-    if (!user || !socket) {
-      setNotification({ message: 'Please log in to create tournaments', type: 'error' });
-      return;
-    }
-
-    // Try to get email from different possible fields
-    const hostEmail = user.email || user.login || user.username;
-    
-    if (!hostEmail) {
-      console.error('No email found in user object for tournament creation:', user);
-      setNotification({ message: 'User email not found. Please log in again.', type: 'error' });
-      return;
-    }
-
-    const createData = {
-      name: `Test Tournament ${Date.now()}`,
-      hostEmail: hostEmail,
-      hostNickname: user.login || user.name || user.username || hostEmail,
-      hostAvatar: user.avatar || '/avatar/Default.svg',
-      size: 4,
-    };
-
-    console.log('Creating tournament with data:', createData);
-    socket.emit('CreateTournament', createData);
-
-    // Listen for tournament creation response
-    const handleTournamentCreated = (tournament: any) => {
-      setNotification({ message: 'Test tournament created successfully!', type: 'success' });
-      // Refresh the tournament list
-      socket.emit('ListTournaments');
-      socket.off('TournamentCreated', handleTournamentCreated);
-    };
-
-    const handleTournamentError = (error: any) => {
-      setNotification({ message: error.message || 'Failed to create test tournament', type: 'error' });
-      socket.off('TournamentError', handleTournamentError);
-    };
-
-    socket.on('TournamentCreated', handleTournamentCreated);
-    socket.on('TournamentError', handleTournamentError);
   };
 
   // Clear notification after 3 seconds
@@ -450,7 +378,13 @@ export default function JoinTournamentPage() {
         {/* Tournament List */}
         <div className="space-y-6">
           {isLoading || filteredTournaments.length === 0 ? (
-            <EmptyState isLoading={isLoading} onCreateTest={handleCreateTestTournament} />
+            <EmptyState
+              isLoading={isLoading}
+              onCreateTest={() => {
+                // You can implement a test tournament creation handler here
+                setNotification({ message: 'Test tournament creation not implemented.', type: 'error' });
+              }}
+            />
           ) : (
             filteredTournaments.map((tournament) => (
               <TournamentCard
@@ -463,27 +397,6 @@ export default function JoinTournamentPage() {
           )}
         </div>
 
-        {/* Create Test Tournament Button (for demonstration) */}
-        <div className="mt-8 flex justify-center space-x-4">
-          <button
-            onClick={handleCreateTestTournament}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-          >
-            Create Test Tournament
-          </button>
-          
-          <button
-            onClick={() => {
-              if (socket) {
-                socket.emit('ListTournaments');
-                setNotification({ message: 'Tournament list refreshed!', type: 'success' });
-              }
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-          >
-            Refresh List
-          </button>
-        </div>
       </div>
     </div>
   );

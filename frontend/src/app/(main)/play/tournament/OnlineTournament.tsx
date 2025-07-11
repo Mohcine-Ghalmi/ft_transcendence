@@ -147,6 +147,7 @@ export default function OnlineTournament() {
   const router = useRouter();
   const [tournamentState, setTournamentState] = useState('setup'); // setup, lobby, in_progress
   const [tournamentName, setTournamentName] = useState('Online Pong Championship');
+  const [tournamentNameError, setTournamentNameError] = useState<string | null>(null);
   const [tournamentSize, setTournamentSize] = useState(4);
   const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState(0);
@@ -181,9 +182,6 @@ export default function OnlineTournament() {
     const socketInstance = getSocketInstance();
     if (socketInstance) {
       setSocket(socketInstance);
-      console.log('Socket connected for tournament creation:', socketInstance.connected);
-    } else {
-      console.error('Failed to get socket instance');
     }
   }, []);
 
@@ -191,11 +189,9 @@ export default function OnlineTournament() {
   useEffect(() => {
     if (!socket) return;
     
-    console.log('Fetching tournaments list...');
     socket.emit('ListTournaments');
     
     const handleTournamentList = (data: any) => {
-      console.log('Received tournaments list:', data);
       setTournaments(data);
     };
     
@@ -468,28 +464,29 @@ export default function OnlineTournament() {
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
   };
 
-  // Leave tournament
+  // Leave tournament (which cancels it if you're the host)
   const leaveTournament = () => {
-    setTournamentId(null);
-    setParticipants([{
-      id: user.id || user.nickname || 'host',
-      login: user.name, 
-      avatar: user.avatar,
-      nickname: user.nickname,
-      isHost: true
-    }]);
-    setMatches([]);
-    setCurrentRound(0);
-    setTournamentState('setup');
-    setSentInvites(new Map());
-    setPendingInvites(new Map());
-    setTournamentComplete(false);
-    setChampion(null);
-  };
-
-  // Remove participant (host only) - REMOVED: Players can no longer be removed from tournaments
-  const removeParticipant = (playerNickname: string) => {
-    // Functionality removed - players cannot be removed from tournaments
+    if (tournamentState === 'lobby' && tournamentId && user?.email) {
+      // If we're in lobby state and have a tournament ID, cancel the tournament properly
+      handleCancelTournament();
+    } else {
+      // Otherwise just reset local state
+      setTournamentId(null);
+      setParticipants([{
+        id: user.id || user.nickname || 'host',
+        login: user.name, 
+        avatar: user.avatar,
+        nickname: user.nickname,
+        isHost: true
+      }]);
+      setMatches([]);
+      setCurrentRound(0);
+      setTournamentState('setup');
+      setSentInvites(new Map());
+      setPendingInvites(new Map());
+      setTournamentComplete(false);
+      setChampion(null);
+    }
   };
 
   // Reset tournament
@@ -516,28 +513,21 @@ export default function OnlineTournament() {
 
   // Create tournament handler
   const handleCreateTournament = () => {
+    // Clear any existing errors
+    setTournamentNameError(null);
+    
     if (!tournamentName || tournamentName.trim().length === 0) {
-      alert('Please enter a tournament name');
+      setTournamentNameError('Please enter a tournament name');
       return;
     }
     
     if (!user?.email) {
-      alert('Please log in to create a tournament');
       return;
     }
     
     if (!socket) {
-      alert('Connection error. Please refresh the page and try again.');
       return;
     }
-    
-    console.log('Creating tournament with data:', {
-      name: tournamentName,
-      hostEmail: user.email,
-      hostNickname: user.login || user.name || user.username,
-      hostAvatar: user.avatar || '/avatar/Default.svg',
-      size: tournamentSize,
-    });
     
     socket.emit('CreateTournament', {
       name: tournamentName,
@@ -552,13 +542,16 @@ export default function OnlineTournament() {
   useEffect(() => {
     if (!socket) return;
     const handleTournamentCreated = (tournament: any) => {
-      console.log('Tournament created successfully:', tournament);
       setTournamentId(tournament.tournamentId);
       setTournamentState('lobby');
+      // Clear any name errors on successful creation
+      setTournamentNameError(null);
     };
     const handleTournamentError = (error: any) => {
-      console.error('Tournament creation error:', error);
-      alert(error.message || 'Failed to create tournament. Please try again.');
+      // Check if it's a duplicate name error
+      if (error.message && error.message.toLowerCase().includes('name') && error.message.toLowerCase().includes('exists')) {
+        setTournamentNameError(error.message);
+      }
     };
     const handleTournamentUpdated = (data: any) => {
       if (data.tournamentId === tournamentId) {
@@ -593,6 +586,36 @@ export default function OnlineTournament() {
         setParticipants(prev => prev.filter(p => p.id !== data.playerEmail));
       }
     };
+    const handleTournamentCancelled = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        // Reset tournament state
+        setTournamentState('setup');
+        setTournamentId(null);
+        setParticipants(user ? [{
+          id: user.id || user.nickname || 'host',
+          login: user.name, 
+          avatar: user.avatar,
+          nickname: user.nickname,
+          isHost: true
+        }] : []);
+        setMatches([]);
+      }
+    };
+    const handleTournamentCancelResponse = (data: any) => {
+      if (data.status === 'success') {
+        // Reset tournament state
+        setTournamentState('setup');
+        setTournamentId(null);
+        setParticipants(user ? [{
+          id: user.id || user.nickname || 'host',
+          login: user.name, 
+          avatar: user.avatar,
+          nickname: user.nickname,
+          isHost: true
+        }] : []);
+        setMatches([]);
+      }
+    };
     socket.on('TournamentCreated', handleTournamentCreated);
     socket.on('TournamentError', handleTournamentError);
     socket.on('TournamentUpdated', handleTournamentUpdated);
@@ -600,6 +623,8 @@ export default function OnlineTournament() {
     socket.on('TournamentStarted', handleTournamentStarted);
     socket.on('TournamentStartResponse', handleTournamentStartResponse);
     socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
+    socket.on('TournamentCancelled', handleTournamentCancelled);
+    socket.on('TournamentCancelResponse', handleTournamentCancelResponse);
     return () => {
       socket.off('TournamentCreated', handleTournamentCreated);
       socket.off('TournamentError', handleTournamentError);
@@ -608,8 +633,85 @@ export default function OnlineTournament() {
       socket.off('TournamentStarted', handleTournamentStarted);
       socket.off('TournamentStartResponse', handleTournamentStartResponse);
       socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
+      socket.off('TournamentCancelled', handleTournamentCancelled);
+      socket.off('TournamentCancelResponse', handleTournamentCancelResponse);
     };
   }, [socket, tournamentId, user?.email, router]);
+
+  // Cancel tournament handler
+  const handleCancelTournament = () => {
+    if (!tournamentId || !user?.email) {
+      return;
+    }
+    
+    if (!socket) {
+      return;
+    }
+    
+    socket.emit('CancelTournament', {
+      tournamentId,
+      hostEmail: user.email
+    });
+  };
+
+  // Handle route changes and page unload - cancel tournament if host leaves
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
+        // Cancel tournament when host leaves
+        socket.emit('CancelTournament', {
+          tournamentId,
+          hostEmail: user.email
+        });
+      }
+    };
+
+    const handleRouteChange = () => {
+      if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
+        // Cancel tournament when host navigates away
+        socket.emit('CancelTournament', {
+          tournamentId,
+          hostEmail: user.email
+        });
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Listen for route changes (Next.js App Router)
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+    
+    history.pushState = function() {
+      handleRouteChange();
+      return originalPushState.apply(history, arguments);
+    };
+    
+    history.replaceState = function() {
+      handleRouteChange();
+      return originalReplaceState.apply(history, arguments);
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handleRouteChange);
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, [tournamentState, tournamentId, user?.email, socket]);
+
+  // Handle tournament name change and clear errors
+  const handleTournamentNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTournamentName(e.target.value);
+    // Clear error when user starts typing
+    if (tournamentNameError) {
+      setTournamentNameError(null);
+    }
+  };
 
   return (
     <div className="h-full w-full text-white">
@@ -631,11 +733,21 @@ export default function OnlineTournament() {
                   <input
                     type="text"
                     value={tournamentName}
-                    onChange={(e) => setTournamentName(e.target.value)}
-                    className="bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 focus:ring-blue-500 border border-[#3a3f4a] text-lg"
+                    onChange={handleTournamentNameChange}
+                    className={`bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 border text-lg transition-all ${
+                      tournamentNameError 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : 'border-[#3a3f4a] focus:ring-blue-500'
+                    }`}
                     placeholder="Enter tournament name"
                     required
                   />
+                  {tournamentNameError && (
+                    <p className="text-red-400 text-sm mt-2 flex items-center">
+                      <span className="mr-1">⚠️</span>
+                      {tournamentNameError}
+                    </p>
+                  )}
                 </div>
                 
                 <div className="mb-6">
