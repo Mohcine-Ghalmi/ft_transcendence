@@ -525,8 +525,7 @@ export default function TournamentGamePage() {
         });
       }
       
-      // Clear notification after 3 seconds
-      setTimeout(() => setNotification(null), 3000);
+      setTimeout(() => setNotification(null), 2000);
     };
 
     // Register all event listeners
@@ -745,7 +744,7 @@ export default function TournamentGamePage() {
           </div>
         )}
 
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-center items-center mb-8">
           <div>
             <h1 className="text-4xl font-bold text-white">
               {tournamentData?.name || 'Tournament'}
@@ -754,17 +753,6 @@ export default function TournamentGamePage() {
               {tournamentData?.status === 'lobby' ? '🎮 Tournament Room - Waiting for players to join' : 
                tournamentData?.status === 'in_progress' ? '⚔️ Tournament in progress' : '🏆 Tournament completed'}
             </p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span className={`px-3 py-1 rounded-full text-white text-sm font-medium ${
-              tournamentData?.status === 'lobby' ? 'bg-yellow-600/70' :
-              tournamentData?.status === 'in_progress' ? 'bg-green-600/70' :
-              'bg-gray-600/70'
-            }`}>
-              {tournamentData?.status === 'lobby' ? 'Waiting for Players' :
-               tournamentData?.status === 'in_progress' ? 'In Progress' :
-               'Completed'}
-            </span>
           </div>
         </div>
 

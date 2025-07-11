@@ -231,7 +231,6 @@ export default function OnlineTournament() {
         }
       } catch (err) {
         setFriends([]);
-        // Don't show alert to user, just log the error
       }
     }
     fetchFriends();
@@ -320,10 +319,7 @@ export default function OnlineTournament() {
 
   // Start tournament logic - only creates bracket and redirects players
   const startTournament = () => {
-    if (!tournamentId) {
-      return;
-    }
-    if (!socket) {
+    if (!tournamentId || !socket) {
       return;
     }
     socket.emit('StartTournament', { tournamentId, hostEmail: user.email });
@@ -331,10 +327,7 @@ export default function OnlineTournament() {
 
   // Start matches for current round
   const startCurrentRoundMatches = () => {
-    if (!tournamentId) {
-      return;
-    }
-    if (!socket) {
+    if (!tournamentId || !socket) {
       return;
     }
     socket.emit('StartCurrentRound', { tournamentId, hostEmail: user.email });
@@ -342,13 +335,7 @@ export default function OnlineTournament() {
 
   // Tournament invite handler (encrypt and emit)
   const handleInvitePlayer = async (player: Player) => {
-    if (participants.length >= tournamentSize) {
-      return;
-    }
-    if (!tournamentId) {
-      return;
-    }
-    if (!socket) {
+    if (participants.length >= tournamentSize || !tournamentId || !socket) {
       return;
     }
     setIsInviting(true);
@@ -407,7 +394,6 @@ export default function OnlineTournament() {
         setWaitingForResponse(false);
         setInvitedPlayer(null);
         setInviteId(null);
-        // Add the accepted player to the participants list immediately
         if (data.newParticipant) {
           setParticipants(prev => [...prev, data.newParticipant]);
         }
@@ -464,10 +450,8 @@ export default function OnlineTournament() {
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
   };
 
-  // Leave tournament (which cancels it if you're the host)
   const leaveTournament = () => {
     if (tournamentState === 'lobby' && tournamentId && user?.email) {
-      // If we're in lobby state and have a tournament ID, cancel the tournament properly
       handleCancelTournament();
     } else {
       // Otherwise just reset local state
@@ -521,11 +505,7 @@ export default function OnlineTournament() {
       return;
     }
     
-    if (!user?.email) {
-      return;
-    }
-    
-    if (!socket) {
+    if (!user?.email || !socket) {
       return;
     }
     
@@ -640,11 +620,7 @@ export default function OnlineTournament() {
 
   // Cancel tournament handler
   const handleCancelTournament = () => {
-    if (!tournamentId || !user?.email) {
-      return;
-    }
-    
-    if (!socket) {
+    if (!tournamentId || !user?.email || !socket) {
       return;
     }
     
