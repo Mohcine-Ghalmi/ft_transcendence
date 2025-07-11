@@ -174,20 +174,37 @@ export default function OnlineTournament() {
   const totalRounds = Math.log2(tournamentSize);
 
   // Use getSocketInstance at runtime
-  let socket;
+  const [socket, setSocket] = useState<any>(null);
+
+  // Initialize socket connection
+  useEffect(() => {
+    const socketInstance = getSocketInstance();
+    if (socketInstance) {
+      setSocket(socketInstance);
+      console.log('Socket connected for tournament creation:', socketInstance.connected);
+    } else {
+      console.error('Failed to get socket instance');
+    }
+  }, []);
 
   // Fetch tournaments from backend
   useEffect(() => {
-    socket = getSocketInstance();
     if (!socket) return;
+    
+    console.log('Fetching tournaments list...');
     socket.emit('ListTournaments');
-    socket.on('TournamentList', (data) => {
+    
+    const handleTournamentList = (data: any) => {
+      console.log('Received tournaments list:', data);
       setTournaments(data);
-    });
-    return () => {
-      socket.off('TournamentList');
     };
-  }, []);
+    
+    socket.on('TournamentList', handleTournamentList);
+    
+    return () => {
+      socket.off('TournamentList', handleTournamentList);
+    };
+  }, [socket]);
 
   useEffect(() => {
     async function fetchFriends() {
@@ -310,7 +327,6 @@ export default function OnlineTournament() {
     if (!tournamentId) {
       return;
     }
-    socket = getSocketInstance();
     if (!socket) {
       return;
     }
@@ -322,7 +338,6 @@ export default function OnlineTournament() {
     if (!tournamentId) {
       return;
     }
-    socket = getSocketInstance();
     if (!socket) {
       return;
     }
@@ -337,7 +352,6 @@ export default function OnlineTournament() {
     if (!tournamentId) {
       return;
     }
-    socket = getSocketInstance();
     if (!socket) {
       return;
     }
@@ -380,7 +394,6 @@ export default function OnlineTournament() {
 
   // Socket event listeners for tournament invite
   useEffect(() => {
-    socket = getSocketInstance();
     if (!socket) return;
     const handleInviteResponse = (data: any) => {
       if (data.status === 'success' && data.type === 'invite_sent') {
@@ -441,11 +454,10 @@ export default function OnlineTournament() {
       socket.off('TournamentInviteCanceled', handleInviteCanceled);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
-  }, [inviteId, user?.email]);
+  }, [socket, inviteId, user?.email]);
 
   // Cancel invite
   const handleCancelInvite = () => {
-    socket = getSocketInstance();
     if (socket && inviteId && user?.email) {
       socket.emit('CancelTournamentInvite', { inviteId, hostEmail: user.email });
     }
@@ -504,30 +516,49 @@ export default function OnlineTournament() {
 
   // Create tournament handler
   const handleCreateTournament = () => {
-    if (!tournamentName || tournamentName.trim().length === 0) return;
-    socket = getSocketInstance();
-    if (!socket) {
+    if (!tournamentName || tournamentName.trim().length === 0) {
+      alert('Please enter a tournament name');
       return;
     }
+    
+    if (!user?.email) {
+      alert('Please log in to create a tournament');
+      return;
+    }
+    
+    if (!socket) {
+      alert('Connection error. Please refresh the page and try again.');
+      return;
+    }
+    
+    console.log('Creating tournament with data:', {
+      name: tournamentName,
+      hostEmail: user.email,
+      hostNickname: user.login || user.name || user.username,
+      hostAvatar: user.avatar || '/avatar/Default.svg',
+      size: tournamentSize,
+    });
+    
     socket.emit('CreateTournament', {
       name: tournamentName,
       hostEmail: user.email,
-      hostNickname: user.login || user.name,
-      hostAvatar: user.avatar,
+      hostNickname: user.login || user.name || user.username,
+      hostAvatar: user.avatar || '/avatar/Default.svg',
       size: tournamentSize,
     });
   };
 
   // Handle tournament creation response
   useEffect(() => {
-    socket = getSocketInstance();
     if (!socket) return;
     const handleTournamentCreated = (tournament: any) => {
+      console.log('Tournament created successfully:', tournament);
       setTournamentId(tournament.tournamentId);
       setTournamentState('lobby');
     };
     const handleTournamentError = (error: any) => {
-      // Handle tournament creation error
+      console.error('Tournament creation error:', error);
+      alert(error.message || 'Failed to create tournament. Please try again.');
     };
     const handleTournamentUpdated = (data: any) => {
       if (data.tournamentId === tournamentId) {
@@ -578,7 +609,7 @@ export default function OnlineTournament() {
       socket.off('TournamentStartResponse', handleTournamentStartResponse);
       socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
     };
-  }, [tournamentId, user?.email, router]);
+  }, [socket, tournamentId, user?.email, router]);
 
   return (
     <div className="h-full w-full text-white">

@@ -44,12 +44,27 @@ export function TournamentInviteProvider({ children }) {
       setReceivedInvite(null);
     };
 
+    const handleTournamentInviteResponse = (data) => {
+      // This handles the response when the current user accepts an invite
+      if (data.status === 'success' && data.tournamentId) {
+        setReceivedInvite(null);
+        // Redirect to tournament lobby immediately with shorter timeout for better UX
+        setTimeout(() => {
+          router.push(`/play/tournament/${data.tournamentId}`);
+        }, 300);
+      } else if (data.status === 'error') {
+        console.error('Failed to accept tournament invite:', data.message);
+        setReceivedInvite(null);
+      }
+    };
+
     // Add event listeners
     socket.on("TournamentInviteReceived", handleTournamentInviteReceived);
     socket.on("TournamentInviteCanceled", handleTournamentInviteCanceled);
     socket.on("TournamentInviteTimeout", handleTournamentInviteTimeout);
     socket.on("TournamentInviteAccepted", handleTournamentInviteAccepted);
     socket.on("TournamentInviteDeclined", handleTournamentInviteDeclined);
+    socket.on("TournamentInviteResponse", handleTournamentInviteResponse);
 
     // Cleanup event listeners on unmount
     return () => {
@@ -58,6 +73,7 @@ export function TournamentInviteProvider({ children }) {
       socket.off("TournamentInviteTimeout", handleTournamentInviteTimeout);
       socket.off("TournamentInviteAccepted", handleTournamentInviteAccepted);
       socket.off("TournamentInviteDeclined", handleTournamentInviteDeclined);
+      socket.off("TournamentInviteResponse", handleTournamentInviteResponse);
     };
   }, [socket, user?.email, router]);
 
@@ -67,8 +83,7 @@ export function TournamentInviteProvider({ children }) {
         inviteId: receivedInvite.inviteId,
         inviteeEmail: user.email,
       });
-      setReceivedInvite(null);
-      // Don't navigate here - let the socket event handle it
+      // Don't clear invite here - let the response handler deal with it
     }
   };
 

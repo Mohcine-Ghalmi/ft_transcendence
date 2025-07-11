@@ -289,22 +289,28 @@ export default function TournamentGamePage() {
 
     const handleTournamentCanceled = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        setNotification({ 
-          message: 'Tournament was canceled by the host.', 
-          type: 'error' 
-        })
+        setNotification({
+          type: 'error',
+          message: `Tournament canceled: ${data.reason}`
+        });
         
-        // Redirect to play page after 3 seconds
+        // Redirect to play page after a short delay
         setTimeout(() => {
-          router.push('/play')
-        }, 3000)
+          router.push('/play');
+        }, 3000);
       }
     }
 
     const handleRedirectToPlay = (data: any) => {
-      if (data.tournamentId === tournamentId) {
-        router.push('/play')
-      }
+      setNotification({
+        type: 'error',
+        message: data.message || 'Redirecting to play page...'
+      });
+      
+      // Redirect to play page
+      setTimeout(() => {
+        router.push('/play');
+      }, 2000);
     }
 
     const handleTournamentMatchGameStarted = (data: any) => {

@@ -22,6 +22,7 @@ interface Tournament {
     avatar: string;
     nickname: string;
     isHost: boolean;
+    email: string;
   }>;
 };
 
@@ -32,10 +33,9 @@ const TournamentCard = ({ tournament, onJoin, isJoining }: {
 }) => {
   const { user } = useAuthStore();
   const router = useRouter();
-  const isParticipant = tournament.participants.some(p => p.id === user?.id || p.login === user?.email);
+  const isParticipant = tournament.participants.some(p => p.email === user?.email || p.login === user?.email);
   const isFull = tournament.currentParticipants >= tournament.maxParticipants;
-  const canJoin = (tournament.status === 'setup' || tournament.status === 'lobby') && !isParticipant && !isFull;
-  const canJoinAsSpectator = tournament.status === 'in_progress' && !isParticipant;
+  const canJoin = tournament.status === 'lobby' && !isParticipant && !isFull;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -144,27 +144,13 @@ const TournamentCard = ({ tournament, onJoin, isJoining }: {
         {(tournament.status === 'in_progress' || tournament.status === 'completed') && !isParticipant && (
           <button
             onClick={() => {
-              if (tournament.status === 'completed') {
-                // For completed tournaments, just navigate directly to view results
-                router.push(`/play/tournament/${tournament.tournamentId}`);
-              } else {
-                // For in-progress tournaments, join as spectator
-                onJoin(tournament.tournamentId);
-              }
+              // Since we only show lobby tournaments, this won't be reached
+              router.push(`/play/tournament/${tournament.tournamentId}`);
             }}
             disabled={isJoining}
-            className={`text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isJoining 
-                ? 'bg-gray-600 cursor-not-allowed' 
-                : tournament.status === 'completed' 
-                  ? 'bg-gray-600 hover:bg-gray-700' 
-                  : 'bg-green-600 hover:bg-green-700'
-            }`}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            {isJoining ? 'Joining...' : 
-             tournament.status === 'completed' ? 'View Results' : 
-             tournament.status === 'in_progress' ? 'Join as Spectator' : 
-             'Join Tournament'}
+            View Tournament
           </button>
         )}
       </div>
@@ -233,17 +219,27 @@ export default function JoinTournamentPage() {
       console.log('Received tournament list:', data);
       
       // Transform backend tournament data to match frontend interface
-      const transformedTournaments = (data || []).map((tournament: any) => ({
-        tournamentId: tournament.tournamentId,
-        name: tournament.name,
-        hostEmail: tournament.hostEmail,
-        hostName: tournament.hostEmail, // Use email as name for now
-        maxParticipants: tournament.size,
-        currentParticipants: tournament.participants?.length || 0,
-        status: tournament.status,
-        createdAt: tournament.createdAt,
-        participants: tournament.participants || []
-      }));
+      // Only show tournaments that are in lobby state (joinable)
+      const transformedTournaments = (data || [])
+        .filter((tournament: any) => tournament.status === 'lobby') // Only show joinable tournaments
+        .map((tournament: any) => ({
+          tournamentId: tournament.tournamentId,
+          name: tournament.name,
+          hostEmail: tournament.hostEmail,
+          hostName: tournament.hostEmail, // Use email as name for now
+          maxParticipants: tournament.size,
+          currentParticipants: tournament.participants?.length || 0,
+          status: tournament.status,
+          createdAt: tournament.createdAt,
+          participants: (tournament.participants || []).map((p: any) => ({
+            id: p.email,
+            login: p.nickname || p.login,
+            avatar: p.avatar,
+            nickname: p.nickname,
+            isHost: p.isHost,
+            email: p.email
+          }))
+        }));
       
       console.log('Transformed tournaments:', transformedTournaments);
       setTournaments(transformedTournaments);
@@ -253,14 +249,11 @@ export default function JoinTournamentPage() {
     // Listen for join responses
     const handleJoinResponse = (data: { status: string; message: string; tournamentId?: string; tournamentStatus?: string }) => {
       if (data.status === 'success' && data.tournamentId) {
-        const successMessage = data.tournamentStatus === 'in_progress' 
-          ? 'Successfully joined tournament as spectator!' 
-          : 'Successfully joined tournament!';
-        setNotification({ message: successMessage, type: 'success' });
-        // Navigate to the tournament page
+        setNotification({ message: 'Successfully joined tournament! Redirecting to tournament lobby...', type: 'success' });
+        // Navigate to the tournament page (lobby) immediately with shorter timeout for better UX
         setTimeout(() => {
           router.push(`/play/tournament/${data.tournamentId}`);
-        }, 1500);
+        }, 300);
       } else {
         setNotification({ message: data.message || 'Failed to join tournament', type: 'error' });
       }
@@ -283,10 +276,17 @@ export default function JoinTournamentPage() {
       }, 2000);
     };
 
+    // Listen for tournament updated events
+    const handleTournamentUpdated = (data: { tournamentId: string; tournament: any }) => {
+      // Refresh the tournament list when tournaments are updated
+      socketInstance.emit('ListTournaments');
+    };
+
     socketInstance.on('TournamentList', handleTournamentList);
     socketInstance.on('TournamentJoinResponse', handleJoinResponse);
     socketInstance.on('TournamentCanceled', handleTournamentCanceled);
     socketInstance.on('RedirectToPlay', handleRedirectToPlay);
+    socketInstance.on('TournamentUpdated', handleTournamentUpdated);
 
     // Request tournament list
     socketInstance.emit('ListTournaments');
@@ -297,6 +297,7 @@ export default function JoinTournamentPage() {
       socketInstance.off('TournamentJoinResponse', handleJoinResponse);
       socketInstance.off('TournamentCanceled', handleTournamentCanceled);
       socketInstance.off('RedirectToPlay', handleRedirectToPlay);
+      socketInstance.off('TournamentUpdated', handleTournamentUpdated);
     };
   }, [router]);
 
@@ -355,8 +356,8 @@ export default function JoinTournamentPage() {
       playerEmail
     };
     
-    console.log('Sending JoinTournament event with data:', joinData);
-    socket.emit('JoinTournament', joinData);
+    console.log('Sending JoinTournamentAsNewParticipant event with data:', joinData);
+    socket.emit('JoinTournamentAsNewParticipant', joinData);
   };
 
   // Handle creating a test tournament

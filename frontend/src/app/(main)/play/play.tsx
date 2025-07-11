@@ -167,7 +167,7 @@ export const OnlineGames = () => {
     } else if (gameType === 'one-vs-one') {
       router.push('/play/OneVsOne');
     } else {
-      router.push(`/play/game/online/${gameType}${difficulty ? `/${difficulty}` : ''}${action ? `/${action}` : ''}`);
+      router.push(`/play/${gameType}${difficulty ? `/${difficulty}` : ''}${action ? `/${action}` : ''}`);
     }
   };
 
@@ -209,12 +209,14 @@ export const OnlineGames = () => {
         illustration={<TournamentSceneIllustration />}
         buttons={
           <>
-            <button 
-              onClick={() => handleOnlineGame('Tournament', null, 'Join')}
-              className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Join an Online Tournament
-            </button>
+            <Link href="/play/tournament/join">
+              <button 
+                onClick={() => handleOnlineGame('tournament', null, 'Join')}
+                className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
+              >
+                Join an Online Tournament
+              </button>
+            </Link>
             <Link href="/play/tournament?mode=Online">
               <button 
                 onClick={() => handleOnlineGame('Tournament', null, 'Create')}

@@ -6,8 +6,30 @@ import { getSocketIds } from '../../socket';
 import { getUserByEmail, getFriend } from '../user/user.service';
 import CryptoJS from 'crypto-js';
 
+// Key prefix for tournaments in Redis
 const TOURNAMENT_PREFIX = 'tournament:';
 const TOURNAMENT_INVITE_PREFIX = 'tournament_invite:';
+
+// Helper function to get all active tournaments
+async function getAllActiveTournaments(): Promise<any[]> {
+  try {
+    const keys = await redis.keys(`${TOURNAMENT_PREFIX}*`);
+    const tournaments: any[] = [];
+    for (const key of keys) {
+      const t = await redis.get(key);
+      if (t) {
+        const parsed = JSON.parse(t);
+        if (parsed.status === 'lobby' || parsed.status === 'in_progress') {
+          tournaments.push(parsed);
+        }
+      }
+    }
+    return tournaments;
+  } catch (err) {
+    console.error('Error getting active tournaments:', err);
+    return [];
+  }
+}
 
 export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
   // List tournaments
@@ -316,14 +338,7 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         return socket.emit('TournamentCancelResponse', { status: 'error', message: 'Tournament is not in lobby state.' });
       }
       
-      // Update tournament status to canceled
-      tournament.status = 'canceled';
-      tournament.endedAt = Date.now();
-      
-      // Update tournament in Redis
-      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
-      
-      // Notify all participants that tournament is canceled
+      // Get all participants before deletion
       const allParticipantEmails = tournament.participants.map((p: any) => p.email);
       const allSocketIds = [];
       
@@ -332,10 +347,13 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         allSocketIds.push(...socketIds);
       }
       
+      // Delete tournament immediately from Redis (event-driven cleanup)
+      await redis.del(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      
       // Emit tournament canceled event to all participants
       io.to(allSocketIds).emit('TournamentCanceled', {
         tournamentId,
-        tournament,
+        tournament: { ...tournament, status: 'canceled', endedAt: Date.now() },
         reason: 'Host canceled the tournament'
       });
       
@@ -344,6 +362,10 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         message: 'Tournament was canceled by the host.'
       });
       
+      // Emit updated tournament list to all clients
+      const remainingTournaments = await getAllActiveTournaments();
+      io.emit('TournamentList', remainingTournaments);
+      
       socket.emit('TournamentCancelResponse', { status: 'success', message: 'Tournament canceled successfully.' });
       
     } catch (error) {
@@ -351,4 +373,4 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       socket.emit('TournamentCancelResponse', { status: 'error', message: 'Failed to cancel tournament.' });
     }
   });
-} 
+}

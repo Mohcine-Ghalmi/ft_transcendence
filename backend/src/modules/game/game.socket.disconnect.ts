@@ -15,6 +15,27 @@ import { advanceTournamentRound } from './game.socket.tournament.events'
 // Tournament prefix for Redis keys
 const TOURNAMENT_PREFIX = 'tournament:'
 
+// Helper function to get all active tournaments
+async function getAllActiveTournaments(): Promise<any[]> {
+  try {
+    const keys = await redis.keys(`${TOURNAMENT_PREFIX}*`);
+    const tournaments: any[] = [];
+    for (const key of keys) {
+      const t = await redis.get(key);
+      if (t) {
+        const parsed = JSON.parse(t);
+        if (parsed.status === 'lobby' || parsed.status === 'in_progress') {
+          tournaments.push(parsed);
+        }
+      }
+    }
+    return tournaments;
+  } catch (err) {
+    console.error('Error getting active tournaments:', err);
+    return [];
+  }
+}
+
 // Track games that are currently being processed to prevent duplicate processing
 const processingGames = new Set<string>();
 
@@ -219,14 +240,10 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
         
         // Check if disconnecting user is the host
         if (tournament.hostEmail === userEmail && tournament.status !== 'completed' && tournament.status !== 'canceled') {
-          // Host disconnected - cancel tournament and kick all players
-          tournament.status = 'canceled';
-          tournament.endedAt = Date.now();
-          
+          // Host disconnected - delete tournament immediately and kick all players
           const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
-          await redis.setex(key, 3600, JSON.stringify(tournament));
           
-          // Notify all participants
+          // Get all participants before deletion
           const allParticipantEmails = tournament.participants.map((p: any) => p.email);
           const allSocketIds: string[] = [];
           
@@ -235,9 +252,12 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
             allSocketIds.push(...socketIds);
           }
           
+          // Delete tournament immediately from Redis (event-driven cleanup)
+          await redis.del(key);
+          
           io.to(allSocketIds).emit('TournamentCanceled', {
             tournamentId,
-            tournament,
+            tournament: { ...tournament, status: 'canceled', endedAt: Date.now() },
             reason: 'Host disconnected'
           });
           
@@ -245,6 +265,10 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
             message: 'Tournament canceled because host disconnected.',
             tournamentId
           });
+          
+          // Emit updated tournament list to all clients
+          const remainingTournaments = await getAllActiveTournaments();
+          io.emit('TournamentList', remainingTournaments);
           
           continue;
         }
