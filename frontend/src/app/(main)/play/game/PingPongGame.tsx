@@ -624,13 +624,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       }
       
       if (isTournamentMode) {
-        // For tournament mode, pass the complete winner object back
         onExit(winner);
       } else {
         const winnerName = winner.name;
         const loserName = scores.p1 >= 7 ? safePlayer2.name : safePlayer1.name;
         
-        // Check if current user won by comparing with their position
         const currentUserWon = (isHost && scores.p1 >= 7) || (!isHost && scores.p2 >= 7);
         
         if (currentUserWon) {

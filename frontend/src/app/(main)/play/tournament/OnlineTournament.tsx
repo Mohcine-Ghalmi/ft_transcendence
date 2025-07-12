@@ -451,26 +451,57 @@ export default function OnlineTournament() {
   };
 
   const leaveTournament = () => {
-    if (tournamentState === 'lobby' && tournamentId && user?.email) {
-      handleCancelTournament();
-    } else {
-      // Otherwise just reset local state
-      setTournamentId(null);
-      setParticipants([{
-        id: user.id || user.nickname || 'host',
-        login: user.name, 
-        avatar: user.avatar,
-        nickname: user.nickname,
-        isHost: true
-      }]);
-      setMatches([]);
-      setCurrentRound(0);
-      setTournamentState('setup');
-      setSentInvites(new Map());
-      setPendingInvites(new Map());
-      setTournamentComplete(false);
-      setChampion(null);
+    if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
+      // Check if user is the host
+      const isHost = participants.some(p => 
+        (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+      );
+      
+      if (isHost) {
+        handleCancelTournament();
+      } else {
+        // Participant leaves the tournament
+        socket.emit('LeaveTournament', {
+          tournamentId,
+          playerEmail: user.email
+        });
+        
+        // Reset local state for participants immediately
+        setTournamentId(null);
+        setParticipants([{
+          id: user.id || user.nickname || 'host',
+          login: user.name, 
+          avatar: user.avatar,
+          nickname: user.nickname,
+          isHost: true
+        }]);
+        setMatches([]);
+        setCurrentRound(0);
+        setTournamentState('setup');
+        setSentInvites(new Map());
+        setPendingInvites(new Map());
+        setTournamentComplete(false);
+        setChampion(null);
+        return;
+      }
     }
+    
+    // Reset local state for host after canceling or if not in lobby
+    setTournamentId(null);
+    setParticipants([{
+      id: user.id || user.nickname || 'host',
+      login: user.name, 
+      avatar: user.avatar,
+      nickname: user.nickname,
+      isHost: true
+    }]);
+    setMatches([]);
+    setCurrentRound(0);
+    setTournamentState('setup');
+    setSentInvites(new Map());
+    setPendingInvites(new Map());
+    setTournamentComplete(false);
+    setChampion(null);
   };
 
   // Reset tournament
@@ -535,14 +566,19 @@ export default function OnlineTournament() {
     };
     const handleTournamentUpdated = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        setParticipants(data.tournament.participants.map((p: any) => ({
+        const updatedParticipants = data.tournament.participants.map((p: any) => ({
           id: p.email,
           login: p.nickname,
           avatar: p.avatar,
           nickname: p.nickname,
           isHost: p.isHost,
           email: p.email
-        })));
+        }));
+        setParticipants(updatedParticipants);
+        
+        // Also update other tournament properties if they've changed
+        if (data.tournament.status !== tournamentState)
+          setTournamentState(data.tournament.status);
       }
     };
     const handleTournamentReady = (data: any) => {
@@ -563,7 +599,35 @@ export default function OnlineTournament() {
     };
     const handleTournamentParticipantLeft = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        setParticipants(prev => prev.filter(p => p.id !== data.playerEmail));
+        
+        // Remove participant using multiple identifiers for robustness
+        setParticipants(prev => prev.filter(p => {
+          const leftPlayerEmail = data.leftPlayer?.email || data.playerEmail;
+          const leftPlayerId = data.leftPlayer?.id;
+          const leftPlayerNickname = data.leftPlayer?.nickname;
+          const participant = p as any; // Cast to any to access email property
+          
+          // Check multiple identifiers to ensure robust removal
+          return !(
+            participant.id === leftPlayerEmail ||
+            participant.email === leftPlayerEmail ||
+            (leftPlayerId && participant.id === leftPlayerId) ||
+            (leftPlayerNickname && participant.nickname === leftPlayerNickname)
+          );
+        }));
+        
+        // If tournament data is provided, use that as the source of truth
+        if (data.tournament?.participants) {
+          const updatedParticipants = data.tournament.participants.map((p: any) => ({
+            id: p.email,
+            login: p.nickname,
+            avatar: p.avatar,
+            nickname: p.nickname,
+            isHost: p.isHost,
+            email: p.email
+          }));
+          setParticipants(updatedParticipants);
+        }
       }
     };
     const handleTournamentCancelled = (data: any) => {
@@ -596,6 +660,7 @@ export default function OnlineTournament() {
         setMatches([]);
       }
     };
+    
     socket.on('TournamentCreated', handleTournamentCreated);
     socket.on('TournamentError', handleTournamentError);
     socket.on('TournamentUpdated', handleTournamentUpdated);
@@ -634,21 +699,47 @@ export default function OnlineTournament() {
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
-        // Cancel tournament when host leaves
-        socket.emit('CancelTournament', {
-          tournamentId,
-          hostEmail: user.email
-        });
+        // Check if user is the host
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
+        if (isHost) {
+          // Cancel tournament when host leaves
+          socket.emit('CancelTournament', {
+            tournamentId,
+            hostEmail: user.email
+          });
+        } else {
+          // Remove participant when they leave
+          socket.emit('LeaveTournament', {
+            tournamentId,
+            playerEmail: user.email
+          });
+        }
       }
     };
 
     const handleRouteChange = () => {
       if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
-        // Cancel tournament when host navigates away
-        socket.emit('CancelTournament', {
-          tournamentId,
-          hostEmail: user.email
-        });
+        // Check if user is the host
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
+        if (isHost) {
+          // Cancel tournament when host navigates away
+          socket.emit('CancelTournament', {
+            tournamentId,
+            hostEmail: user.email
+          });
+        } else {
+          // Remove participant when they navigate away
+          socket.emit('LeaveTournament', {
+            tournamentId,
+            playerEmail: user.email
+          });
+        }
       }
     };
 
@@ -678,7 +769,7 @@ export default function OnlineTournament() {
       history.pushState = originalPushState;
       history.replaceState = originalReplaceState;
     };
-  }, [tournamentState, tournamentId, user?.email, socket]);
+  }, [tournamentState, tournamentId, user?.email, socket, participants]);
 
   // Handle tournament name change and clear errors
   const handleTournamentNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -688,6 +779,65 @@ export default function OnlineTournament() {
       setTournamentNameError(null);
     }
   };
+
+  // Monitor participants and ensure they're still in the lobby
+  useEffect(() => {
+    if (!tournamentId || !socket || tournamentState !== 'lobby') return;
+
+    // Set up a periodic check to ensure participants are still active
+    const participantCheckInterval = setInterval(() => {
+      if (socket && tournamentId) {
+        // Emit a heartbeat/presence check for all participants
+        socket.emit('CheckTournamentParticipants', { tournamentId });
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => {
+      if (participantCheckInterval) {
+        clearInterval(participantCheckInterval);
+      }
+    };
+  }, [tournamentId, socket, tournamentState]);
+
+  // Handle visibility changes and tab switching
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && tournamentState === 'lobby' && tournamentId && user?.email && socket) {
+        // Check if user is not the host
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
+        if (!isHost) {
+          // Emit a presence check when participant tab becomes hidden
+          socket.emit('ParticipantPresenceCheck', {
+            tournamentId,
+            playerEmail: user.email,
+            isActive: false
+          });
+        }
+      } else if (!document.hidden && tournamentState === 'lobby' && tournamentId && user?.email && socket) {
+        // Tab becomes visible again
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
+        if (!isHost) {
+          socket.emit('ParticipantPresenceCheck', {
+            tournamentId,
+            playerEmail: user.email,
+            isActive: true
+          });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [tournamentState, tournamentId, user?.email, socket, participants]);
 
   return (
     <div className="h-full w-full text-white">
