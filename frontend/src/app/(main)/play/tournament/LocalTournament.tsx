@@ -520,7 +520,7 @@ const LocalTournamentMode = () => {
                   player1={playingMatch.player1}
                   player2={playingMatch.player2}
                   onExit={handleGameEnd}
-                  isTournamentMode={false}
+                  isTournamentMode={true}
                 />
               ) : (
                 <>

@@ -130,8 +130,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   // Auto-start for tournament games immediately when component mounts
   useEffect(() => {
-    if (isRemoteGame && isTournamentMode && !gameStarted) {
-      // For tournament games, start immediately without waiting for events
+    if (isTournamentMode && !gameStarted) {
+      // For all tournament games (both remote and local), start immediately without waiting for events
       setGameStarted(true);
       setPaused(false);
       gameStartTime.current = Date.now();
@@ -147,7 +147,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       setScores({ p1: 0, p2: 0 });
       setGameReady(true);
     }
-  }, [isRemoteGame, isTournamentMode, gameStarted]);
+  }, [isTournamentMode, gameStarted]);
 
   // Regular game auto-start logic (only for non-tournament games)
   useEffect(() => {
@@ -354,7 +354,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     const update = () => {
       // Move paddles - only for local player in remote game
       if (isRemoteGame) {
-        // Host always controls left paddle (player1), Guest always controls right paddle (player2)
         if (isHost) {
           // Host controls left paddle (paddle1)
           if (!mobile) {
