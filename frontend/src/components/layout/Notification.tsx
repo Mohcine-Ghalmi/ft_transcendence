@@ -128,8 +128,8 @@ export const NotificationDropdown = ({
   const { logout } = useAuthStore()
   const router = useRouter()
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     router.push('/')
   }
 

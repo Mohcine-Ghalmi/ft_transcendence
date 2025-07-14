@@ -272,18 +272,12 @@ const Chat = () => {
   const [message, setMessage] = useState('')
   const [image, setImage] = useState<File | null>(null)
   const {
-    getMessage,
     selectedConversationId,
-    connectChatSocket,
-    disconnectChatSocket,
-    offUpdateChat,
-    updateChat,
     chatHeader,
     handleNewMessage,
     tmp,
     selectedConversation,
   } = useChatStore()
-  const { user } = useAuthStore()
 
   const changeMessageValue = (message: string) => {
     if (message.length >= 255) return
@@ -365,7 +359,7 @@ const Chat = () => {
   }
 
   useEffect(() => {
-    connectChatSocket()
+    // connectChatSocket()
 
     const onFailedToSendMessage = (err) => {
       toast.error(err)
@@ -380,7 +374,7 @@ const Chat = () => {
       if (chatSocket?.connected) {
         chatSocket.on('failedToSendMessage', onFailedToSendMessage)
         chatSocket.on('messageSent', onMessageSent)
-        updateChat()
+        chatSocket.on('newMessage', handleNewMessage)
       }
     }
 
@@ -390,9 +384,8 @@ const Chat = () => {
       if (chatSocket) {
         chatSocket.off('failedToSendMessage', onFailedToSendMessage)
         chatSocket.off('messageSent', onMessageSent)
+        chatSocket.off('newMessage', handleNewMessage)
       }
-      offUpdateChat()
-      disconnectChatSocket()
     }
   }, [selectedConversationId])
 

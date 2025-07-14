@@ -13,8 +13,6 @@ interface ChatStoreType {
   pageNumber: number
   getConversations: () => Promise<void>
   getMessage: (id: number, offset: number) => Promise<void>
-  updateChat: () => Promise<void>
-  offUpdateChat: () => Promise<void>
   handleNewMessage: (newMessage: any) => void
   handleChangeConversations: (newConversation: any) => void
   setSelectedConversationId: (id: number | undefined) => void
@@ -24,6 +22,7 @@ interface ChatStoreType {
   setConversations: (data: any) => void
   setChatHeader: (data: any) => void
   tmp: (data: any) => void
+  isChatSocketConnected: boolean
 }
 
 export let chatSocket: Socket | null = null
@@ -36,6 +35,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   pageNumber: 0,
   isLoading: true,
   selectedConversationId: undefined,
+  isChatSocketConnected: false,
 
   tmp: (data) => {
     set({ selectedConversation: data })
@@ -89,7 +89,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       console.log('friend : ', friend)
 
       set({ chatHeader: friend })
-      get().updateChat()
       if (id !== undefined && chatSocket && offset === 0) {
         const myId = user.id
         const selectedConversation = get().selectedConversation
@@ -150,24 +149,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     set({ conversations: newConversation })
   },
 
-  updateChat: async () => {
-    try {
-      if (chatSocket) {
-        chatSocket.on('newMessage', get().handleNewMessage)
-        chatSocket.on('changeConvOrder', get().handleChangeConversations)
-      }
-    } catch (err: any) {
-      console.log(err)
-    }
-  },
-
-  offUpdateChat: async () => {
-    if (chatSocket) {
-      chatSocket.off('newMessage', get().handleNewMessage)
-      chatSocket.off('changeConvOrder', get().handleChangeConversations)
-    }
-  },
-
   connectChatSocket: () => {
     if (chatSocket?.connected) return
     const user = useAuthStore.getState().user
@@ -191,6 +172,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       reconnection: false,
       query: { cryptedMail },
     })
+    set({ isChatSocketConnected: true })
 
     const onMessagesSeenUpdate = (data: any) => {
       const selectedConversation = get().selectedConversation
@@ -243,6 +225,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
 
   disconnectChatSocket: () => {
     if (chatSocket) {
+      set({ isChatSocketConnected: false })
       chatSocket.off('connect')
       chatSocket.off('disconnect')
       chatSocket.off('sendMessage')
