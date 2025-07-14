@@ -111,7 +111,6 @@ const LocalTournamentMode = () => {
   
   const totalRounds = Math.log2(tournamentSize);
   
-  // Helper function to get display name (nickname if available, otherwise name)
   const getDisplayName = (player: any) => {
     return player?.nickname?.trim() || player?.name || 'Unknown Player';
   };
@@ -256,28 +255,6 @@ const LocalTournamentMode = () => {
     return participants.filter(p => !eliminatedPlayerIds.has(p.id));
   };
   
-  // Advance to next round
-  const advanceRound = () => {
-    if (currentRound < totalRounds - 1) {
-      setCurrentRound(prevRound => prevRound + 1);
-    } else {
-      // Tournament is completed
-      const finalMatch = matches.find(m => m.round === totalRounds - 1 && m.matchIndex === 0);
-      if (finalMatch) {
-        const winner = finalMatch.state === MATCH_STATES.PLAYER1_WIN ? 
-          finalMatch.player1 : finalMatch.player2;
-        setChampion(winner);
-        setChampionCelebrating(true);
-        
-        // Stop celebration after 5 seconds
-        setTimeout(() => {
-          setChampionCelebrating(false);
-        }, 5000);
-      }
-      setTournamentComplete(true);
-    }
-  };
-  
   const addParticipant = () => {
     if (participants.length < tournamentSize) {
       setParticipants([
@@ -313,7 +290,10 @@ const LocalTournamentMode = () => {
   };
   
   const startTournament = () => {
-    initializeTournament();
+    if (!participants.some(participant => !participant.name || participant.name.trim() === '') &&
+                    new Set(participants.map(p => p.name?.trim())).size === participants.filter(p => p.name?.trim()).length)
+                      initializeTournament()
+    return;
   };
   
   const resetTournament = () => {
