@@ -6,6 +6,7 @@ import { user } from '@/data/mockData';
 import {MATCH_STATES} from '../../../../data/mockData';
 import TournamentBracket from './TournamentBracket';
 import {PingPongGame} from '../game/PingPongGame';
+import { useAuthStore } from '@/(zustand)/useAuthStore'
 
 // Tournament Bracket Component for Local Tournament
 
@@ -85,12 +86,13 @@ const RoundControls = ({ currentRound, totalRounds, canAdvance }: {
 };
 
 const LocalTournamentMode = () => {
+  const { user } = useAuthStore()
   const [participants, setParticipants] = useState([
     { 
       id: crypto.randomUUID(), 
-      name: user.name, 
-      nickname: user.nickname || '', 
-      avatar: user.avatar || 'Default.avif', 
+      name: user.username, 
+      nickname: user.login || '', 
+      avatar: `/images/${user.avatar}` || 'Default.avif', 
       ready: true, 
       is_user: true
     }
