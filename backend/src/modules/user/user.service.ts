@@ -179,24 +179,33 @@ export async function getFriend(
 export function selectRandomFriends(email: string) {
   try {
     const sql = db.prepare(`
-      SELECT
-        UA.id as userA_id,
-        UA.email AS userA_email,
-        UA.username AS userA_username,
-        UA.login AS userA_login,
-        UA.avatar AS userA_avatar
-      FROM User UA ORDER BY RANDOM() LIMIT 5
+      SELECT u.*
+      FROM User u
+      WHERE u.email != ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM FriendRequest fr
+          WHERE (fr.fromEmail = u.email OR fr.toEmail = u.email)
+            AND fr.status != 'ACCEPTED'
+        )
+      ORDER BY RANDOM()
+      LIMIT 5
     `)
-    const data = sql.all()
+    const data = sql.all(email)
+    console.log(data)
+
     return data.map((row: any) => {
       const isMeA = row.fromEmail === email
       const friend = isMeA
         ? {
-            id: row.userA_id,
+            id: row.userB_id,
             email: row.userB_email,
             username: row.userB_username,
             login: row.userB_login,
             avatar: row.userB_avatar,
+            status: row.status,
+            fromEmail: row.fromEmail,
+            toEmail: row.toEmail,
           }
         : {
             id: row.userA_id,
@@ -204,6 +213,9 @@ export function selectRandomFriends(email: string) {
             username: row.userA_username,
             login: row.userA_login,
             avatar: row.userA_avatar,
+            status: row.status,
+            fromEmail: row.fromEmail,
+            toEmail: row.toEmail,
           }
       return friend
     })

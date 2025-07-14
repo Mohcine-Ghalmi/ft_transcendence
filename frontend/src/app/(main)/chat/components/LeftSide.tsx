@@ -1,12 +1,13 @@
 'use client'
 import Image from 'next/image'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { format, isToday, isYesterday } from 'date-fns'
 import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { Search } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
+import { useClickOutside } from '@/components/lib/clickOutSide'
 
 export const formatDate = (dateString: string) => {
   const date = new Date(dateString)
@@ -166,6 +167,8 @@ const InChatSearch = () => {
   const { user, onlineUsers } = useAuthStore()
   const { setSelectedConversationId } = useChatStore()
   const [isSearching, setIsSearching] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useClickOutside(ref, () => setSearchedUsers([]))
 
   const {
     searchedChatUsers: searchedUsers,
@@ -247,7 +250,10 @@ const InChatSearch = () => {
         </div>
       ) : (
         searchedUsers.length > 0 && (
-          <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
+          <div
+            ref={ref}
+            className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700"
+          >
             <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
               {searchedUsers.map((conv) => (
                 <div

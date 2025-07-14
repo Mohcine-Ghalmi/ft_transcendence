@@ -500,14 +500,17 @@ export default function SettingsPage() {
         >
           Account
         </button>
-        <button
-          onClick={() => setPage(1)}
-          className={`w-[200px] py-4 px-6 ${
-            page === 1 && 'bg-[#2B3036]'
-          }  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
-        >
-          Security
-        </button>
+        {user.type === 0 && (
+          <button
+            onClick={() => setPage(1)}
+            className={`w-[200px] py-4 px-6 ${
+              page === 1 && 'bg-[#2B3036]'
+            }  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
+          >
+            Security
+          </button>
+        )}
+
         <button className="w-[200px] py-4 px-6  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
           Game Settings
         </button>

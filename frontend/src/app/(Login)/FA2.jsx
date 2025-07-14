@@ -8,7 +8,6 @@ const Page = () => {
   const [secret, setSecret] = useState('')
   const [token, setToken] = useState('')
   const { user, setUser } = useAuthStore()
-  const [isTwoFAVerified, setUser2FAStatus] = useState(false)
 
   const getQr = async () => {
     try {
@@ -19,10 +18,18 @@ const Page = () => {
       setMessage('Failed to load QR')
     }
   }
-
+  const getUser = async () => {
+    try {
+      const res = await axiosInstance.get('/api/users/me')
+      setUser(res.data.user)
+    } catch (err) {
+      console.log(err)
+    }
+  }
   useEffect(() => {
     getQr()
-    setUser2FAStatus(user?.isTwoFAVerified)
+    getUser()
+    // setUser2FAStatus(user?.isTwoFAVerified)
   }, [])
 
   const handleVerify = async () => {
@@ -38,7 +45,6 @@ const Page = () => {
 
       if (res.data.verified) {
         toast.success('2FA enabled successfully')
-        setUser2FAStatus(true)
         setUser({ ...user, isTwoFAVerified: true })
       } else {
         toast.warning('Invalid code. Please try again.')
@@ -66,7 +72,7 @@ const Page = () => {
 
   return (
     <div className="w-full">
-      {isTwoFAVerified ? (
+      {user.isTwoFAVerified ? (
         <div className="flex flex-col mt-10">
           <h1 className="text-2xl font-bold mb-4">
             Two-Factor Authentication Enabled

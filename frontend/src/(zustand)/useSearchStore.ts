@@ -40,6 +40,7 @@ export const useSearchStore = create<useSearch>((set, get) => ({
         email: user.email,
       })
       set({ randomFriendsSuggestions: res.data.friends })
+      console.log('randomFriendsSuggestions : ', res.data.friends)
     } catch (err) {
       set({ randomFriendsSuggestions: [] })
       console.log(err)

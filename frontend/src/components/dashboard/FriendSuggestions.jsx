@@ -138,9 +138,15 @@ export const FriendSuggestions = () => {
         Friend Suggestions
       </h3>
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 sm:space-y-3 lg:space-y-4">
-        {randomFriendsSuggestions.map((friend, index) => (
-          <Friend user={friend} key={index} />
-        ))}
+        {randomFriendsSuggestions.length > 0 ? (
+          randomFriendsSuggestions.map((friend, index) => (
+            <Friend user={friend} key={index} />
+          ))
+        ) : (
+          <div className="border border-gray-500 rounded-xl min-h-[300px] flex items-center justify-center text-gray-500">
+            no friends Suggestions
+          </div>
+        )}
       </div>
     </div>
   )

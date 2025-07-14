@@ -6,8 +6,9 @@ import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { Search } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
+import { useClickOutside } from '../lib/clickOutSide'
 
 const Notification = ({ user }) => {
   const [status, setStatus] = useState(user.status || '')
@@ -143,6 +144,9 @@ export const SearchBar = () => {
     setSearchedUsersGlobal: setSearchedUsers,
   } = useSearchStore()
   const [isSearching, setIsSearching] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useClickOutside(ref, () => setSearchedUsers([]))
 
   const handleChatSearch = async () => {
     if (!search.trim()) return
@@ -186,11 +190,6 @@ export const SearchBar = () => {
     }
   }, [search, socketInstance, user.email])
 
-  const handleUserClick = (id: number) => {
-    setSearch('')
-    setSearchedUsers([])
-  }
-
   return (
     <div className="relative">
       <div className="flex items-center relative  m-4">
@@ -215,7 +214,10 @@ export const SearchBar = () => {
         </div>
       ) : (
         searchedUsers.length > 0 && (
-          <div className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700">
+          <div
+            ref={ref}
+            className="absolute w-full z-10 h-[500px] overflow-y-auto animate-fade-up duration-700"
+          >
             <div className="w-[95%] mx-auto bg-[#0b1014] rounded-2xl flex flex-col gap-4 p-2">
               {searchedUsers.map((user) => (
                 <Notification key={user.id} user={user} />

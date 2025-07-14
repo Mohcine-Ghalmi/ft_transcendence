@@ -109,7 +109,6 @@ async function userRoutes(server: FastifyInstance) {
     '/me',
     {
       preHandler: [server.authenticate],
-      schema: { response: { 200: $ref('loginResponseSchema') } },
     },
     getLoggedInUser
   )

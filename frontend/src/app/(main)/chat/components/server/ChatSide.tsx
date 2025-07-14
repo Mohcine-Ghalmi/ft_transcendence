@@ -271,7 +271,7 @@ export const More = ({ src, text }: { src: string; text: string }) => {
         alt=""
         width={100}
         height={100}
-        className="w-[30px] h-[20px] mr-2"
+        className="w-[15px] h-[15px] mr-2"
       />
       <p className="text-xs xl:text-xl text-[#363B4B]">{text}</p>
     </div>

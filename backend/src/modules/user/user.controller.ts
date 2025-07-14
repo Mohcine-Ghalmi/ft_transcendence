@@ -183,7 +183,10 @@ export async function logoutUserHandled(
 
 export async function getLoggedInUser(req: FastifyRequest, rep: FastifyReply) {
   try {
-    return rep.code(200).send(req.user)
+    const user: any = req.user
+    const logedIn = await getUserByEmail(user.email)
+    signJWT(logedIn, rep)
+    return rep.code(200).send({ user: logedIn })
   } catch (err) {
     return rep.code(500).send({ error: 'Internal Server Error' })
   }

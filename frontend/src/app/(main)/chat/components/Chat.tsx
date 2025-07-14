@@ -1,6 +1,6 @@
 'use client'
 import Image from 'next/image'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Skeleton from 'react-loading-skeleton'
 import { toast } from 'react-toastify'
 import { ConversationContainer, EmptyChat, More } from './server/ChatSide'
@@ -14,16 +14,17 @@ import {
 import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 import { useRouter } from 'next/navigation'
 
+import { motion, AnimatePresence } from 'motion/react'
+import { useClickOutside } from '@/components/lib/clickOutSide'
+
 const ChatHeader = () => {
   const [more, setMore] = useState(false)
   const { onlineUsers } = useAuthStore()
   const { setSelectedConversationId, chatHeader: user } = useChatStore()
-  const { user: me } = useAuthStore()
   const router = useRouter()
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  const closeMore = (e: any) => {
-    e.target.id === 'more' && setMore(false)
-  }
+  useClickOutside(menuRef, () => setMore(false))
 
   const handleBlock = () => {
     if (socketInstance) {
@@ -101,32 +102,38 @@ const ChatHeader = () => {
           className="w-[20px] xl:w-[60px]"
         />
       </div>
-      {more && (
-        <div
-          id="more"
-          onClick={closeMore}
-          className="animate-fade animate-duration-400 absolute top-0 left-0 rounded-2xl bg-[#1c1c1c00] w-full px-4 h-full"
-        >
-          <div
-            className="cursor-pointer absolute top-0 right-0 xl:right-15 xl:top-10 "
-            onClick={() => setMore(!more)}
-          ></div>
-          <div className="border border-gray-500  bg-white absolute  top-10 right-5 xl:right-10 xl:top-30  rounded-2xl animate-fade-down animate-duration-400">
-            <div onClick={() => router.push(`/profile/${user.login}`)}>
-              <More src="/user.svg" text="See profile" />
+      <AnimatePresence>
+        {more && (
+          <motion.div
+            key="more"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+            className="absolute top-0 left-0 rounded-2xl bg-[#1c1c1c00] w-full px-4 h-full"
+          >
+            <div
+              ref={menuRef}
+              className="cursor-pointer absolute top-0 right-0 xl:right-15 xl:top-10"
+              onClick={() => setMore(false)}
+            />
+            <div className="border border-gray-500 bg-white absolute top-10 right-5 xl:right-10 xl:top-30 rounded-2xl">
+              <div onClick={() => router.push(`/profile/${user.login}`)}>
+                <More src="/user.svg" text="See profile" />
+              </div>
+              <div onClick={() => handleBlock()}>
+                <More
+                  src="/slash-block.svg"
+                  text={user.isBlockedByMe ? 'Unblock' : 'Block'}
+                />
+              </div>
+              <div onClick={() => setSelectedConversationId(undefined)}>
+                <More src="/X.svg" text="Close Chat" />
+              </div>
             </div>
-            <div onClick={() => handleBlock()}>
-              <More
-                src="/slash-block.svg"
-                text={user.isBlockedByMe ? 'Unblock' : 'Block'}
-              />
-            </div>
-            <div onClick={() => setSelectedConversationId(undefined)}>
-              <More src="/X.svg" text="Close Chat" />
-            </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
