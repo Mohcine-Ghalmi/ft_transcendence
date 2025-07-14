@@ -19,7 +19,9 @@ const ParticipantItem = ({ player, removeParticipant, changeParticipantName, cha
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-gray-700/50">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-gray-600">
         <Image 
-          src={`/images/${player.avatar}`} 
+          src={player.avatar?.startsWith('data:') ? player.avatar : 
+               (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
+               player.avatar?.startsWith('/') ? player.avatar : `/images/${player.avatar}`} 
           alt={player.name} 
           width={40}  
           height={40}
@@ -88,7 +90,7 @@ const LocalTournamentMode = () => {
       id: crypto.randomUUID(), 
       name: user.name, 
       nickname: user.nickname || '', 
-      avatar: `/avatar/Default.svg`, 
+      avatar: user.avatar || 'Default.avif', 
       ready: true, 
       is_user: true
     }
@@ -282,7 +284,7 @@ const LocalTournamentMode = () => {
           id: crypto.randomUUID(),
           name: `Player ${participants.length + 1}`, 
           nickname: '',
-          avatar: `/avatar/Default.svg`, 
+          avatar: 'Default.avif', 
           ready: true,
           is_user: false
         }
@@ -334,31 +336,16 @@ const LocalTournamentMode = () => {
 
   // Handle winner from PingPongGame - Fixed with proper null checks
   const handleGameEnd = (winner?: any) => {
-
-    
-
-    
-    // Enhanced validation with better error handling
     if (!playingMatch) {
       return;
     }
-
-    // If no winner is provided (game was exited), just go back to tournament
     if (!winner) {
       setPlayingMatch(null);
       return;
     }
-    
-    // Ensure winner has required properties
-    if (!winner.id) {
-      return;
-    }
-    
-    // Set match winner and show result
     setMatchWinner(winner);
     setShowMatchResult(true);
     
-    // Update match state - Fixed null checks
     const matchState = winner.id === playingMatch.player1?.id 
       ? MATCH_STATES.PLAYER1_WIN 
       : MATCH_STATES.PLAYER2_WIN;
@@ -484,7 +471,9 @@ const LocalTournamentMode = () => {
                     <div className="mb-6">
                       <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-green-500 mx-auto mb-4">
                         <Image 
-                          src={`/images/${matchWinner.avatar}` || '/avatar/Default.svg'} 
+                          src={matchWinner.avatar?.startsWith('data:') ? matchWinner.avatar : 
+                               (matchWinner.avatar === 'Default.avif' || matchWinner.avatar === 'Default.svg') ? `/avatar/${matchWinner.avatar}` : 
+                               matchWinner.avatar?.startsWith('/') ? matchWinner.avatar : `/images/${matchWinner.avatar}`} 
                           alt={matchWinner.name || 'Winner'} 
                           width={96} 
                           height={96}
@@ -565,7 +554,9 @@ const LocalTournamentMode = () => {
                         <div key={player.id} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-gray-600">
                           <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                             <Image 
-                              src={`/images/${player.avatar}`} 
+                              src={player.avatar?.startsWith('data:') ? player.avatar : 
+                                   (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
+                                   player.avatar?.startsWith('/') ? player.avatar : `/images/${player.avatar}`} 
                               alt={player.name} 
                               width={48} 
                               height={48}
@@ -638,7 +629,9 @@ const LocalTournamentMode = () => {
                         <div className="w-32 h-32 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 p-1 animate-spin">
                           <div className="w-full h-full rounded-full overflow-hidden border-4 border-white">
                             <Image 
-                              src={`/images/${champion.avatar}`} 
+                              src={champion.avatar?.startsWith('data:') ? champion.avatar : 
+                                   (champion.avatar === 'Default.avif' || champion.avatar === 'Default.svg') ? `/avatar/${champion.avatar}` : 
+                                   champion.avatar?.startsWith('/') ? champion.avatar : `/images/${champion.avatar}`} 
                               alt={getDisplayName(champion)} 
                               width={128} 
                               height={128}
@@ -667,7 +660,9 @@ const LocalTournamentMode = () => {
                   <div className="bg-gradient-to-b from-yellow-400 to-yellow-600 p-2 rounded-full mb-6">
                     <div className="w-32 h-32 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-yellow-500">
                       <Image 
-                        src={`/images/${champion?.avatar}`} 
+                        src={champion?.avatar?.startsWith('data:') ? champion.avatar : 
+                             (champion?.avatar === 'Default.avif' || champion?.avatar === 'Default.svg') ? `/avatar/${champion.avatar}` : 
+                             champion?.avatar?.startsWith('/') ? champion.avatar : `/images/${champion?.avatar}`} 
                         alt={champion?.name || 'Champion'} 
                         width={128} 
                         height={128}

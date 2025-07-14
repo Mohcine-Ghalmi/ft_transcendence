@@ -208,9 +208,6 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
             src={`/images/${player.avatar}`}
             alt={player.login}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
-            onError={(e: any) => {
-              e.target.src = '/avatar/Default.svg'
-            }}
           />
         </div>
         <h4 className="text-white font-semibold text-2xl md:text-3xl">
@@ -235,10 +232,6 @@ export default function Local1v1() {
   }
 
   const handleStartGame = () => {
-    if (!player2) {
-      alert('Please add Player 2 before starting the game')
-      return
-    }
     setShowGame(true)
   }
 
@@ -270,10 +263,7 @@ export default function Local1v1() {
           </h1>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 mb-12 md:mb-20">
-            {/* Player 1 - Current User */}
             <PlayerCard player={user} playerNumber={1} />
-
-            {/* Player 2 - To be added */}
             <PlayerCard
               player={player2}
               playerNumber={2}
@@ -281,7 +271,6 @@ export default function Local1v1() {
             />
           </div>
 
-          {/* Start Game Button */}
           <div className="text-center">
             <button
               onClick={handleStartGame}
@@ -297,7 +286,6 @@ export default function Local1v1() {
           </div>
         </div>
       </div>
-      {/* Add Player Modal */}
       <AddPlayerModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

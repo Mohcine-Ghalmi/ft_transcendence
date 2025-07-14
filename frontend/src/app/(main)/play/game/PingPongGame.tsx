@@ -166,7 +166,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const safePlayer1 = {
     id: isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id) || crypto.randomUUID(),
     name: isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username),
-    avatar: isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar) || '/avatar/Default.svg',
+    avatar: isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar),
     nickname: isRemoteGame && isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : user?.login) || 'Player 1',
     email: isRemoteGame && isHost ? user?.email : (isRemoteGame ? opponent?.email : user?.email)
   };
@@ -174,7 +174,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const safePlayer2 = {
     id: isRemoteGame && !isHost ? user?.id : (isRemoteGame ? opponent?.id : player2?.id) || crypto.randomUUID(),
     name: isRemoteGame && !isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : player2?.username || player2?.name),
-    avatar: isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar) || '/avatar/Default.svg',
+    avatar: isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar),
     nickname: isRemoteGame && !isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : player2?.login || player2?.nickname) || 'Player 2',
     email: isRemoteGame && !isHost ? user?.email : (isRemoteGame ? opponent?.email : player2?.email)
   };
