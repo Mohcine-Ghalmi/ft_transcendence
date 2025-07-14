@@ -66,7 +66,7 @@ const ChatHeader = () => {
       <div className="flex items-center">
         <div className="relative">
           <Image
-            src={`${user.avatar}`}
+            src={`/images/${user.avatar}`}
             width={100}
             height={100}
             alt="avatar"
