@@ -291,8 +291,8 @@ const LocalTournamentMode = () => {
   
   const startTournament = () => {
     if (!participants.some(participant => !participant.name || participant.name.trim() === '') &&
-                    new Set(participants.map(p => p.name?.trim())).size === participants.filter(p => p.name?.trim()).length)
-                      initializeTournament()
+        new Set(participants.map(p => p.name?.trim())).size === participants.filter(p => p.name?.trim()).length)
+        initializeTournament()
     return;
   };
   

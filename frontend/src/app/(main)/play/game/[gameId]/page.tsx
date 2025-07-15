@@ -90,7 +90,7 @@ export default function GamePage() {
           setOpponent({
             email: opponentData.email,
             username: opponentData.username || opponentData.login || opponentData.email,
-            avatar: opponentData.avatar || '/avatar/Default.svg',
+            avatar: opponentData.avatar,
             login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
           });
           
@@ -147,7 +147,7 @@ export default function GamePage() {
           setOpponent({
             email: opponentData.email,
             username: opponentData.username || opponentData.login || opponentData.email,
-            avatar: opponentData.avatar || '/avatar/Default.svg',
+            avatar: opponentData.avatar,
             login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
           });
           
