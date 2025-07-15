@@ -11,6 +11,7 @@ interface useSearch {
   setUserProfile: (data: any) => void
   randomFriendsSuggestions: any
   getRandomFriendsSuggestions: () => Promise<void>
+  setRandomFriendsSuggestion: (data: any) => void
 }
 
 export const useSearchStore = create<useSearch>((set, get) => ({

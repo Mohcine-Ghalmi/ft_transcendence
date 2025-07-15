@@ -23,6 +23,7 @@ interface ChatStoreType {
   setChatHeader: (data: any) => void
   tmp: (data: any) => void
   isChatSocketConnected: boolean
+  setIsChatSocketConnected: (value: boolean) => void
 }
 
 export let chatSocket: Socket | null = null
@@ -40,7 +41,9 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   tmp: (data) => {
     set({ selectedConversation: data })
   },
-
+  setIsChatSocketConnected: (value: boolean) => {
+    set({ isChatSocketConnected: value })
+  },
   setConversations: (data: any) => {
     set({ conversations: data })
   },
@@ -111,6 +114,8 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   },
 
   handleNewMessage: (newMessage: any) => {
+    console.log('newMessage : ', newMessage)
+
     if (!newMessage) return
 
     const { selectedConversationId, selectedConversation } = get()
@@ -146,6 +151,8 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   },
 
   handleChangeConversations: (newConversation: any) => {
+    console.log('newConversation : ', newConversation)
+
     set({ conversations: newConversation })
   },
 

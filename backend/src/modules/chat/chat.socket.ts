@@ -143,18 +143,18 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
     socket.on('sendMessage', async (data) => {
       try {
-        const bytes = CryptoJs.AES.decrypt(
-          data,
-          process.env.ENCRYPTION_KEY || ''
-        )
-        const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+        // const bytes = CryptoJs.AES.decrypt(
+        //   data,
+        //   process.env.ENCRYPTION_KEY || ''
+        // )
+        // const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
         const {
           recieverId,
           senderEmail,
           senderId: myId,
           message,
           image,
-        } = dencrypt as SentMessageData
+        } = data as SentMessageData
 
         const [me, receiver]: any = await Promise.all([
           getUserByEmail(senderEmail),
@@ -192,11 +192,17 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           message,
           image
         )
-        const conversationsPromise = getConversations(me.id, me.email)
-        const receiverConversationsPromise = getConversations(
-          receiver.id,
-          receiver.email
-        )
+
+        const [conversationsPromise, receiverConversationsPromise] =
+          await Promise.all([
+            getConversations(me.id, me.email),
+            getConversations(receiver.id, receiver.email),
+          ])
+        // const conversationsPromise = await getConversations(me.id, me.email)
+        // const receiverConversationsPromise = await getConversations(
+        //   receiver.id,
+        //   receiver.email
+        // )
 
         const mySockets = await getSocketIds(me.email, 'chat')
         const recieverSockets = await getSocketIds(receiver.email, 'chat')
@@ -215,11 +221,14 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         //   JSON.stringify(messagePayload),
         //   key
         // ).toString()
+        console.log('mySockets : ', mySockets)
+        console.log('recieverSockets : ', recieverSockets)
+        console.log('receiverGlobalSockets : ', receiverGlobalSockets)
 
         if (mySockets?.length) {
           chatNamespace.to(mySockets).emit('newMessage', messagePayload)
 
-          const myConversations = await conversationsPromise
+          const myConversations = conversationsPromise
           chatNamespace.to(mySockets).emit('changeConvOrder', myConversations)
           chatNamespace.to(mySockets).emit('messageSent')
         }
@@ -227,7 +236,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         if (recieverSockets?.length) {
           chatNamespace.to(recieverSockets).emit('newMessage', messagePayload)
 
-          const receiverConversations = await receiverConversationsPromise
+          const receiverConversations = receiverConversationsPromise
           chatNamespace
             .to(recieverSockets)
             .emit('changeConvOrder', receiverConversations)

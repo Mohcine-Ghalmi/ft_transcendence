@@ -283,7 +283,9 @@ const Chat = () => {
     chatHeader,
     handleNewMessage,
     tmp,
+    connectChatSocket,
     selectedConversation,
+    isChatSocketConnected,
   } = useChatStore()
 
   const changeMessageValue = (message: string) => {
@@ -339,19 +341,25 @@ const Chat = () => {
         }
       }
 
-      const payload = CryptoJs.AES.encrypt(
-        JSON.stringify({
+      // const payload = CryptoJs.AES.encrypt(
+      //   JSON.stringify({
+      //     recieverId: selectedConversationId,
+      //     senderEmail: user.email,
+      //     senderId: user.id,
+      //     message: message.trim(),
+      //     image: imagePath,
+      //   }),
+      //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+      // ).toString()
+
+      if (chatSocket?.connected) {
+        chatSocket.emit('sendMessage', {
           recieverId: selectedConversationId,
           senderEmail: user.email,
           senderId: user.id,
           message: message.trim(),
           image: imagePath,
-        }),
-        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-      ).toString()
-
-      if (chatSocket?.connected) {
-        chatSocket.emit('sendMessage', payload)
+        })
 
         setMessage('')
         setImage(null)
@@ -366,7 +374,7 @@ const Chat = () => {
   }
 
   useEffect(() => {
-    // connectChatSocket()
+    console.log('Chat isChatSocketConnected : ', isChatSocketConnected)
 
     const onFailedToSendMessage = (err) => {
       toast.error(err)

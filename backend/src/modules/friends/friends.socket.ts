@@ -39,12 +39,16 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
   const key = process.env.ENCRYPTION_KEY as string
   //
   socket.on('addFriend', async (toEmail) => {
+    console.log('toEmail : ', toEmail)
+
     try {
       const myEmail = CryptoJS.AES.decrypt(
         socket.handshake.query.cryptedMail as string,
         key
       ).toString(CryptoJS.enc.Utf8)
       const invitedUser: any = await getUserByEmail(toEmail)
+      console.log('invitedUser : ', invitedUser)
+
       if (!invitedUser)
         return socket.emit('friendResponse', {
           status: 'error',
@@ -52,7 +56,8 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
         })
 
       const userSockets = await getSocketIds(invitedUser.email, 'sockets')
-      addFriendRequest(myEmail, toEmail)
+      const isAdded = addFriendRequest(myEmail, toEmail)
+      isAdded
         ? socket.emit('friendResponse', {
             status: 'success',
             message: 'Friend Request sent',
@@ -61,8 +66,9 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
             status: 'error',
             message: 'Failed to send Friend Request',
           })
+      console.log('userSockets : ', userSockets)
 
-      if (userSockets?.length)
+      if (isAdded && userSockets?.length)
         io.to(userSockets).emit('friendResponse', {
           status: 'success',
           message: `You Recieved A friend request from ${myEmail}`,

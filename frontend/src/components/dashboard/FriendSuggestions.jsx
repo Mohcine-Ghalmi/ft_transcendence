@@ -111,15 +111,7 @@ const Friend = ({ user }) => {
           }`}
         >
           {getButtonText() === 'Friends' ? (
-            <div onClick={() => handleChatWithuser()}>
-              <Image
-                src="/chat.svg"
-                alt="chat"
-                width={100}
-                height={100}
-                className="w-4 h-4"
-              />
-            </div>
+            <div onClick={() => handleChatWithuser()}>Chat</div>
           ) : (
             getButtonText()
           )}

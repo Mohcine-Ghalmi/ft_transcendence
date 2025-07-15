@@ -48,7 +48,7 @@ export const server = Fastify({
       options: {
         colorize: true,
         singleLine: false,
-        hideObject: false,
+        hideObject: true,
       },
     },
   },

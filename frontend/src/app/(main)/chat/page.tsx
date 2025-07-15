@@ -2,7 +2,7 @@
 import LeftSide from './components/LeftSide'
 import Chat from './components/Chat'
 import 'react-loading-skeleton/dist/skeleton.css'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
 
 const page = () => {
@@ -11,27 +11,44 @@ const page = () => {
     connectChatSocket,
     disconnectChatSocket,
     handleChangeConversations,
+    selectedConversationId,
+    setIsChatSocketConnected,
   } = useChatStore()
+  const [isConnected, setIsSocketConnected] = useState(false)
+
   useEffect(() => {
     connectChatSocket()
-    chatSocket.on('changeConvOrder', handleChangeConversations)
+
+    const checkSocket = () => {
+      if (chatSocket?.connected) {
+        setIsSocketConnected(true)
+        chatSocket.on('changeConvOrder', handleChangeConversations)
+      }
+    }
+
+    checkSocket()
+
+    const timeout = setTimeout(checkSocket, 1000)
+
     return () => {
-      if (chatSocket) {
+      clearTimeout(timeout)
+      if (chatSocket?.connected) {
         chatSocket.off('changeConvOrder', handleChangeConversations)
-        // offUpdateChat()
         disconnectChatSocket()
       }
     }
   }, [])
   return (
     <div className="flex h-[92vh] gap-6 p-6">
-      {isChatSocketConnected ? (
+      {isConnected ? (
         <>
           <LeftSide />
           <Chat />
         </>
       ) : (
-        <>chat socket not connected</>
+        <div className="flex items-center justify-center w-full">
+          chat socket not connected
+        </div>
       )}
     </div>
   )

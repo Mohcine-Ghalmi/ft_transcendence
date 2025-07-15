@@ -185,42 +185,33 @@ export function selectRandomFriends(email: string) {
         AND NOT EXISTS (
           SELECT 1
           FROM FriendRequest fr
-          WHERE (fr.fromEmail = u.email OR fr.toEmail = u.email)
-            AND fr.status != 'ACCEPTED'
+          WHERE (
+            (fr.fromEmail = u.email AND fr.toEmail = ?)
+            OR
+            (fr.toEmail = u.email AND fr.fromEmail = ?)
+          )
         )
       ORDER BY RANDOM()
       LIMIT 5
     `)
-    const data = sql.all(email)
-    console.log(data)
+    const data = sql.all(email, email, email)
+    console.log('data : ', data)
 
-    return data.map((row: any) => {
-      const isMeA = row.fromEmail === email
-      const friend = isMeA
-        ? {
-            id: row.userB_id,
-            email: row.userB_email,
-            username: row.userB_username,
-            login: row.userB_login,
-            avatar: row.userB_avatar,
-            status: row.status,
-            fromEmail: row.fromEmail,
-            toEmail: row.toEmail,
-          }
-        : {
-            id: row.userA_id,
-            email: row.userA_email,
-            username: row.userA_username,
-            login: row.userA_login,
-            avatar: row.userA_avatar,
-            status: row.status,
-            fromEmail: row.fromEmail,
-            toEmail: row.toEmail,
-          }
-      return friend
-    })
+    return data.map((row: any) => ({
+      id: row.id,
+      email: row.email,
+      username: row.username,
+      login: row.login,
+      avatar: row.avatar,
+      level: row.level,
+      xp: row.xp,
+      fromEmail: null,
+      toEmail: null,
+      status: null,
+    }))
   } catch (err) {
     console.log(err)
+    return []
   }
 }
 
