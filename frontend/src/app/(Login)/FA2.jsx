@@ -7,7 +7,7 @@ const Page = () => {
   const [code, setQrCode] = useState('')
   const [secret, setSecret] = useState('')
   const [token, setToken] = useState('')
-  const { user, setUser } = useAuthStore()
+  const { user, setUser, getUser } = useAuthStore()
 
   const getQr = async () => {
     try {
@@ -18,14 +18,7 @@ const Page = () => {
       setMessage('Failed to load QR')
     }
   }
-  const getUser = async () => {
-    try {
-      const res = await axiosInstance.get('/api/users/me')
-      setUser(res.data.user)
-    } catch (err) {
-      console.log(err)
-    }
-  }
+
   useEffect(() => {
     getQr()
     getUser()

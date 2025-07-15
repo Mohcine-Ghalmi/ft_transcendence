@@ -5,6 +5,7 @@ import { useChatStore } from '@/(zustand)/useChatStore'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { StatisticsChart } from '@/components/dashboard/StatisticsChart'
 import Image from 'next/image'
+import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -58,9 +59,12 @@ const TopProfile = ({ user }) => {
       <h3 className="text-gray-400 text-xl my-2">@{user.login}</h3>
 
       {me.email === user.email ? (
-        <button className="mt-4 w-[300px] hover:bg-[#2b3036b6] cursor-pointer rounded-2xl py-2 bg-[#2B3036] text-white duration-300 hover:scale-99">
+        <Link
+          className="text-center mt-4 w-[300px] hover:bg-[#2b3036b6] cursor-pointer rounded-2xl py-2 bg-[#2B3036] text-white duration-300 hover:scale-99"
+          href="/settings"
+        >
           Edit Profile
-        </button>
+        </Link>
       ) : (
         <div className="flex gap-4">
           <button
@@ -95,18 +99,21 @@ const MatchHistory = ({ user }) => {
 }
 
 const State = ({ user }) => {
+  const { userDetails } = useAuthStore()
+  const total = userDetails?.wins + userDetails?.losses
+  const winRate = total ? ((userDetails?.wins / total) * 100).toFixed(1) : 0
   return (
-    <div className="w-[60%] flex items-center justify-center">
+    <div className="w-[100%] flex items-center justify-center">
       <div className="grid grid-cols-2 gap-10 h-[500px] w-full">
         <StatisticsChart
           title="Win/Loss Rate"
-          value="60%"
+          value={`${winRate}%`}
           subtitle="Last 30 Days"
           chartType="line"
         />
         <StatisticsChart
           title="Matches Played"
-          value="20"
+          value={(userDetails?.wins + userDetails?.losses) | 0}
           subtitle="Last 30 Days"
           chartType="bar"
         />
@@ -116,21 +123,32 @@ const State = ({ user }) => {
 }
 
 const Level = ({ user }) => {
+  const width = 100
+  const [progress, setProgress] = useState(0)
+  const { userDetails } = useAuthStore()
+  useEffect(() => {
+    const newProgress = (user.xp / 100) * width
+    setProgress(newProgress)
+  }, [user.xp, width])
+
   return (
     <div className="w-full flex-col flex items-center justify-center">
       <div className="w-full mt-10">
         <h3>Next Level</h3>
         {/* progress bar */}
-        <div className="w-full] bg-gray-700 h-2 rounded-2xl relative mt-5">
-          <div className="w-[50%] h-2 rounded-2xl absolute left-0 top-0 bg-white"></div>
+        <div className="w-full bg-gray-700 h-2 rounded-2xl relative mt-5">
+          <div
+            style={{ width: `${progress}%` }}
+            className={`h-2 rounded-2xl absolute left-0 top-0 bg-white`}
+          ></div>
         </div>
-        <p className="mt-4 text-gray-400">{user.xp ? user.xp : 0}/100XP</p>
+        <p className="mt-4 text-gray-400">{user.xp}/100XP</p>
       </div>
-      <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,_minmax(350px,1fr))] mt-10">
-        <Card number="120" text="Wins" />
-        <Card number="30" text="Losses" />
-        <Card number="5" text="Streak" />
-        <Card number="1500" text="Rating" />
+      <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,_minmax(200px,1fr))] mt-10">
+        <Card number={userDetails?.wins | 0} text="Wins" />
+        <Card number={userDetails?.losses | 0} text="Losses" />
+        {/* <Card number="5" text="Streak" />
+        <Card number="1500" text="Rating" /> */}
       </div>
     </div>
   )
@@ -169,16 +187,21 @@ const Level = ({ user }) => {
 // }
 
 export default function Page() {
-  const { user: me } = useAuthStore()
+  const { user: me, getUser, getUserDetails } = useAuthStore()
   const { userProfile, setUserProfile } = useSearchStore()
   const pathname = usePathname()
   const [isSelected, setIsSelected] = useState(false)
   const [user, setUser] = useState()
 
   useEffect(() => {
+    getUser()
     setUser(userProfile ? userProfile : me)
     setUserProfile(null)
   }, [pathname])
+
+  useEffect(() => {
+    getUserDetails()
+  }, [])
   return (
     <div className="flex items-center justify-center text-white">
       <div className="w-[80%] h-[90vh] mt-15">

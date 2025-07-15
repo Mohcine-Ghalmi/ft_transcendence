@@ -12,10 +12,15 @@ import { FriendSuggestions } from '../../../components/dashboard/FriendSuggestio
 import { StatisticsChart } from '../../../components/dashboard/StatisticsChart'
 import { useEffect } from 'react'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
+import { useAuthStore } from '@/(zustand)/useAuthStore'
 
 export default function PingPongDashboard() {
   const { getRandomFriendsSuggestions } = useSearchStore()
+  const { getUserDetails, userDetails } = useAuthStore()
+  const total = userDetails?.wins + userDetails?.losses
+  const winRate = total ? ((userDetails?.wins / total) * 100).toFixed(1) : 0
   useEffect(() => {
+    getUserDetails()
     getRandomFriendsSuggestions()
   }, [])
   return (
@@ -28,21 +33,21 @@ export default function PingPongDashboard() {
             <ProfileSection />
             <GameModeCards />
             <MatchHistory matchHistory={matchHistory} />
-            <FriendsSection friends={friends} />
+            <FriendsSection />
           </div>
 
           {/* Right Sidebar */}
           <div className="space-y-4 sm:space-y-6">
-            <FriendSuggestions  />
+            <FriendSuggestions />
             <StatisticsChart
               title="Win/Loss Rate"
-              value="60%"
+              value={`${winRate}%`}
               subtitle="Last 30 Days"
               chartType="line"
             />
             <StatisticsChart
               title="Matches Played"
-              value="20"
+              value={(userDetails?.wins + userDetails?.losses) | 0}
               subtitle="Last 30 Days"
               chartType="bar"
             />
