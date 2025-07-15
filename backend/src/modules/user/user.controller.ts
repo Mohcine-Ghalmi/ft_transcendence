@@ -520,6 +520,7 @@ export async function updateUserData(
       } catch (err: any) {
         if (err.code !== 'ENOENT')
           console.error('Failed to delete avatar:', err)
+        // return rep.code(404).send({status: false, message: 'Avatar not found'})
       }
     }
 
@@ -578,6 +579,70 @@ export async function updateUserData(
     })
   } catch (err) {
     console.error(err)
+    return rep
+      .code(500)
+      .send({ status: false, message: 'Internal server error' })
+  }
+}
+
+export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
+  try {
+    const user: any = req.user
+    const randomFriends = db
+      .prepare(
+        `SELECT User.email , User.username ,User.avatar, User.login , FriendRequest.fromEmail, FriendRequest.toEmail, FriendRequest.status
+          FROM FriendRequest
+          INNER JOIN User
+            ON (FriendRequest.fromEmail = User.email OR FriendRequest.toEmail = User.email)
+          WHERE FriendRequest.status = 'ACCEPTED'
+            AND (FriendRequest.fromEmail = ? OR FriendRequest.toEmail = ?)
+            AND User.email != ?
+          ORDER BY RANDOM()
+          LIMIT 3`
+      )
+      .all(user.email, user.email, user.email)
+
+    const match_history_sql = db.prepare(
+      'SELECT * FROM match_history WHERE winner = ? OR loser = ? ORDER BY created_at DESC LIMIT 5'
+    )
+    console.log('user.email : ', user.email)
+
+    const matchHistory = match_history_sql.all(user.email, user.email)
+    const sql: any = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM match_history WHERE winner = ?) as wins,
+        (SELECT COUNT(*) FROM match_history WHERE loser = ?) as losses
+        `)
+
+    const data = db
+      .prepare(
+        `
+        SELECT
+          ((strftime('%d', datetime(created_at)) - 1) / 7 + 1) AS week_of_month,
+          SUM(CASE WHEN winner = ? THEN 1 ELSE 0 END) AS wins,
+          SUM(CASE WHEN loser = ? THEN 1 ELSE 0 END) AS losses
+        FROM match_history
+        WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+        GROUP BY week_of_month
+        ORDER BY week_of_month
+      `
+      )
+      .all(user.email, user.email)
+
+    const chartData = Array.from({ length: 4 }, (_, i) => {
+      const weekData: any = data.find((d: any) => d.week_of_month === i + 1)
+      return {
+        label: `Week ${i + 1}`,
+        wins: weekData ? weekData.wins : 0,
+        losses: weekData ? weekData.losses : 0,
+      }
+    })
+
+    const { wins, losses } = sql.get(user.email, user.email)
+
+    return rep.send({ wins, losses, chartData, matchHistory, randomFriends })
+  } catch (err) {
+    console.log('getUserDetails : ', err)
     return rep
       .code(500)
       .send({ status: false, message: 'Internal server error' })
