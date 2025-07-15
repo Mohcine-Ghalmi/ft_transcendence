@@ -152,7 +152,7 @@ export default function OnlineTournament() {
   const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState(0);
   const [participants, setParticipants] = useState(user ? [{
-    id: user.id || user.nickname || 'host',
+    id: user.id || 'host',
     login: user.name, 
     avatar: user.avatar,
     nickname: user.nickname,
@@ -544,7 +544,7 @@ export default function OnlineTournament() {
       name: tournamentName,
       hostEmail: user.email,
       hostNickname: user.login || user.name || user.username,
-      hostAvatar: user.avatar || '/avatar/Default.svg',
+      hostAvatar: user.avatar,
       size: tournamentSize,
     });
   };
@@ -605,7 +605,7 @@ export default function OnlineTournament() {
           const leftPlayerEmail = data.leftPlayer?.email || data.playerEmail;
           const leftPlayerId = data.leftPlayer?.id;
           const leftPlayerNickname = data.leftPlayer?.nickname;
-          const participant = p as any; // Cast to any to access email property
+          const participant = p as any;
           
           // Check multiple identifiers to ensure robust removal
           return !(
@@ -616,7 +616,6 @@ export default function OnlineTournament() {
           );
         }));
         
-        // If tournament data is provided, use that as the source of truth
         if (data.tournament?.participants) {
           const updatedParticipants = data.tournament.participants.map((p: any) => ({
             id: p.email,
@@ -787,7 +786,6 @@ export default function OnlineTournament() {
     // Set up a periodic check to ensure participants are still active
     const participantCheckInterval = setInterval(() => {
       if (socket && tournamentId) {
-        // Emit a heartbeat/presence check for all participants
         socket.emit('CheckTournamentParticipants', { tournamentId });
       }
     }, 10000); // Check every 10 seconds

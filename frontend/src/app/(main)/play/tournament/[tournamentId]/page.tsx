@@ -20,11 +20,7 @@ export default function TournamentGamePage() {
   const [authorizationChecked, setAuthorizationChecked] = useState(false)
   const [isStartingGame, setIsStartingGame] = useState(false)
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null)
-  
-  // Use refs to track the latest state in event handlers
-  const isLeavingGameRef = useRef(false)
 
-  // Join tournament on mount
   useEffect(() => {
     if (!socket || !tournamentId || !user?.email) return;
 
@@ -67,8 +63,6 @@ export default function TournamentGamePage() {
       }
     };
 
-    const handleDisconnect = () => {};
-    const handleConnectError = () => {};
     const handleReconnect = () => {
       if (tournamentId && user?.email) {
         socket.emit('JoinTournament', { 
@@ -79,14 +73,10 @@ export default function TournamentGamePage() {
     };
 
     socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('connect_error', handleConnectError);
     socket.on('reconnect', handleReconnect);
 
     return () => {
       socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('connect_error', handleConnectError);
       socket.off('reconnect', handleReconnect);
     };
   }, [socket, tournamentId, user?.email]);
@@ -101,12 +91,8 @@ export default function TournamentGamePage() {
         setTournamentData(data.tournament)
         setIsHost(data.tournament.hostEmail === user?.email)
         
-        // Do NOT automatically set up matches when joining tournament room
-        // Matches should only start when host clicks "Start Round"
       } else {
-        // If join failed, still try to get tournament data for completed tournaments
         if (data.message && data.message.includes('completed')) {
-          // Tournament is completed, allow viewing
           setIsAuthorized(true)
           if (data.tournament) {
             setTournamentData(data.tournament)
@@ -199,8 +185,6 @@ export default function TournamentGamePage() {
           setNotification(null);
         }, 5000)
         
-        // Do NOT set up any matches yet - participants should just see the bracket
-        // Matches will only start when the host clicks "Start Current Round"
       } else {
         // Tournament ID mismatch, ignoring event
       }
@@ -337,35 +321,6 @@ export default function TournamentGamePage() {
       }
     }
 
-    const handleTournamentMatchesStarted = (data: any) => {
-      if (data.tournamentId === tournamentId) {
-        setTournamentData(data.tournament)
-        
-        // Check if current user is in any of the started matches
-        const userMatch = data.matches?.find((match: any) => 
-          match.player1?.email === user?.email || match.player2?.email === user?.email
-        )
-        
-        if (userMatch) {
-          const opponent = userMatch.player1?.email === user?.email ? 
-            userMatch.player2 : userMatch.player1
-          const opponentName = opponent?.nickname || opponent?.login || 'your opponent'
-          
-          setNotification({ 
-            message: `🎮 Your tournament match against ${opponentName} is starting!`, 
-            type: 'success' 
-          })
-        } else {
-          setNotification({ 
-            message: 'Tournament matches have started! You will be notified when your match begins.', 
-            type: 'info' 
-          })
-        }
-        
-        setTimeout(() => setNotification(null), 5000)
-      }
-    }
-
     const handleTournamentNextMatchReady = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
@@ -403,7 +358,6 @@ export default function TournamentGamePage() {
       }
     };
 
-    // Add the new event handlers for tournament start and cancel responses
     const handleTournamentStartResponse = (data: any) => {
       setIsStartingGame(false);
       
@@ -645,9 +599,10 @@ export default function TournamentGamePage() {
         const isLeavingToGame = newPath.includes('/play/game/');
         const isStayingInTournament = newPath.includes(`/play/tournament/${tournamentId}`);
         const isGoingToPlay = newPath === '/play';
+        const isInternalRoute = newPath.startsWith('/play/') || newPath.startsWith('/another-internal-route/'); // Add your internal routes here
         
         // Only consider it "leaving" if going to non-tournament, non-game pages
-        if (!isLeavingToGame && !isStayingInTournament && !isGoingToPlay) {
+        if (!isLeavingToGame && !isStayingInTournament && !isGoingToPlay && !isInternalRoute) {
           if (isHost) {
             // Host leaves lobby before tournament starts
             socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
@@ -769,7 +724,7 @@ export default function TournamentGamePage() {
                   <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden mx-auto mb-2 border-2 border-green-500">
                     <Image 
                       src={`/images/${participant.avatar}`} 
-                      alt={participant.nickname} 
+                      alt={participant} 
                       width={48}
                       height={48}
                       className="w-full h-full object-cover"

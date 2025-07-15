@@ -39,7 +39,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [scores, setScores] = useState({ p1: 0, p2: 0 });
-  const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameReady, setGameReady] = useState(false);
