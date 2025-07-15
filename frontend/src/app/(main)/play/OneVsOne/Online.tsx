@@ -9,6 +9,33 @@ import { PingPongGame } from '../game/PingPongGame';
 import CryptoJS from 'crypto-js';
 import Image from 'next/image';
 
+export const sendGameInvite = async (playerEmail, socket, user) => {
+  if (!socket || !user?.email || !playerEmail) {
+    return false;
+  }
+
+  try {
+    const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      throw new Error('Encryption key not found');
+    }
+
+    const inviteData = {
+      myEmail: user.email,
+      hisEmail: playerEmail
+    };
+    
+    const encrypted = CryptoJS.AES.encrypt(JSON.stringify(inviteData), encryptionKey).toString();
+    
+    socket.emit('InviteToGame', encrypted);
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to send invite:', error);
+    return false;
+  }
+};
+
 export const PlayerListItem = ({ player, onInvite, isInviting }) => {
   const isAvailable = player.GameStatus === 'Available';
 
@@ -691,24 +718,11 @@ export default function OnlineMatch() {
     setIsWaitingForResponse(true);
     setGameAccepted(false);
     setWaitTime(30);
-    
     clearCountdown();
     
-    try {
-      const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
-      if (!encryptionKey) {
-        throw new Error('Encryption key not found');
-      }
-
-      const inviteData = {
-        myEmail: user.email,
-        hisEmail: player.email
-      };
-      
-      const encrypted = CryptoJS.AES.encrypt(JSON.stringify(inviteData), encryptionKey).toString();
-      
-      socket.emit('InviteToGame', encrypted);
-      
+    const success = await sendGameInvite(player.email, socket, user);
+    
+    if (success) {
       // Start countdown
       countdownIntervalRef.current = setInterval(() => {
         setWaitTime(prev => {
@@ -722,8 +736,7 @@ export default function OnlineMatch() {
           return prev - 1;
         });
       }, 1000);
-      
-    } catch (error) {
+    } else {
       setIsInviting(false);
       resetGameState();
     }
