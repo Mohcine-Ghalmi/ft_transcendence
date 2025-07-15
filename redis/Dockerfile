@@ -9,4 +9,6 @@ COPY tools/showdata.sh /usr/local/bin/showdata.sh
 RUN chmod +x /usr/local/bin/redis.sh
 RUN chmod +x /usr/local/bin/showdata.sh
 
+EXPOSE 6379
+
 CMD ["/usr/local/bin/redis.sh"]

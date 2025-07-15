@@ -4,15 +4,14 @@ CREATE TABLE "User" (
     "username" TEXT NOT NULL,
     "salt" TEXT NOT NULL,
     "password" TEXT NOT NULL,
-    "login" TEXT,
-    "level" INTEGER,
-    "xp" INTEGER NULL,
+    "login" TEXT NOT NULL UNIQUE,
+    "level" INTEGER DEFAULT 0,
+    "xp" INTEGER DEFAULT 0,
     "avatar" TEXT,
-    "type" INTEGER,
+    "type" INTEGER DEFAULT 0,
     "resetOtp" TEXT NULL,
     "resetOtpExpireAt" TEXT NULL,
-    "isOnline" BOOLEAN,
-    "twoFASecret" TEXT,
+    "twoFASecret" TEXT NULL,
     "isTwoFAVerified" BOOLEAN DEFAULT 0
 );
 
@@ -23,7 +22,7 @@ CREATE TABLE "Messages" (
     "message" TEXT,
     "image" TEXT,
     "seen" BOOLEAN DEFAULT FALSE,
-    "date" DATETIME NOT NULL,
+    "date" DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Messages_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Messages_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -41,7 +40,7 @@ CREATE TABLE  FriendRequest (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
   fromEmail TEXT NOT NULL,
   toEmail TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING | ACCEPTED | REJECTED
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'BLOCKED', 'MUTED')),
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (fromEmail, toEmail),
@@ -57,4 +56,25 @@ CREATE TABLE "Block" (
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (blockedBy, blockedUser)
-)
+);
+
+CREATE TABLE "match_history" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "game_id" TEXT UNIQUE NOT NULL,
+    "player1_email" TEXT NOT NULL,
+    "player2_email" TEXT NOT NULL,
+    "player1_score" INTEGER NOT NULL DEFAULT 0,
+    "player2_score" INTEGER NOT NULL DEFAULT 0,
+    "winner" TEXT NOT NULL,
+    "loser" TEXT NOT NULL,
+    "game_duration" INTEGER NOT NULL DEFAULT 0,
+    "started_at" INTEGER NOT NULL,
+    "ended_at" INTEGER NOT NULL,
+    "game_mode" TEXT NOT NULL DEFAULT '1v1',
+    "status" TEXT NOT NULL DEFAULT 'completed',
+    "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("player1_email") REFERENCES "User" ("email") ON DELETE CASCADE,
+    FOREIGN KEY ("player2_email") REFERENCES "User" ("email") ON DELETE CASCADE,
+    FOREIGN KEY ("winner") REFERENCES "User" ("email") ON DELETE CASCADE,
+    FOREIGN KEY ("loser") REFERENCES "User" ("email") ON DELETE CASCADE
+);

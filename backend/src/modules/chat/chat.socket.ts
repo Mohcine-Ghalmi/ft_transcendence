@@ -4,6 +4,7 @@ import { getFriend, getUserByEmail, getUserById } from '../user/user.service'
 import { addMessage, getConversations } from './chat.controller'
 import { db } from '../../app'
 import CryptoJs from 'crypto-js'
+import { changeFriendStatus } from '../friends/friends.socket'
 
 interface SentMessageData {
   recieverId: number
@@ -79,40 +80,15 @@ export function setupChatNamespace(chatNamespace: Namespace) {
       }
     })
 
-    // mute a user
-
-    socket.on('toggleMuteUser', async ({ userToMuteEmail, myEmail }) => {
-      try {
-        // const friend = await getFriend(userToMuteEmail, myEmail)
-        // if (!friend)
-        //   return socket.emit(
-        //     'toggleMuteUserError',
-        //     'You are not friends with this user'
-        //   )
-        // await prisma.friends.update({
-        //   where: { id: friend.id },
-        //   data: { isMuted: !friend.isMuted },
-        // })
-        // socket.emit('muted', !friend.isMuted)
-      } catch (err) {
-        return socket.emit(
-          'toggleMuteUserError',
-          `Can't mute user for now please try again`
-        )
-      }
-    })
-
     //searching for a user in chat
-    socket.on('searchForUser', async ({ searchedUser, email, type }) => {
-      console.log('searchedUser : ', searchedUser)
-      console.log('email : ', email)
-
+    socket.on('searchForUser', ({ searchedUser, email }) => {
       try {
         const sql = db.prepare(`
             SELECT
               f.id AS f_id,
-              f.userA,
-              f.userB,
+              f.fromEmail,
+              f.toEmail,
+              f.status,
 
               u.id AS id,
               u.email AS email,
@@ -124,27 +100,27 @@ export function setupChatNamespace(chatNamespace: Namespace) {
               u.resetOtp AS resetOtp,
               u.resetOtpExpireAt AS resetOtpExpireAt
 
-            FROM Friends f
+            FROM FriendRequest f
             JOIN User me ON me.email = ?
             JOIN User u ON (
-              (f.userA = me.email AND f.userB = u.email)
+              (f.fromEmail = me.email AND f.toEmail = u.email)
               OR
-              (f.userB = me.email AND f.userA = u.email)
+              (f.toEmail = me.email AND f.fromEmail = u.email)
             )
-            WHERE u.email LIKE ? OR u.usernam LIKE ? OR u.login LIKE ?;
+            WHERE (u.email LIKE ? OR u.username LIKE ? OR u.login LIKE ?) AND status = 'ACCEPTED';
           `)
 
-        const rawUsers = await sql.all(
+        const rawUsers = sql.all(
           email,
           `${searchedUser}%`,
-          `${searchedUser}%`,
+          `%${searchedUser}%`,
           `${searchedUser}%`
         )
 
         const users = rawUsers.map((row: any) => ({
           id: row.f_id,
-          userA: row.userA,
-          userB: row.userB,
+          fromEmail: row.fromEmail,
+          toEmail: row.toEmail,
           user: {
             id: row.id,
             email: row.email,
@@ -167,26 +143,24 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
     socket.on('sendMessage', async (data) => {
       try {
-        const bytes = CryptoJs.AES.decrypt(
-          data,
-          process.env.ENCRYPTION_KEY || ''
-        )
-        const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+        // const bytes = CryptoJs.AES.decrypt(
+        //   data,
+        //   process.env.ENCRYPTION_KEY || ''
+        // )
+        // const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
         const {
           recieverId,
           senderEmail,
           senderId: myId,
           message,
           image,
-        } = dencrypt as SentMessageData
+        } = data as SentMessageData
 
-        const [me, receiver, friend]: any = await Promise.all([
+        const [me, receiver]: any = await Promise.all([
           getUserByEmail(senderEmail),
           getUserById(recieverId),
-          getUserById(recieverId).then((rec: any) =>
-            rec ? getFriend(senderEmail, rec.email) : null
-          ),
         ])
+
         if (!me) {
           socket.emit('failedToSendMessage', 'Sender Not Found')
           return
@@ -197,6 +171,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           return
         }
 
+        const friend = await getFriend(senderEmail, receiver.email)
         if (!friend) {
           socket.emit(
             'failedToSendMessage',
@@ -204,6 +179,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           )
           return
         }
+        if (friend.isBlockedByMe || friend.isBlockedByHim) return //socket.emit('failedToSendMessage', 'This User Is Blocked')
 
         if (me.email === receiver.email) {
           socket.emit('failedToSendMessage', 'You cannot message yourself')
@@ -216,8 +192,17 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           message,
           image
         )
-        const conversationsPromise = getConversations(me.id)
-        const receiverConversationsPromise = getConversations(receiver.id)
+
+        const [conversationsPromise, receiverConversationsPromise] =
+          await Promise.all([
+            getConversations(me.id, me.email),
+            getConversations(receiver.id, receiver.email),
+          ])
+        // const conversationsPromise = await getConversations(me.id, me.email)
+        // const receiverConversationsPromise = await getConversations(
+        //   receiver.id,
+        //   receiver.email
+        // )
 
         const mySockets = await getSocketIds(me.email, 'chat')
         const recieverSockets = await getSocketIds(receiver.email, 'chat')
@@ -232,23 +217,26 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           sender: me,
         }
 
-        const cryptedMessage = CryptoJs.AES.encrypt(
-          JSON.stringify(messagePayload),
-          key
-        ).toString()
+        // const cryptedMessage = CryptoJs.AES.encrypt(
+        //   JSON.stringify(messagePayload),
+        //   key
+        // ).toString()
+        console.log('mySockets : ', mySockets)
+        console.log('recieverSockets : ', recieverSockets)
+        console.log('receiverGlobalSockets : ', receiverGlobalSockets)
 
         if (mySockets?.length) {
-          chatNamespace.to(mySockets).emit('newMessage', cryptedMessage)
+          chatNamespace.to(mySockets).emit('newMessage', messagePayload)
 
-          const myConversations = await conversationsPromise
+          const myConversations = conversationsPromise
           chatNamespace.to(mySockets).emit('changeConvOrder', myConversations)
           chatNamespace.to(mySockets).emit('messageSent')
         }
 
         if (recieverSockets?.length) {
-          chatNamespace.to(recieverSockets).emit('newMessage', cryptedMessage)
+          chatNamespace.to(recieverSockets).emit('newMessage', messagePayload)
 
-          const receiverConversations = await receiverConversationsPromise
+          const receiverConversations = receiverConversationsPromise
           chatNamespace
             .to(recieverSockets)
             .emit('changeConvOrder', receiverConversations)
@@ -268,11 +256,22 @@ export function setupChatNamespace(chatNamespace: Namespace) {
     })
 
     socket.on('disconnect', () => {
-      const userEmail = socket.handshake.query.userEmail
-      if (userEmail) {
-        const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
-        removeSocketId(email, socket.id, 'chat')
+      const cryptedMail = socket.handshake.query.cryptedMail
+      if (!cryptedMail) {
+        console.error('No cryptedMail provided in handshake query')
+        return
       }
+      const key = process.env.ENCRYPTION_KEY as string
+      const userEmail = CryptoJs.AES.decrypt(
+        cryptedMail as string,
+        key
+      ).toString(CryptoJs.enc.Utf8)
+      if (!userEmail) {
+        console.error('Failed to decrypt user email from cryptedMail')
+        return
+      }
+
+      removeSocketId(userEmail, socket.id, 'chat')
     })
   })
 }

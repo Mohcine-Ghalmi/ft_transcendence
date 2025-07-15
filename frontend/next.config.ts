@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  output: 'standalone',
   images: {
     remotePatterns: [
       {
@@ -41,6 +42,14 @@ const nextConfig: NextConfig = {
         hostname: 'hostname',
       },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/images/:path*',
+        destination: 'http://localhost:5005/images/:path*',
+      },
+    ]
   },
 }
 

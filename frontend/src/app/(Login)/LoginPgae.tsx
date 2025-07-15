@@ -4,8 +4,13 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 import SignInWithOthers from './SignInWithOthers'
+import ResetPassword from './ResetPassword/resetPassword'
+import { CustomError } from './SignUp/SingUpPage'
+import { useRouter } from 'next/navigation'
+import VerifyTwoFa from './VerifyTwoFa'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setemail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState({
@@ -41,7 +46,7 @@ export default function LoginPage() {
   }
 
   //
-  const { login } = useAuthStore()
+  const { login, hidePopUp } = useAuthStore()
 
   const handleLogin = async () => {
     const newErrors = {
@@ -71,12 +76,19 @@ export default function LoginPage() {
     }
 
     // If validation passes, proceed with login
-    await login({ email, password })
+    const res = await login({ email, password })
+    if (res) router.push('/dashboard')
     // Add your login logic here
   }
 
+  //
+  const [showRestpassword, setShowRestpassword] = useState(false)
+
   return (
-    <div className="min-h-screen  flex flex-col">
+    <div className="min-h-screen  flex flex-col relative">
+      {showRestpassword && (
+        <ResetPassword setShowRestpassword={setShowRestpassword} />
+      )}
       {/* Header */}
       <header className="flex items-center bg-[#121417] justify-between px-6 py-4 border-b border-gray-700">
         <Link href="/">
@@ -97,7 +109,7 @@ export default function LoginPage() {
           </button>
         </Link>
       </header>
-
+      {hidePopUp && <VerifyTwoFa email={email} />}
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-5xl">
@@ -121,13 +133,7 @@ export default function LoginPage() {
                     : 'border-gray-600 focus:ring-blue-500'
                 }`}
               />
-              <div className="min-h-[60px]">
-                {errors.email && (
-                  <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
-                    {errors.email}
-                  </p>
-                )}
-              </div>
+              <CustomError message={errors.email} isTouched={1} />
             </div>
 
             {/* Password Input */}
@@ -143,23 +149,18 @@ export default function LoginPage() {
                     : 'border-gray-600 focus:ring-blue-500'
                 }`}
               />
-              {errors.password && (
-                <p className="text-red-500 text-sm md:text-base xl:text-lg mt-1">
-                  {errors.password}
-                </p>
-              )}
+              <CustomError message={errors.password} isTouched={1} />
             </div>
 
             {/* Forgot Password */}
             <div className="text-left">
-              <Link href="/ResetPassword" passHref>
-                <button
-                  type="button"
-                  className="text-gray-400 text-sm hover:text-gray-300 transition-colors"
-                >
-                  Forgot Password?
-                </button>
-              </Link>
+              <button
+                type="button"
+                onClick={() => setShowRestpassword(true)}
+                className="text-gray-400 text-sm hover:text-gray-300 transition-colors"
+              >
+                Forgot Password?
+              </button>
             </div>
 
             {/* Login Button */}

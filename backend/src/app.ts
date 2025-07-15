@@ -7,15 +7,23 @@ import dotenv from 'dotenv'
 import userRoutes from './modules/user/user.route'
 import chatRoutes from './modules/chat/chat.route'
 import mailRoutes from './modules/Mail/mail.route'
+import gameRoute from './modules/game/game.route'
 
 import { userSchemas } from './modules/user/user.schema'
 
-import { addFriendById, getUserByEmail } from './modules/user/user.service'
+import {
+  addFriendById,
+  getFriend,
+  getUserByEmail,
+} from './modules/user/user.service'
+
+import { initializeMatchHistoryTable } from './modules/game/game.service'
 
 import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
+import fastifyOauth2 from '@fastify/oauth2'
 
 const fastifyMultipart = require('@fastify/multipart')
 const fastifyStatic = require('@fastify/static')
@@ -23,6 +31,8 @@ const fastifyMailer = require('fastify-mailer')
 
 import { cleanupStaleSocketsOnStartup, setupSocketIO } from './socket'
 import { initializeDatabase } from './database/connection'
+import { twoFARoutes } from './modules/user/user.2fa'
+import { loginRouter } from './modules/user/user.login'
 
 dotenv.config()
 
@@ -38,7 +48,7 @@ export const server = Fastify({
       options: {
         colorize: true,
         singleLine: false,
-        hideObject: true, //set to false in development
+        hideObject: true,
       },
     },
   },
@@ -138,6 +148,62 @@ async function registerPlugins() {
       },
     },
   })
+  await server.register(fastifyOauth2, {
+    name: 'ftOAuth2',
+    scope: ['public'],
+    credentials: {
+      client: {
+        id: process.env.FORTY_TWO_CLIENT_ID as string,
+        secret: process.env.FORTY_TWO_CLIENT_SECRET as string,
+      },
+      auth: {
+        authorizeHost: 'https://api.intra.42.fr',
+        authorizePath: '/oauth/authorize',
+        tokenHost: 'https://api.intra.42.fr',
+        tokenPath: '/oauth/token',
+      },
+    },
+    startRedirectPath: '/login/42',
+    callbackUri: 'http://localhost:5005/login/42/callback',
+  })
+  await server.register(fastifyOauth2, {
+    name: 'googleOAuth2',
+    scope: ['profile', 'email'],
+    credentials: {
+      client: {
+        id: process.env.GOOGLE_CLIENT_ID as string,
+        secret: process.env.GOOGLE_CLIENT_SECRET as string,
+      },
+      auth: fastifyOauth2.GOOGLE_CONFIGURATION,
+    },
+    startRedirectPath: '/login/google',
+    callbackUri: 'http://localhost:5005/login/google/callback',
+  })
+  // await server.register(fastifyOauth2, {
+  //   name: 'googleOAuth2',
+  //   credentials: {
+  //     client: {
+  //       id: process.env.GOOGLE_CLIENT_ID || '',
+  //       secret: process.env.GOOGLE_CLIENT_SECRET || '',
+  //     },
+  //     auth: {
+  //       authorizeHost: 'https://accounts.google.com',
+  //       authorizePath: '/o/oauth2/auth',
+  //       tokenHost: 'https://oauth2.googleapis.com',
+  //       tokenPath: '/token',
+  //     },
+  //   },
+  //   startRedirectPath: '/auth/google',
+  //   callbackUri: `${process.env.BACK_END_URL}/auth/google/callback`,
+  //   scope: ['email', 'profile'],
+  //   scopeSeparator: ' ',
+  //   useBasicAuthorizationHeader: false,
+  //   allowBearerToken: true,
+  //   skipAccessToken: true,
+  //   connectHeaders: {
+  //     'Content-Type': 'application/x-www-form-urlencoded',
+  //   },
+  // })
 
   await server.register(rateLimit, {
     global: true,
@@ -152,31 +218,32 @@ server.decorate(
   'authenticate',
   async (req: FastifyRequest, rep: FastifyReply) => {
     try {
-      const authHeader = req.headers['authorization']
-      if (!authHeader) {
-        return rep.code(401).send({ message: 'No token provided' })
+      let token = req.cookies.accessToken
+
+      if (!token && req.headers.authorization) {
+        const authHeader = req.headers.authorization
+        if (authHeader.startsWith('Bearer ')) {
+          token = authHeader.substring(7)
+        }
       }
 
-      const token = authHeader.split(' ')[1]
-
-      if (tokenBlacklist.has(token)) {
-        return rep.code(401).send({ message: 'Invalid or expired token' })
+      if (!token) {
+        return rep.code(401).send({
+          error: 'Authentication required',
+          message: 'No token provided',
+        })
       }
 
-      req.headers['authorization'] = `Bearer ${token}`
+      const decoded = server.jwt.verify(token)
 
-      const user: any = await req.jwtVerify()
-      const dbUser = await getUserByEmail(user.email)
+      req.user = decoded
+    } catch (err: any) {
+      rep.clearCookie('accessToken')
 
-      if (!dbUser) {
-        return rep.code(401).send({ message: 'User Not Found', status: false })
-      }
-
-      if (user?.exp < (new Date().getTime() + 1) / 1000) {
-        return rep.code(401).send({ message: 'Invalid or expired token' })
-      }
-    } catch (err) {
-      return rep.code(401).send({ message: 'Invalid or expired token' })
+      return rep.code(401).send({
+        error: 'Invalid token',
+        message: err.message,
+      })
     }
   }
 )
@@ -215,11 +282,17 @@ async function registerRoutes() {
   server.register(userRoutes, { prefix: 'api/users' })
   server.register(mailRoutes, { prefix: 'api/mail' })
   server.register(chatRoutes, { prefix: 'api/chat' })
+  server.register(twoFARoutes, { prefix: 'api/2fa' })
+  server.register(loginRouter)
+  server.register(gameRoute)
 }
 
 async function startServer() {
   try {
     await registerPlugins()
+
+    // Initialize match history table
+    await initializeMatchHistoryTable()
 
     await registerRoutes()
 
@@ -233,6 +306,7 @@ async function startServer() {
     setupSocketIO(server)
   } catch (error) {
     server.log.error(error)
+    console.error('Failed to start server:', error)
     process.exit(1)
   }
 }

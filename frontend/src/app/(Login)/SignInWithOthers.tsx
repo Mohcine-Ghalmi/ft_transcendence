@@ -3,13 +3,11 @@ import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'react-toastify'
-import { signIn, signOut, useSession } from 'next-auth/react'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 
 const SignInWithOthers = () => {
   //
   const router = useRouter()
-  const { data: session, status } = useSession()
   const [isProcessing, setIsProcessing] = useState(false)
   const searchParams = useSearchParams()
   const { googleLogin } = useAuthStore()
@@ -49,15 +47,7 @@ const SignInWithOthers = () => {
 
     try {
       setIsProcessing(true)
-      const result = await signIn('google', {
-        redirect: false,
-        callbackUrl: '/',
-      })
-
-      if (result?.error) {
-        toast.error('Google login failed')
-        setIsProcessing(false)
-      }
+      router.replace(`${process.env.NEXT_PUBLIC_BACKEND}/login/google`)
     } catch (err) {
       toast.error('Google login failed')
       setIsProcessing(false)
@@ -69,45 +59,13 @@ const SignInWithOthers = () => {
 
     try {
       setIsProcessing(true)
-      const result = await signIn('42-school', {
-        redirect: false,
-        callbackUrl: '/',
-      })
-
-      if (result?.error) {
-        toast.error('42 School login failed')
-        setIsProcessing(false)
-      }
+      router.replace(`${process.env.NEXT_PUBLIC_BACKEND}/login/42`)
     } catch (err) {
       toast.error('42 School login failed')
       setIsProcessing(false)
     }
   }
 
-  useEffect(() => {
-    if (status === 'authenticated' && session?.user && !isProcessing) {
-      const handleLogin = async () => {
-        try {
-          setIsProcessing(true)
-          console.log('session : ', session.user)
-
-          await googleLogin(session.user)
-
-          await signOut({ redirect: false })
-
-          router.push('/dashboard')
-        } catch (err) {
-          toast.error('Login process failed')
-        } finally {
-          setIsProcessing(false)
-        }
-      }
-
-      handleLogin()
-    } else if (status === 'unauthenticated') {
-      setIsProcessing(false)
-    }
-  }, [session, status, router])
   return (
     <>
       {/* Divider */}

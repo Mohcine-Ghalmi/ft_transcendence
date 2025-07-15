@@ -1,30 +1,48 @@
-
 "use client";
-import React, { useRef, useEffect, useState } from "react";
+import { useAuthStore } from "@/(zustand)/useAuthStore";
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 const GAME_RATIO = 16 / 9;
 
-const GAME_WIDTH = 880;
-const GAME_HEIGHT = 495; // 16:9 ratio
-const PADDLE_WIDTH = 12;
-const PADDLE_HEIGHT = 90;
-const BALL_SIZE = 16;
-const PADDLE_SPEED = 7;
+const GAME_WIDTH = 800;
+const GAME_HEIGHT = 600;
+const PADDLE_WIDTH = 15;
+const PADDLE_HEIGHT = 100;
+const PADDLE_SPEED = 8;
+const BALL_SIZE = 15;
 const BALL_SPEED = 6;
 
 const isMobile = () => typeof window !== 'undefined' && window.innerWidth < 640;
+
+interface PingPongGameProps {
+  player1: any;
+  player2: any;
+  onExit: (winner?: any) => void;
+  isTournamentMode?: boolean;
+  // Remote game props
+  gameId?: string;
+  socket?: any;
+  isHost?: boolean;
+  opponent?: any;
+}
 
 export const PingPongGame: React.FC<PingPongGameProps> = ({ 
   player1, 
   player2, 
   onExit, 
-  isTournamentMode = false 
+  isTournamentMode = false,
+  gameId,
+  socket,
+  isHost = false,
+  opponent
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [scores, setScores] = useState({ p1: 0, p2: 0 });
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
+  const [gameReady, setGameReady] = useState(false);
   const [mobile, setMobile] = useState(isMobile());
   const [gameTime, setGameTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
   const gameStartTime = useRef<number | null>(null);
@@ -32,20 +50,133 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
   });
+  const {user} = useAuthStore();
 
-  // Validate players have required properties
+  // Remote game state
+  const [isRemoteGame, setIsRemoteGame] = useState(false);
+  const [remoteGameState, setRemoteGameState] = useState<any>(null);
+  const [isPlayer1, setIsPlayer1] = useState(true);
+  const [isGameHost, setIsGameHost] = useState(false);
+  const updateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastUpdateTime = useRef<number>(0);
+  const animationRef = useRef<number | null>(null);
+  const router = useRouter();
+
+  // Mobile paddle state
+  const [paddle1Move, setPaddle1Move] = useState<'' | 'up' | 'down'>('');
+  const [paddle2Move, setPaddle2Move] = useState<'' | 'up' | 'down'>('');
+
+  // Determine if this is a remote game
+  useEffect(() => {
+    setIsRemoteGame(!!gameId && !!socket);
+    if (gameId && socket) {
+      // For ALL remote games (tournament and matchmaking), maintain consistent positioning
+      // Host is always Player 1 (left), Guest is always Player 2 (right)
+      setIsPlayer1(isHost);
+      setIsGameHost(isHost);
+    }
+  }, [gameId, socket, isHost]);
+
+  // Listen for game start event from server
+  useEffect(() => {
+    if (!isRemoteGame || !socket) return;
+
+    const handleGameStarted = (data: any) => {
+      if (data.gameId === gameId) {
+        setGameStarted(true);
+        setPaused(false);
+        gameStartTime.current = Date.now();
+        
+        // Initialize game state from server if available
+        if (data.gameState) {
+          ball.current.x = data.gameState.ballX;
+          ball.current.y = data.gameState.ballY;
+          ball.current.dx = data.gameState.ballDx;
+          ball.current.dy = data.gameState.ballDy;
+          paddle1Y.current = data.gameState.paddle1Y;
+          paddle2Y.current = data.gameState.paddle2Y;
+          currentScores.current = data.gameState.scores;
+          setScores(data.gameState.scores);
+        } else {
+          // Initialize with default values
+          ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
+          ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
+          ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+          ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+          paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+          paddle2Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+          currentScores.current = { p1: 0, p2: 0 };
+          setScores({ p1: 0, p2: 0 });
+        }
+        
+        // Tournament games should be ready immediately with no delay
+        if (isTournamentMode) {
+          setGameReady(true);
+        } else {
+          // Add small delay for regular games
+          setTimeout(() => {
+            setGameReady(true);
+          }, 500);
+        }
+      }
+    };
+
+    socket.on('GameStarted', handleGameStarted);
+
+    return () => {
+      socket.off('GameStarted', handleGameStarted);
+    };
+  }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost, isTournamentMode]);
+
+  // Auto-start for tournament games immediately when component mounts
+  useEffect(() => {
+    if (isTournamentMode && !gameStarted) {
+      // For all tournament games (both remote and local), start immediately without waiting for events
+      setGameStarted(true);
+      setPaused(false);
+      gameStartTime.current = Date.now();
+      
+      // Initialize with default values for tournament
+      ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
+      ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
+      ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+      ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+      paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      paddle2Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      currentScores.current = { p1: 0, p2: 0 };
+      setScores({ p1: 0, p2: 0 });
+      setGameReady(true);
+    }
+  }, [isTournamentMode, gameStarted]);
+
+  // Regular game auto-start logic (only for non-tournament games)
+  useEffect(() => {
+    if (isRemoteGame && socket && gameId && !gameStarted && !isTournamentMode) {
+      const autoStartTimer = setTimeout(() => {
+        if (!gameStarted && socket && gameId) {
+          socket.emit('StartGame', { gameId });
+        }
+      }, 1000); // 1 second delay for regular games
+
+      return () => clearTimeout(autoStartTimer);
+    }
+  }, [isRemoteGame, socket, gameId, gameStarted, isTournamentMode]);
+
+  // Validate players have required properties - Fix for consistent positioning
   const safePlayer1 = {
-    id: player1?.id || crypto.randomUUID(),
-    name: player1?.name || 'Player 1',
-    avatar: player1?.avatar || '/mghalmi.jpg',
-    nickname: player1?.nickname || player1?.name || 'Player 1'
+    id: isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id) || crypto.randomUUID(),
+    name: isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username),
+    avatar: isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar),
+    nickname: isRemoteGame && isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : user?.login) || 'Player 1',
+    email: isRemoteGame && isHost ? user?.email : (isRemoteGame ? opponent?.email : user?.email)
   };
 
   const safePlayer2 = {
-    id: player2?.id || crypto.randomUUID(),
-    name: player2?.name || 'Player 2',
-    avatar: player2?.avatar || '/mghalmi.jpg',
-    nickname: player2?.nickname || player2?.name || 'Player 2'
+    id: isRemoteGame && !isHost ? user?.id : (isRemoteGame ? opponent?.id : player2?.id) || crypto.randomUUID(),
+    name: isRemoteGame && !isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : player2?.username || player2?.name),
+    avatar: isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar),
+    nickname: isRemoteGame && !isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : player2?.login || player2?.nickname) || 'Player 2',
+    email: isRemoteGame && !isHost ? user?.email : (isRemoteGame ? opponent?.email : player2?.email)
   };
 
   // Paddle positions: player1 left, player2 right
@@ -58,10 +189,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     dy: BALL_SPEED * (Math.random() > 0.5 ? 1 : -1),
   });
   const keys = useRef<{ [key: string]: boolean }>({});
-
-  // Mobile paddle state
-  const [paddle1Move, setPaddle1Move] = useState<'' | 'up' | 'down'>('');
-  const [paddle2Move, setPaddle2Move] = useState<'' | 'up' | 'down'>('');
+  const currentScores = useRef({ p1: 0, p2: 0 });
 
   // Game timer
   useEffect(() => {
@@ -74,7 +202,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         const minutes = Math.floor((elapsed % 3600) / 60);
         const seconds = elapsed % 60;
         setGameTime({ hours, minutes, seconds });
-      }, 1000);
+      }, 1000); // Update every second
     }
 
     return () => {
@@ -82,24 +210,38 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
   }, [gameStarted, paused]);
 
-  // Responsive canvas
+  // Mobile detection
+  useEffect(() => {
+    setMobile(isMobile());
+  }, []);
+
+  // Canvas resize handler
   useEffect(() => {
     const handleResize = () => {
-      setMobile(isMobile());
-      // Calculate responsive dimensions while maintaining aspect ratio
-      const maxW = Math.min(window.innerWidth * 0.9, 1200);
-      const maxH = Math.min(window.innerHeight * 0.6, 700);
-      let width = maxW;
-      let height = width / GAME_RATIO;
-      if (height > maxH) {
-        height = maxH;
-        width = height * GAME_RATIO;
+      const container = canvasRef.current?.parentElement;
+      if (!container) return;
+
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      
+      // Calculate canvas dimensions maintaining aspect ratio
+      let width = containerWidth;
+      let height = containerWidth / GAME_RATIO;
+      
+      if (height > containerHeight) {
+        height = containerHeight;
+        width = containerHeight * GAME_RATIO;
       }
+      
       setCanvasDims({ width, height });
     };
+
     handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   // Update canvas size when dimensions change
@@ -111,35 +253,47 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     }
   }, [canvasDims]);
 
-  // Keyboard controls (Desktop)
+  // Keyboard event handlers
   useEffect(() => {
-    if (mobile) return;
     const downHandler = (e: KeyboardEvent) => {
       keys.current[e.key.toLowerCase()] = true;
     };
+
     const upHandler = (e: KeyboardEvent) => {
       keys.current[e.key.toLowerCase()] = false;
     };
-    window.addEventListener("keydown", downHandler);
-    window.addEventListener("keyup", upHandler);
+
+    window.addEventListener('keydown', downHandler);
+    window.addEventListener('keyup', upHandler);
+
     return () => {
-      window.removeEventListener("keydown", downHandler);
-      window.removeEventListener("keyup", upHandler);
+      window.removeEventListener('keydown', downHandler);
+      window.removeEventListener('keyup', upHandler);
     };
-  }, [mobile]);
+  }, []);
 
-  // Game loop
+  // Canvas setup and game loop
   useEffect(() => {
-    if (!gameStarted || paused) return;
-    let animation: number;
+    if (!canvasRef.current) return;
 
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size
+    canvas.width = canvasDims.width;
+    canvas.height = canvasDims.height;
+
+    // Calculate scale factors
     const scaleX = canvasDims.width / GAME_WIDTH;
     const scaleY = canvasDims.height / GAME_HEIGHT;
 
     const draw = () => {
-      const ctx = canvasRef.current?.getContext("2d");
-      if (!ctx) return;
+      if (!canvasRef.current) return;
       
+      const ctx = canvasRef.current.getContext('2d');
+      if (!ctx) return;
+
       // Clear canvas
       ctx.clearRect(0, 0, canvasDims.width, canvasDims.height);
       
@@ -169,13 +323,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       ctx.shadowColor = "#20242a";
       ctx.shadowBlur = 7;
       ctx.fillRect(
-        0, 
+        10, 
         paddle1Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
       );
       ctx.fillRect(
-        canvasDims.width - PADDLE_WIDTH * scaleX, 
+        canvasDims.width - PADDLE_WIDTH * scaleX - 10, 
         paddle2Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
@@ -198,51 +352,212 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
 
     const update = () => {
-      // Move paddles - desktop or mobile
-      if (!mobile) {
-        if (keys.current["w"] && paddle1Y.current > 0) paddle1Y.current -= PADDLE_SPEED;
-        if (keys.current["s"] && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle1Y.current += PADDLE_SPEED;
-        if ((keys.current["arrowup"] || keys.current["↑"]) && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
-        if ((keys.current["arrowdown"] || keys.current["↓"]) && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+      // Move paddles - only for local player in remote game
+      if (isRemoteGame) {
+        if (isHost) {
+          // Host controls left paddle (paddle1)
+          if (!mobile) {
+            if (keys.current["w"] && paddle1Y.current > 0) {
+              paddle1Y.current -= PADDLE_SPEED;
+            }
+            if (keys.current["s"] && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) {
+              paddle1Y.current += PADDLE_SPEED;
+            }
+          } else {
+            if (paddle1Move === "up" && paddle1Y.current > 0) {
+              paddle1Y.current -= PADDLE_SPEED;
+            }
+            if (paddle1Move === "down" && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) {
+              paddle1Y.current += PADDLE_SPEED;
+            }
+          }
+        } else {
+          // Guest controls right paddle (paddle2)
+          if (!mobile) {
+            if (keys.current["arrowup"] && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
+            if (keys.current["arrowdown"] && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+          } else {
+            if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
+            if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+          }
+        }
+        
+        // Only host controls ball movement
+        if (isGameHost) {
+          // Ball movement
+          ball.current.x += ball.current.dx;
+          ball.current.y += ball.current.dy;
+
+          // Wall collision
+          if (ball.current.y <= 0 || ball.current.y + BALL_SIZE >= GAME_HEIGHT) {
+            ball.current.dy *= -1;
+          }
+          
+          // Left paddle collision
+          if (
+            ball.current.x <= PADDLE_WIDTH &&
+            ball.current.x + ball.current.dx >= 0 &&
+            ball.current.y + BALL_SIZE >= paddle1Y.current &&
+            ball.current.y <= paddle1Y.current + PADDLE_HEIGHT
+          ) {
+            ball.current.x = PADDLE_WIDTH; // Prevent ball from going through paddle
+            ball.current.dx = Math.abs(ball.current.dx);
+            // Increase speed after each paddle hit (minimal increase for better performance)
+            ball.current.dx *= 1.01;
+            ball.current.dy *= 1.01;
+          }
+          
+          // Right paddle collision
+          if (
+            ball.current.x + BALL_SIZE >= GAME_WIDTH - PADDLE_WIDTH &&
+            ball.current.x + BALL_SIZE + ball.current.dx <= GAME_WIDTH &&
+            ball.current.y + BALL_SIZE >= paddle2Y.current &&
+            ball.current.y <= paddle2Y.current + PADDLE_HEIGHT
+          ) {
+            ball.current.x = GAME_WIDTH - PADDLE_WIDTH - BALL_SIZE; // Prevent ball from going through paddle
+            ball.current.dx = -Math.abs(ball.current.dx);
+            // Increase speed after each paddle hit (minimal increase for better performance)
+            ball.current.dx *= 1.01;
+            ball.current.dy *= 1.01;
+          }
+          
+          // Scoring
+          if (ball.current.x < -BALL_SIZE) {
+            currentScores.current = { p1: currentScores.current.p1, p2: currentScores.current.p2 + 1 };
+            setScores(currentScores.current);
+            resetBall(-1);
+            // Send immediate game state update when goal is scored
+            if (isRemoteGame && isGameHost && socket && gameId) {
+              const gameState = {
+                gameId,
+                ballX: ball.current.x,
+                ballY: ball.current.y,
+                ballDx: ball.current.dx,
+                ballDy: ball.current.dy,
+                paddle1Y: paddle1Y.current,
+                paddle2Y: paddle2Y.current,
+                scores: currentScores.current,
+                gameStatus: 'playing',
+                lastUpdate: Date.now()
+              };
+              socket.emit('GameStateUpdate', { gameId, gameState });
+            }
+          } else if (ball.current.x > GAME_WIDTH + BALL_SIZE) {
+            currentScores.current = { p1: currentScores.current.p1 + 1, p2: currentScores.current.p2 };
+            setScores(currentScores.current);
+            resetBall(1);
+            // Send immediate game state update when goal is scored
+            if (isRemoteGame && isGameHost && socket && gameId) {
+              const gameState = {
+                gameId,
+                ballX: ball.current.x,
+                ballY: ball.current.y,
+                ballDx: ball.current.dx,
+                ballDy: ball.current.dy,
+                paddle1Y: paddle1Y.current,
+                paddle2Y: paddle2Y.current,
+                scores: currentScores.current,
+                gameStatus: 'playing',
+                lastUpdate: Date.now()
+              };
+              socket.emit('GameStateUpdate', { gameId, gameState });
+            }
+          }
+        }
       } else {
-        // Touch/mobile, button-based control
-        if (paddle1Move === "up" && paddle1Y.current > 0) paddle1Y.current -= PADDLE_SPEED;
-        if (paddle1Move === "down" && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle1Y.current += PADDLE_SPEED;
-        if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
-        if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+        // Local game - both players can control
+        if (!mobile) {
+          if (keys.current["w"] && paddle1Y.current > 0) paddle1Y.current -= PADDLE_SPEED;
+          if (keys.current["s"] && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle1Y.current += PADDLE_SPEED;
+          if ((keys.current["arrowup"] || keys.current["↑"]) && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
+          if ((keys.current["arrowdown"] || keys.current["↓"]) && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+        } else {
+          // Touch/mobile, button-based control
+          if (paddle1Move === "up" && paddle1Y.current > 0) paddle1Y.current -= PADDLE_SPEED;
+          if (paddle1Move === "down" && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle1Y.current += PADDLE_SPEED;
+          if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
+          if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+        }
+
+        // Ball movement for local game
+        ball.current.x += ball.current.dx;
+        ball.current.y += ball.current.dy;
+
+        // Wall collision
+        if (ball.current.y <= 0 || ball.current.y + BALL_SIZE >= GAME_HEIGHT) {
+          ball.current.dy *= -1;
+        }
+        // Left paddle collision
+        if (
+          ball.current.x <= PADDLE_WIDTH &&
+          ball.current.y + BALL_SIZE >= paddle1Y.current &&
+          ball.current.y <= paddle1Y.current + PADDLE_HEIGHT
+        ) {
+          ball.current.dx = Math.abs(ball.current.dx);
+          // Increase speed after each paddle hit (minimal increase for better performance)
+          ball.current.dx *= 1.01;
+          ball.current.dy *= 1.01;
+        }
+        // Right paddle collision
+        if (
+          ball.current.x + BALL_SIZE >= GAME_WIDTH - PADDLE_WIDTH &&
+          ball.current.y + BALL_SIZE >= paddle2Y.current &&
+          ball.current.y <= paddle2Y.current + PADDLE_HEIGHT
+        ) {
+          ball.current.dx = -Math.abs(ball.current.dx);
+          // Increase speed after each paddle hit (minimal increase for better performance)
+          ball.current.dx *= 1.01;
+          ball.current.dy *= 1.01;
+        }
+        
+        // Scoring
+        if (ball.current.x < -BALL_SIZE) {
+          currentScores.current = { p1: currentScores.current.p1, p2: currentScores.current.p2 + 1 };
+          setScores(currentScores.current);
+          resetBall(-1);
+        } else if (ball.current.x > GAME_WIDTH + BALL_SIZE) {
+          currentScores.current = { p1: currentScores.current.p1 + 1, p2: currentScores.current.p2 };
+          setScores(currentScores.current);
+          resetBall(1);
+        }
       }
 
-      // Ball movement
-      ball.current.x += ball.current.dx;
-      ball.current.y += ball.current.dy;
-
-      // Wall collision
-      if (ball.current.y <= 0 || ball.current.y + BALL_SIZE >= GAME_HEIGHT) {
-        ball.current.dy *= -1;
+      // Send game state update for remote game - only host sends updates
+      if (isRemoteGame && isGameHost && socket && gameId) {
+        const currentTime = Date.now();
+        // Increase update frequency to 60fps (16ms) for smoother remote gameplay
+        if (currentTime - lastUpdateTime.current >= 16) {
+          const gameState = {
+            gameId,
+            ballX: ball.current.x,
+            ballY: ball.current.y,
+            ballDx: ball.current.dx,
+            ballDy: ball.current.dy,
+            paddle1Y: paddle1Y.current,
+            paddle2Y: paddle2Y.current,
+            scores: currentScores.current,
+            gameStatus: 'playing',
+            lastUpdate: currentTime
+          };
+          
+          socket.emit('GameStateUpdate', { gameId, gameState });
+          lastUpdateTime.current = currentTime;
+        }
       }
-      // Left paddle collision
-      if (
-        ball.current.x <= PADDLE_WIDTH &&
-        ball.current.y + BALL_SIZE >= paddle1Y.current &&
-        ball.current.y <= paddle1Y.current + PADDLE_HEIGHT
-      ) {
-        ball.current.dx = Math.abs(ball.current.dx);
-      }
-      // Right paddle collision
-      if (
-        ball.current.x + BALL_SIZE >= GAME_WIDTH - PADDLE_WIDTH &&
-        ball.current.y + BALL_SIZE >= paddle2Y.current &&
-        ball.current.y <= paddle2Y.current + PADDLE_HEIGHT
-      ) {
-        ball.current.dx = -Math.abs(ball.current.dx);
-      }
-      // Scoring
-      if (ball.current.x < -BALL_SIZE) {
-        setScores((s) => ({ ...s, p2: s.p2 + 1 }));
-        resetBall(-1);
-      } else if (ball.current.x > GAME_WIDTH + BALL_SIZE) {
-        setScores((s) => ({ ...s, p1: s.p1 + 1 }));
-        resetBall(1);
+      
+      // Send paddle position updates from guest player to host
+      if (isRemoteGame && !isGameHost && socket && gameId) {
+        const currentTime = Date.now();
+        if (currentTime - lastUpdateTime.current >= 16) {
+          const paddleUpdate = {
+            gameId,
+            paddleY: isHost ? paddle1Y.current : paddle2Y.current,
+            playerType: isHost ? 'p1' : 'p2'
+          };
+          
+          socket.emit('PaddleUpdate', paddleUpdate);
+          lastUpdateTime.current = currentTime;
+        }
       }
     };
 
@@ -256,42 +571,195 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
 
     const loop = () => {
-      if (!paused) update();
+      if (!paused && gameReady) update(); // Only update when game is ready
       draw();
-      animation = requestAnimationFrame(loop);
+      // Use throttled animation frame for better performance
+      animationRef.current = requestAnimationFrame(loop);
     };
 
-    loop();
+    if (gameStarted) {
+      // Cancel any existing animation frame before starting a new one
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      loop();
+    }
+    
     return () => {
-      cancelAnimationFrame(animation);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
     };
-  }, [gameStarted, paused, mobile, canvasDims, paddle1Move, paddle2Move]);
+  }, [gameStarted, paused, gameReady]); // Add gameReady to dependencies
 
-  // Win condition - Updated for tournament mode with better winner object
+  // Win condition - Fixed for consistent scoring
   useEffect(() => {
     if (scores.p1 >= 7 || scores.p2 >= 7) {
       setGameStarted(false);
       setPaused(true);
       
+      // Winner determination based on scores (p1 = left player, p2 = right player)
       const winner = scores.p1 >= 7 ? safePlayer1 : safePlayer2;
       
+      if (isRemoteGame && socket && gameId) {
+        // Only the host should emit GameEnd event to prevent duplicates
+        if (isGameHost) {
+          // Send game end event to server with correct winner/loser emails
+          const finalScore = { p1: scores.p1, p2: scores.p2 };
+          const winnerEmail = scores.p1 >= 7 ? safePlayer1.email || user?.email : safePlayer2.email || opponent?.email;
+          const loserEmail = scores.p1 >= 7 ? safePlayer2.email || opponent?.email : safePlayer1.email || user?.email;
+          
+          socket.emit('GameEnd', {
+            gameId,
+            winner: winnerEmail,
+            loser: loserEmail,
+            finalScore,
+            reason: 'normal_end'
+          });
+        }
+        
+        // Don't navigate immediately - wait for server confirmation
+        return;
+      }
+      
       if (isTournamentMode) {
-        // For tournament mode, pass the complete winner object back
         onExit(winner);
       } else {
-        // For regular games, navigate to result pages
         const winnerName = winner.name;
         const loserName = scores.p1 >= 7 ? safePlayer2.name : safePlayer1.name;
         
-        // Check if current user won (assuming player1 is always the user in 1v1 mode)
-        if (scores.p1 >= 7) {
-          window.location.href = `/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+        const currentUserWon = (isHost && scores.p1 >= 7) || (!isHost && scores.p2 >= 7);
+        
+        if (currentUserWon) {
+          router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         } else {
-          window.location.href = `/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`;
+          router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
         }
       }
     }
-  }, [scores, safePlayer1, safePlayer2, onExit, isTournamentMode]);
+  }, [scores.p1, scores.p2, safePlayer1, safePlayer2, onExit, isTournamentMode, isRemoteGame, socket, gameId, isGameHost, isHost, opponent?.email, user?.email]);
+
+  // UI helpers
+  const gameOver = scores.p1 >= 7 || scores.p2 >= 7;
+  const isGameActive = gameStarted && !paused && !gameOver;
+
+  // Game end handler - defined before socket handlers
+  const handleGameEnd = useCallback((winner: any) => {
+    if (isRemoteGame && socket && gameId) {
+      // Leave the game
+      socket.emit('LeaveGame', { gameId, playerEmail: user?.email });
+    }
+    
+    if (isTournamentMode) {
+      onExit(winner);
+    } else if (isRemoteGame) {
+      // For remote games, let the GameEnded event handle navigation
+    } else {
+      onExit();
+    }
+  }, [isRemoteGame, socket, gameId, user?.email, isTournamentMode, onExit]);
+
+  // Socket event handlers - moved after player declarations
+  const handleGameStateUpdate = useCallback((data: any) => {
+    if (data.gameId === gameId && data.gameState) {
+      setRemoteGameState(data.gameState);
+      
+      // Always update ball position and scores from server (host controls ball)
+      ball.current.x = data.gameState.ballX;
+      ball.current.y = data.gameState.ballY;
+      ball.current.dx = data.gameState.ballDx;
+      ball.current.dy = data.gameState.ballDy;
+      
+      // Update scores - ALWAYS use server scores as-is (no swapping)
+      if (data.gameState.scores) {
+        currentScores.current = data.gameState.scores;
+        setScores(data.gameState.scores);
+      }
+      
+      if (isHost) {
+        paddle2Y.current = data.gameState.paddle2Y;
+      } else {
+        paddle1Y.current = data.gameState.paddle1Y;
+      }
+      
+      if (data.gameState.gameStatus === 'finished' && data.gameState.winner) {
+        handleGameEnd(data.gameState.winner);
+      }
+    }
+  }, [gameId, isHost, handleGameEnd]);
+
+  const handlePaddleUpdate = useCallback((data: any) => {
+    if (data.gameId === gameId && isGameHost) {
+      // Host receives paddle updates from guest player
+      if (data.playerType === 'p1') {
+        paddle1Y.current = data.paddleY;
+      } else if (data.playerType === 'p2') {
+        paddle2Y.current = data.paddleY;
+      }
+    }
+  }, [gameId, isGameHost]);
+
+  const handleGameEnded = useCallback((data: any) => {
+    if (data.gameId === gameId) {
+      // Set game state to ended
+      setGameStarted(false);
+      setPaused(true);
+      
+      // Determine winner based on user's email, not position
+      const isWinner = data.winner === user?.email;
+      const winnerName = isWinner ? 
+        (user?.username || user?.login || 'You') : 
+        (isHost ? safePlayer2.name : safePlayer1.name);
+      const loserName = isWinner ? 
+        (isHost ? safePlayer2.name : safePlayer1.name) : 
+        (user?.username || user?.login || 'You');
+      
+      // Navigate to appropriate result page
+      if (isWinner) {
+        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      } else {
+        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+      }
+    }
+  }, [gameId, user?.email, safePlayer1.name, safePlayer2.name, router, isHost]);
+
+  const handlePlayerLeft = useCallback((data: any) => {
+    if (data.gameId === gameId) {
+      // Set game state to ended
+      setGameStarted(false);
+      setPaused(true);
+      
+      // Current player wins when opponent leaves
+      const winnerName = user?.username || user?.login || 'You';
+      const loserName = data.playerWhoLeft || 'Opponent';
+      
+      // Navigate to winner page
+      router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+    }
+  }, [gameId, user?.username, user?.login, router]);
+
+  // Socket event listeners for remote game
+  useEffect(() => {
+    if (!isRemoteGame || !socket) return;
+
+    socket.on('GameStateUpdate', handleGameStateUpdate);
+    socket.on('PaddleUpdate', handlePaddleUpdate);
+    socket.on('GameEnded', handleGameEnded);
+    socket.on('PlayerLeft', handlePlayerLeft);
+
+    return () => {
+      socket.off('GameStateUpdate', handleGameStateUpdate);
+      socket.off('PaddleUpdate', handlePaddleUpdate);
+      socket.off('GameEnded', handleGameEnded);
+      socket.off('PlayerLeft', handlePlayerLeft);
+      // Clean up update timeout
+      if (updateTimeout.current) {
+        clearTimeout(updateTimeout.current);
+        updateTimeout.current = null;
+      }
+    };
+  }, [isRemoteGame, socket, handleGameStateUpdate, handlePaddleUpdate, handleGameEnded, handlePlayerLeft]);
 
   // Touch button event helpers
   const handleMobilePress = (which: 'p1up' | 'p1down' | 'p2up' | 'p2down', isDown: boolean) => {
@@ -303,40 +771,39 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   // Reset/exit helpers
   const handleStart = () => {
-    setScores({ p1: 0, p2: 0 });
-    paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
-    paddle2Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
-    ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
-    ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
-    ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
-    ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
-    setGameStarted(true);
-    setPaused(false);
-    gameStartTime.current = Date.now();
-  };
-
-  const handlePause = () => {
-    setPaused(true);
-  };
-
-  const handleResume = () => {
-    setPaused(false);
-  };
-
-  const handleExit = () => {
-    if (isTournamentMode) {
-      onExit(); // Exit without winner for tournament mode
+    if (isRemoteGame && socket && gameId) {
+      // For remote games, emit start game event to server
+      socket.emit('StartGame', { gameId });
     } else {
-      onExit();
+      // For local games, start immediately but add 1-second delay before ready
+      currentScores.current = { p1: 0, p2: 0 };
+      setScores({ p1: 0, p2: 0 });
+      paddle1Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      paddle2Y.current = GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
+      ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
+      ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+      ball.current.dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+      setGameStarted(true);
+      setPaused(false);
+      gameStartTime.current = Date.now();
+      
+      // Add 1-second delay before game is ready to play
+      setTimeout(() => {
+        setGameReady(true);
+      }, 0);
     }
   };
 
-  // UI helpers
-  const gameOver = scores.p1 >= 7 || scores.p2 >= 7;
-  const isGameActive = gameStarted && !paused && !gameOver;
+  const handleExit = () => {
+    if (isRemoteGame && socket && gameId) {
+      socket.emit('LeaveGame', { gameId, playerEmail: user?.email });
+    }
+    onExit();
+  };
 
   return (
-    <div className="flex flex-col overflow-hidden">
+    <div className="flex flex-col">
       {/* Game Container - Full Screen */}
       <div className="flex-1 flex flex-col">
         
@@ -358,8 +825,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
               }}
             />
             
-            {/* Start Button Overlay */}
-            {!gameStarted && (
+            {/* Start Button Overlay - Only show for non-tournament games */}
+            {!gameStarted && !isTournamentMode && (
               <div className="absolute inset-0 z-20 flex items-center justify-center">
                 <button
                   onClick={handleStart}
@@ -371,55 +838,85 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                 </button>
               </div>
             )}
-
-            {/* Pause Icon Overlay - Only shows pause icon */}
-            {gameStarted && paused && !gameOver && (
-              <div className="absolute inset-0 z-30 bg-black/60 flex items-center justify-center">
-                <div className="flex items-center justify-center w-24 h-24 rounded-full bg-black/80 border-4 border-white/80">
-                  <svg width={48} height={48} viewBox="0 0 24 24" fill="#fff">
-                    <rect x="6" y="4" width="4" height="16" />
-                    <rect x="14" y="4" width="4" height="16" />
-                  </svg>
+            
+            {/* Tournament Game Loading Overlay */}
+            {!gameStarted && isTournamentMode && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent mx-auto mb-4"></div>
+                  <p className="text-white text-lg font-semibold">Tournament Match Starting...</p>
                 </div>
               </div>
             )}
-            
+
             {/* Mobile Controls */}
             {mobile && isGameActive && (
               <>
-                <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p1up', true)}
-                    onTouchEnd={() => handleMobilePress('p1up', false)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p1down', true)}
-                    onTouchEnd={() => handleMobilePress('p1down', false)}
-                  >
-                    ↓
-                  </button>
-                </div>
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p2up', true)}
-                    onTouchEnd={() => handleMobilePress('p2up', false)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="w-12 h-12 bg-gray-800/80 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation"
-                    onTouchStart={() => handleMobilePress('p2down', true)}
-                    onTouchEnd={() => handleMobilePress('p2down', false)}
-                  >
-                    ↓
-                  </button>
-                </div>
+                {/* Player controls based on actual position */}
+                {(!isRemoteGame || isHost) && (
+                  <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
+                    <button
+                      className="w-12 h-12 bg-blue-700/80 hover:bg-blue-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg"
+                      onTouchStart={() => handleMobilePress('p1up', true)}
+                      onTouchEnd={() => handleMobilePress('p1up', false)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="w-12 h-12 bg-blue-700/80 hover:bg-blue-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg"
+                      onTouchStart={() => handleMobilePress('p1down', true)}
+                      onTouchEnd={() => handleMobilePress('p1down', false)}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                )}
+                {(!isRemoteGame || !isHost) && (
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
+                    <button
+                      className="w-12 h-12 bg-red-700/80 hover:bg-red-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg"
+                      onTouchStart={() => handleMobilePress('p2up', true)}
+                      onTouchEnd={() => handleMobilePress('p2up', false)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="w-12 h-12 bg-red-700/80 hover:bg-red-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg"
+                      onTouchStart={() => handleMobilePress('p2down', true)}
+                      onTouchEnd={() => handleMobilePress('p2down', false)}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                )}
               </>
+            )}
+            {/* Desktop Controls Overlay */}
+            {!mobile && isGameActive && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 flex gap-8 bg-black/60 rounded-xl px-6 py-3 border border-gray-700 shadow-lg">
+                {/* Player 1 Controls - only show if controlling left paddle */}
+                {(!isRemoteGame || isHost) && (
+                  <div className="flex flex-col items-center">
+                    <div className="flex gap-2 items-center mb-1">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">W</span>
+                      <span className="text-white font-semibold">/</span>
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">S</span>
+                    </div>
+                    <span className="text-xs text-blue-200 font-semibold">Left Paddle</span>
+                  </div>
+                )}
+                {/* Player 2 Controls - only show if controlling right paddle */}
+                {(!isRemoteGame || !isHost) && (
+                  <div className="flex flex-col items-center">
+                    <div className="flex gap-2 items-center mb-1">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↑</span>
+                      <span className="text-white font-semibold">/</span>
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↓</span>
+                    </div>
+                    <span className="text-xs text-red-200 font-semibold">Right Paddle</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -449,7 +946,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Player 1 - Left Column */}
             <div className="flex items-center gap-2 sm:gap-3 justify-start">
               <img
-                src={safePlayer1.avatar}
+                src={`/images/${safePlayer1.avatar}`}
                 alt={safePlayer1.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
@@ -477,7 +974,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                 <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{safePlayer2.nickname}</p>
               </div>
               <img
-                src={safePlayer2.avatar}
+                src={`/images/${safePlayer2.avatar}`}
                 alt={safePlayer2.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
@@ -486,22 +983,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
           {/* Game Controls */}
           <div className="flex justify-center gap-2 sm:gap-4">
-            {isGameActive && (
-              <button
-                onClick={handlePause}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base"
-              >
-                Pause
-              </button>
-            )}
-            {gameStarted && paused && !gameOver && (
-              <button
-                onClick={handleResume}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base"
-              >
-                Resume
-              </button>
-            )}
             <button
               onClick={handleExit}
               className="bg-gray-600 hover:bg-gray-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base"

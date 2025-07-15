@@ -19,7 +19,9 @@ const ParticipantItem = ({ player, removeParticipant, changeParticipantName, cha
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-gray-700/50">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-gray-600">
         <Image 
-          src={player.avatar} 
+          src={player.avatar?.startsWith('data:') ? player.avatar : 
+               (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
+               player.avatar?.startsWith('/') ? player.avatar : `/images/${player.avatar}`} 
           alt={player.name} 
           width={40}  
           height={40}
@@ -58,30 +60,26 @@ const ParticipantItem = ({ player, removeParticipant, changeParticipantName, cha
   );
 };
 
-const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }: {
+const RoundControls = ({ currentRound, totalRounds, canAdvance }: {
   currentRound: number;
   totalRounds: number;
-  onAdvanceRound: () => void;
   canAdvance: boolean;
 }) => {
   return (
     <div className="flex items-center justify-center mb-6 bg-[#1a1d23] rounded-lg p-4 border border-gray-700/50">
-      <div className="flex items-center space-x-3">
-        <span className="text-white text-lg">Round:</span>
-        <span className="text-blue-400 font-bold text-xl">{currentRound + 1}/{totalRounds}</span>
+      <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-3">
+          <span className="text-white text-lg">Round:</span>
+          <span className="text-blue-400 font-bold text-xl">{currentRound + 1}/{totalRounds}</span>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <div className={`w-3 h-3 rounded-full ${canAdvance ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+          <span className="text-gray-300 text-sm">
+            {canAdvance ? 'Auto-advancing...' : 'Waiting for matches to complete'}
+          </span>
+        </div>
       </div>
-      
-      <button
-        onClick={onAdvanceRound}
-        disabled={!canAdvance}
-        className={`ml-6 px-6 py-2 rounded-lg text-white font-medium transition-colors ${
-          canAdvance
-            ? 'bg-blue-600 hover:bg-blue-700'
-            : 'bg-gray-600 cursor-not-allowed opacity-50'
-        }`}
-      >
-        {currentRound + 1 === totalRounds ? "End Tournament" : "Next Round"}
-      </button>
     </div>
   );
 };
@@ -92,7 +90,7 @@ const LocalTournamentMode = () => {
       id: crypto.randomUUID(), 
       name: user.name, 
       nickname: user.nickname || '', 
-      avatar: user.avatar, 
+      avatar: user.avatar || 'Default.avif', 
       ready: true, 
       is_user: true
     }
@@ -107,6 +105,7 @@ const LocalTournamentMode = () => {
   const [playingMatch, setPlayingMatch] = useState<any>(null);
   const [showMatchResult, setShowMatchResult] = useState(false);
   const [matchWinner, setMatchWinner] = useState<any>(null);
+  const [championCelebrating, setChampionCelebrating] = useState(false);
   
   const totalRounds = Math.log2(tournamentSize);
   
@@ -130,7 +129,7 @@ const LocalTournamentMode = () => {
         matchIndex: i,
         player1: player1,
         player2: player2,
-        state: MATCH_STATES.WAITING
+        state: player1 && player2 ? MATCH_STATES.READY : MATCH_STATES.WAITING
       });
     }
     
@@ -175,7 +174,13 @@ const LocalTournamentMode = () => {
         // Check if this is the final match
         if (roundIndex === totalRounds - 1) {
           setChampion(winner);
+          setChampionCelebrating(true);
           setTournamentComplete(true);
+          
+          // Stop celebration after 5 seconds
+          setTimeout(() => {
+            setChampionCelebrating(false);
+          }, 5000);
         }
         // Calculate position in next round
         else if (roundIndex < totalRounds - 1) {
@@ -197,8 +202,26 @@ const LocalTournamentMode = () => {
               nextMatch.player2 = winner;
             }
             
+            // If both players are now set, make the match ready to play
+            if (nextMatch.player1 && nextMatch.player2) {
+              nextMatch.state = MATCH_STATES.READY;
+            }
+            
             updatedMatches[nextMatchIndex2] = nextMatch;
           }
+        }
+      }
+      
+      // Check if all matches in current round are complete and auto-advance
+      const currentRoundMatches = updatedMatches.filter(m => m.round === roundIndex);
+      const completedMatches = currentRoundMatches.filter(m => 
+        m.state === MATCH_STATES.PLAYER1_WIN || m.state === MATCH_STATES.PLAYER2_WIN
+      );
+      
+      // Auto-advance to next round if all matches complete
+      if (currentRoundMatches.length > 0 && completedMatches.length === currentRoundMatches.length) {
+        if (roundIndex < totalRounds - 1) {
+          setTimeout(() => setCurrentRound(roundIndex + 1), 500);
         }
       }
       
@@ -242,6 +265,12 @@ const LocalTournamentMode = () => {
         const winner = finalMatch.state === MATCH_STATES.PLAYER1_WIN ? 
           finalMatch.player1 : finalMatch.player2;
         setChampion(winner);
+        setChampionCelebrating(true);
+        
+        // Stop celebration after 5 seconds
+        setTimeout(() => {
+          setChampionCelebrating(false);
+        }, 5000);
       }
       setTournamentComplete(true);
     }
@@ -255,7 +284,7 @@ const LocalTournamentMode = () => {
           id: crypto.randomUUID(),
           name: `Player ${participants.length + 1}`, 
           nickname: '',
-          avatar: `/mghalmi.jpg`, 
+          avatar: 'Default.avif', 
           ready: true,
           is_user: false
         }
@@ -291,6 +320,7 @@ const LocalTournamentMode = () => {
     setMatches([]);
     setTournamentComplete(false);
     setChampion(null);
+    setChampionCelebrating(false);
     setPlayingMatch(null);
     setShowMatchResult(false);
     setMatchWinner(null);
@@ -298,41 +328,24 @@ const LocalTournamentMode = () => {
 
   // Start a match in PingPongGame
   const handlePlayMatch = (match: any) => {
-    setPlayingMatch(match);
+    // Only allow playing READY matches (both players available)
+    if (match.state === MATCH_STATES.READY && match.player1 && match.player2) {
+      setPlayingMatch(match);
+    }
   };
 
   // Handle winner from PingPongGame - Fixed with proper null checks
   const handleGameEnd = (winner?: any) => {
-    // if (!playingMatch || !playingMatch.player1 || !playingMatch.player2) {
-    //   console.error('Invalid match or missing players');
-    //   return;
-    // }
-    
-    console.log('Game ended. Winner:', winner, 'Playing match:', playingMatch);
-    
-    // Enhanced validation with better error handling
     if (!playingMatch) {
-      console.error('No playing match found');
       return;
     }
-
-    // If no winner is provided (game was exited), just go back to tournament
     if (!winner) {
       setPlayingMatch(null);
       return;
     }
-    
-    // Ensure winner has required properties
-    if (!winner.id) {
-      console.error('Winner missing id property');
-      return;
-    }
-    
-    // Set match winner and show result
     setMatchWinner(winner);
     setShowMatchResult(true);
     
-    // Update match state - Fixed null checks
     const matchState = winner.id === playingMatch.player1?.id 
       ? MATCH_STATES.PLAYER1_WIN 
       : MATCH_STATES.PLAYER2_WIN;
@@ -458,7 +471,9 @@ const LocalTournamentMode = () => {
                     <div className="mb-6">
                       <div className="w-24 h-24 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-green-500 mx-auto mb-4">
                         <Image 
-                          src={matchWinner.avatar || '/mghalmi.jpg'} 
+                          src={matchWinner.avatar?.startsWith('data:') ? matchWinner.avatar : 
+                               (matchWinner.avatar === 'Default.avif' || matchWinner.avatar === 'Default.svg') ? `/avatar/${matchWinner.avatar}` : 
+                               matchWinner.avatar?.startsWith('/') ? matchWinner.avatar : `/images/${matchWinner.avatar}`} 
                           alt={matchWinner.name || 'Winner'} 
                           width={96} 
                           height={96}
@@ -501,9 +516,28 @@ const LocalTournamentMode = () => {
                   <RoundControls
                     currentRound={currentRound}
                     totalRounds={totalRounds}
-                    onAdvanceRound={advanceRound}
                     canAdvance={canAdvanceRound()}
                   />
+                  
+                  {/* Tournament Status */}
+                  <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
+                    <h3 className="text-xl font-semibold text-white mb-4">Tournament Status</h3>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+                        <span className="text-white">Click on any match to play</span>
+                      </div>
+                      <div className="text-gray-300 text-sm">
+                        {matches.filter(m => 
+                          m.round === currentRound && 
+                          m.state === MATCH_STATES.READY && 
+                          m.player1 && 
+                          m.player2
+                        ).length} matches ready in Round {currentRound + 1}
+                      </div>
+                    </div>
+                  </div>
+                  
                   <TournamentBracket
                     participants={participants}
                     tournamentSize={tournamentSize}
@@ -520,7 +554,9 @@ const LocalTournamentMode = () => {
                         <div key={player.id} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-gray-600">
                           <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                             <Image 
-                              src={player.avatar} 
+                              src={player.avatar?.startsWith('data:') ? player.avatar : 
+                                   (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
+                                   player.avatar?.startsWith('/') ? player.avatar : `/images/${player.avatar}`} 
                               alt={player.name} 
                               width={48} 
                               height={48}
@@ -546,13 +582,87 @@ const LocalTournamentMode = () => {
           
           {/* Tournament Complete View */}
           {tournamentComplete && (
-            <div className="text-center space-y-6">
+            <div className="text-center space-y-6 relative">
+              {/* Champion Celebration Overlay */}
+              {championCelebrating && champion && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                  <div className="relative">
+                    {/* Confetti Animation */}
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                      {Array.from({ length: 50 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="absolute animate-bounce"
+                          style={{
+                            left: `${Math.random() * 100}%`,
+                            top: `${Math.random() * 100}%`,
+                            animationDelay: `${Math.random() * 2}s`,
+                            animationDuration: `${2 + Math.random() * 2}s`
+                          }}
+                        >
+                          <div className="w-4 h-4 bg-yellow-400 rounded-full animate-pulse"></div>
+                        </div>
+                      ))}
+                      {Array.from({ length: 30 }).map((_, i) => (
+                        <div
+                          key={`star-${i}`}
+                          className="absolute animate-ping"
+                          style={{
+                            left: `${Math.random() * 100}%`,
+                            top: `${Math.random() * 100}%`,
+                            animationDelay: `${Math.random() * 3}s`,
+                            animationDuration: `${1 + Math.random() * 2}s`
+                          }}
+                        >
+                          ⭐
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Champion Spotlight */}
+                    <div className="text-center animate-pulse">
+                      <div className="text-6xl mb-4 animate-bounce">🏆</div>
+                      <h1 className="text-6xl font-bold text-yellow-400 mb-4 animate-pulse">
+                        CHAMPION!
+                      </h1>
+                      <div className="relative mx-auto mb-6">
+                        <div className="w-32 h-32 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 p-1 animate-spin">
+                          <div className="w-full h-full rounded-full overflow-hidden border-4 border-white">
+                            <Image 
+                              src={champion.avatar?.startsWith('data:') ? champion.avatar : 
+                                   (champion.avatar === 'Default.avif' || champion.avatar === 'Default.svg') ? `/avatar/${champion.avatar}` : 
+                                   champion.avatar?.startsWith('/') ? champion.avatar : `/images/${champion.avatar}`} 
+                              alt={getDisplayName(champion)} 
+                              width={128} 
+                              height={128}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        </div>
+                        {/* Crown animation */}
+                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-4xl animate-bounce">
+                          👑
+                        </div>
+                      </div>
+                      <h2 className="text-4xl font-bold text-white mb-2 animate-pulse">
+                        {getDisplayName(champion)}
+                      </h2>
+                      <p className="text-xl text-yellow-300 animate-pulse">
+                        Tournament Victor!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50">
                 <div className="flex flex-col items-center">
                   <div className="bg-gradient-to-b from-yellow-400 to-yellow-600 p-2 rounded-full mb-6">
                     <div className="w-32 h-32 rounded-full bg-[#2a2f3a] overflow-hidden border-4 border-yellow-500">
                       <Image 
-                        src={champion?.avatar || '/mghalmi.jpg'} 
+                        src={champion?.avatar?.startsWith('data:') ? champion.avatar : 
+                             (champion?.avatar === 'Default.avif' || champion?.avatar === 'Default.svg') ? `/avatar/${champion.avatar}` : 
+                             champion?.avatar?.startsWith('/') ? champion.avatar : `/images/${champion?.avatar}`} 
                         alt={champion?.name || 'Champion'} 
                         width={128} 
                         height={128}
@@ -579,6 +689,7 @@ const LocalTournamentMode = () => {
                 matches={matches}
                 currentRound={currentRound}
                 onMatchUpdate={() => {}} // No more updates allowed
+                onPlayMatch={() => {}} // No more matches to play
               />
               
               <div className="flex justify-center space-x-4">

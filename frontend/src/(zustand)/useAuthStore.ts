@@ -3,8 +3,10 @@ import { create } from 'zustand'
 import { toast } from 'react-toastify'
 import { io, Socket } from 'socket.io-client'
 import { jwtDecode } from 'jwt-decode'
-import { signOut } from 'next-auth/react'
+// import { signOut } from 'next-auth/react'
 import CryptoJs from 'crypto-js'
+import { useSearchStore } from './useSearchStore'
+import { useChatStore } from './useChatStore'
 
 const BACK_END = process.env.NEXT_PUBLIC_BACKEND
 const FRON_END = process.env.NEXT_PUBLIC_FRONEND
@@ -52,8 +54,8 @@ interface UserState {
   isLoading: boolean
   user: any | null
   socketConnected: boolean
-  onlineUsers: string[]
-  checkAuth: (accessToken: string) => Promise<boolean>
+  onlineUsers: string[] // lasdj@gmail.com asdasd@gaialcom
+  checkAuth: () => Promise<boolean>
   register: (data: any) => Promise<boolean>
   login: (data: any) => Promise<boolean>
   logout: () => Promise<void>
@@ -62,6 +64,15 @@ interface UserState {
   googleLogin: (data: any) => Promise<void>
   notifications: any | null
   setNotifations: () => void
+  seachedUsers: any
+  setIsLoading: (data: boolean) => void
+  setUser: (user: any) => void
+  changePassword: (data: {
+    oldPassword: string
+    newPassword: string
+  }) => Promise<boolean>
+  hidePopUp: boolean
+  setHidePopUp: (data: boolean) => void
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -71,31 +82,38 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   socketConnected: false,
   onlineUsers: [],
   notifications: null,
+  seachedUsers: [],
+  hidePopUp: false,
 
+  setHidePopUp: (data: boolean) => {
+    set({ hidePopUp: data })
+  },
+
+  setUser: (user) => {
+    set({ user })
+  },
   setNotifations: () => {
     set({ notifications: null })
   },
-  checkAuth: async (accessToken) => {
-    set({ isLoading: true })
-    try {
-      if (accessToken) {
-        const user: any = jwtDecode(accessToken)
-
-        if (user?.exp < (new Date().getTime() + 1) / 1000) {
-          localStorage.removeItem('accessToken')
-          return false
-        }
-        set({ user, isAuthenticated: true })
-        get().connectSocket()
-        return true
-      } else {
-        return false
-      }
-    } catch (err) {
-      return false
-    } finally {
-      set({ isLoading: false })
-    }
+  setIsLoading: (data) => {
+    set({ isLoading: data })
+  },
+  checkAuth: async () => {
+    return true
+    // set({ isLoading: true })
+    // try {
+    //   const res = await axiosInstance.get('/api/users/getMe')
+    //   const { user } = res.data
+    //   set({ user, isAuthenticated: true })
+    //   get().connectSocket()
+    //   return true
+    // } catch (err) {
+    //   console.error('Auth check failed:', err)
+    //   set({ user: null, isAuthenticated: false })
+    //   return false
+    // } finally {
+    //   set({ isLoading: false })
+    // }
   },
 
   googleLogin: async (data: any): Promise<void> => {
@@ -133,22 +151,47 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(`/api/users/register`, data)
+      const res = await axiosInstance.post(`/v2/api/users/register`, data)
       console.log(res)
 
       if (!res.data) {
         toast.warning('Registration failed')
         return false
       }
-      const { accessToken, ...user } = res.data
-      localStorage.setItem('accessToken', accessToken)
+      const { ...user } = res.data
+      // localStorage.setItem('accessToken', accessToken)
       set({ user, isAuthenticated: true })
       get().connectSocket()
+      window.location.href = `${FRON_END}/dashboard`
       return true
     } catch (err: any) {
       console.log(err)
 
       toast.warning(err.response?.data?.message || err.message)
+      return false
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  changePassword: async (data: {
+    oldPassword: string
+    newPassword: string
+  }) => {
+    set({ isLoading: true })
+    try {
+      const res = await axiosInstance.post(`/api/users/changePassword`, data)
+      if (res?.status === 200) {
+        toast.success('Password changed successfully!')
+        return true
+      } else {
+        toast.warning(res.data?.message || 'Password change failed')
+        return false
+      }
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || err.message || 'Password change failed'
+      toast.error(errorMessage)
       return false
     } finally {
       set({ isLoading: false })
@@ -162,15 +205,35 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(`/api/users/login`, data)
+      // const hasTwoFAres = await axiosInstance.post(
+      //   `/api/users/verify-hasTwoFA`,
+      //   data.email
+      // )
+      // if (hasTwoFAres?.data?.isTwoFAVerified) {
+      //   toast.warning(
+      //     'You have two-factor authentication enabled. Please verify your OTP.'
+      //   )
+      //   return false
+      // }
+      const res = await axiosInstance.post(`/v2/api/users/login`, data)
       if (!res.data) {
         toast.warning('Login failed')
         return false
       }
-      const { accessToken, ...user } = res.data
-      localStorage.setItem('accessToken', accessToken)
-      set({ user, isAuthenticated: true })
-      get().connectSocket()
+      const { status, ...user } = res.data
+      if (status) {
+        set({ user, isAuthenticated: true })
+        get().connectSocket()
+        window.location.href = `${FRON_END}/dashboard`
+      } else {
+        console.log(res.data)
+        if (res.data.desc === '2FA verification required') {
+          get().setHidePopUp(true)
+          return false
+        }
+        return false
+      }
+
       return true
     } catch (err: any) {
       toast.warning(err.response?.data?.message || err.message)
@@ -181,10 +244,20 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   logout: async () => {
-    localStorage.removeItem('accessToken')
-    get().disconnectSocket()
-    set({ user: null, isAuthenticated: false, isLoading: false })
-    signOut({ callbackUrl: `${FRON_END}/` })
+    try {
+      const res = await axiosInstance.post(`/api/users/logout`)
+      if (res?.status === 200) {
+        toast.success('Logout successful!')
+      } else {
+        toast.warning(res.data?.message || 'Logout failed')
+      }
+      get().disconnectSocket()
+    } catch (err) {
+      console.error('Logout failed:', err)
+      toast.warning('Logout failed')
+    }
+    // set({ user: null, isAuthenticated: false, isLoading: false })
+    // signOut({ callbackUrl: `${FRON_END}/` })
   },
 
   connectSocket: () => {
@@ -232,10 +305,85 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       setTimeout(() => set({ notifications: null }), 10000)
     }
 
+    const onsearchResults = (seachedUsers: any) => {
+      set({ seachedUsers })
+    }
+
+    const onaddFriendResponse = (data: any) => {
+      if (data.status === 'error') {
+        toast.warning(data.message)
+      } else {
+        if (data?.desc) {
+          const { searchedUsersGlobal, setSearchedUsersGlobal } =
+            useSearchStore.getState()
+          const { randomFriendsSuggestions, setRandomFriendsSuggestion } =
+            useSearchStore.getState()
+
+          const updatedUsers = searchedUsersGlobal.map((tmp) =>
+            tmp.email === data.hisEmail
+              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+              : tmp
+          )
+          const updatedUsersRandom = randomFriendsSuggestions.map((tmp) =>
+            tmp.email === data.hisEmail
+              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+              : tmp
+          )
+          console.log('searchedUsersGlobal : ', searchedUsersGlobal)
+
+          console.log('updatedUsers : ', updatedUsers)
+          setRandomFriendsSuggestion(updatedUsersRandom)
+          setSearchedUsersGlobal(updatedUsers)
+        }
+        toast.success(data.message)
+      }
+    }
+
+    const onBlockResponse = (data) => {
+      get().setIsLoading(false)
+      if (data.status === 'error') {
+        toast.warning(data.message)
+        return
+      }
+
+      const { chatHeader, setChatHeader } = useChatStore.getState()
+      const { userProfile, setUserProfile } = useSearchStore.getState()
+
+      if (
+        data.hisEmail === chatHeader?.email ||
+        data.hisEmail === userProfile?.email
+      ) {
+        chatHeader &&
+          'isBlockedByMe' in data &&
+          setChatHeader({ ...chatHeader, isBlockedByMe: data.isBlockedByMe })
+        userProfile &&
+          'isBlockedByMe' in data &&
+          setUserProfile({ ...userProfile, isBlockedByMe: data.isBlockedByMe })
+      }
+
+      if (data.hisEmail === useAuthStore.getState().user.email) {
+        chatHeader &&
+          'isBlockedByHim' in data &&
+          setChatHeader({ ...chatHeader, isBlockedByHim: data.isBlockedByHim })
+        userProfile &&
+          'isBlockedByHim' in data &&
+          setUserProfile({
+            ...userProfile,
+            isBlockedByHim: data.isBlockedByHim,
+          })
+      }
+    }
+
     socketInstance.on('connect', onConnect)
     socketInstance.on('getOnlineUsers', onOnlineUsers)
     socketInstance.on('disconnect', onDisconnect)
     socketInstance.on('connect_error', onConnectError)
+    //
+    socketInstance.on('searchResults', onsearchResults)
+    socketInstance.on('friendResponse', onaddFriendResponse)
+    socketInstance.on('blockResponse', onBlockResponse)
+
+    //
     socketInstance.on('newMessageNotification', onNewMessageNotification)
     socketInstance.on('error-in-connection', (data) => {
       console.log('Socket connection error:', data)
@@ -255,6 +403,10 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.off('newMessageNotification')
       socketInstance.off('error-in-connection')
       socketInstance.off('InviteToGameResponse')
+
+      socketInstance.off('searchResults')
+      socketInstance.off('friendResponse')
+
       socketInstance.disconnect()
       socketInstance = null
       set({ socketConnected: false })

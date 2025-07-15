@@ -10,6 +10,12 @@ import {
   googleRegister,
   getAllUsersData,
   getUser,
+  listMyFriendsHandler,
+  getRandomFriends,
+  getMe,
+  changePassword,
+  hasTwoFA,
+  updateUserData,
 } from './user.controller'
 import { $ref } from './user.schema'
 
@@ -19,8 +25,20 @@ async function userRoutes(server: FastifyInstance) {
     { schema: { body: $ref('resetPasswordSchema') } },
     resetPassword
   )
-
+  server.post(
+    '/getRandomFriends',
+    { preHandler: [server.authenticate] },
+    getRandomFriends
+  )
   server.post('/verify-otp', { schema: { body: $ref('OtpSchema') } }, verifyOtp)
+  server.post('/verify-hasTwoFA', hasTwoFA)
+
+  server.post(
+    '/changePassword',
+    { preHandler: server.authenticate },
+    changePassword
+  )
+
   server.post(
     '/password-reset-otp',
     { schema: { body: $ref('resetOtpSchema') } },
@@ -59,16 +77,20 @@ async function userRoutes(server: FastifyInstance) {
     },
     loginUserHandler
   )
-  server.get(
+  server.post(
     '/getUser',
     {
-      schema: {
-        response: {
-          200: $ref('loginResponseSchema'),
-        },
-      },
+      preHandler: [server.authenticate],
     },
     getUser
+  )
+
+  server.get(
+    '/getMe',
+    {
+      preHandler: [server.authenticate],
+    },
+    getMe
   )
 
   server.post(
@@ -77,15 +99,23 @@ async function userRoutes(server: FastifyInstance) {
     logoutUserHandled
   )
 
+  server.post(
+    '/updateUserData',
+    { preHandler: [server.authenticate] },
+    updateUserData
+  )
+
   server.get(
     '/me',
     {
       preHandler: [server.authenticate],
-      schema: { response: { 200: $ref('loginResponseSchema') } },
     },
     getLoggedInUser
   )
   server.get('/users', getAllUsersData)
+
+  // List all friends with accepted status
+  server.get('/friends', listMyFriendsHandler)
 }
 
 export default userRoutes

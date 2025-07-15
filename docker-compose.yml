@@ -19,11 +19,11 @@ services:
     build: ./redis
     image: redis:v0.1
     container_name: redis
-    ports:
-      - '7000:6379'
     restart: always
     networks:
       - ft_transcendence
+    ports:
+      - '7001:6379'
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
@@ -37,8 +37,6 @@ services:
   #   restart: unless-stopped
   #   env_file:
   #     - ./backend/.env
-  #   ports:
-  #     - '5005:5005'
   #   volumes:
   #     - sqlite_storage:/db
   #   depends_on:
@@ -64,13 +62,31 @@ services:
   #   restart: unless-stopped
   #   env_file:
   #     - ./frontend/.env
-  #   ports:
-  #     - '3000:3000'
   #   depends_on:
   #     backend:
   #       condition: service_healthy
   #   networks:
   #     - ft_transcendence
+
+  # nginx:
+  #   build: ./nginx
+  #   image: nginx:v0.1
+  #   container_name: nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - '80:80'
+  #     - '443:443'
+  #   depends_on:
+  #     - frontend
+  #     - backend
+  #   networks:
+  #     - ft_transcendence
+  #   healthcheck:
+  #     test: ['CMD', 'curl', '-f', 'http://backend/health']
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 40s
 
 networks:
   ft_transcendence:
@@ -81,5 +97,5 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: ../sqlite_db
+      device: /Users/$USER/goinfre/sqlite_db
       o: bind

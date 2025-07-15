@@ -1,17 +1,11 @@
-import { useAuthStore } from '../(zustand)/useAuthStore'
-
 export const user = {
-  name: useAuthStore.getState().user.username,
-  nickname: useAuthStore.getState().user.login,
-  avatar: useAuthStore.getState().user.avatar,
-  status: useAuthStore
-    .getState()
-    .onlineUsers.includes(useAuthStore.getState().user.email)
-    ? 'online'
-    : 'offline',
-  email: useAuthStore.getState().user.email,
-  level: useAuthStore.getState().user.level,
-  xp: useAuthStore.getState().user.xp,
+  name: 'Mohcine Ghalmi',
+  nickname: 'SLEEPS',
+  avatar: '/mghalmi.jpg',
+  status: 'Online',
+  email: 'SLEEPS@example.com',
+  level: 12,
+  xp: 70,
   rank: 4,
 }
 
@@ -93,30 +87,35 @@ export const onlineFriends = [
     nickname: 'SLEEPS00',
     GameStatus: 'Available',
     avatar: '/mghalmi.jpg',
+    email: 'sophia@example.com',
   },
   {
     name: 'Ethan Bennett',
     nickname: 'SLEEPS00',
     GameStatus: 'In a match',
     avatar: '/mghalmi.jpg',
+    email: 'ethan@example.com',
   },
   {
     name: 'Olivia Carter',
     nickname: 'SLEEPS00',
     GameStatus: 'Available',
     avatar: '/mghalmi.jpg',
+    email: 'olivia@example.com',
   },
   {
     name: 'Liam Davis',
     nickname: 'SLEEPS00',
     GameStatus: 'Available',
     avatar: '/mghalmi.jpg',
+    email: 'liam@example.com',
   },
   {
     name: 'Ava Evans',
     nickname: 'SLEEPS00',
     GameStatus: 'In a match',
     avatar: '/mghalmi.jpg',
+    email: 'ava@example.com',
   },
 ]
 
