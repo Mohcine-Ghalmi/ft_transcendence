@@ -23,6 +23,8 @@ import {
 } from '../Mail/mail.schema'
 import { getIsBlocked } from './user.socket'
 import { signJWT } from './user.login'
+import path from 'path'
+import fsPromises from 'fs/promises'
 
 export async function registerUserHandler(
   req: FastifyRequest<{
@@ -499,7 +501,7 @@ export async function updateUserData(
   rep: FastifyReply
 ) {
   try {
-    const { email: currentEmail }: any = req.user
+    const { email: currentEmail, avatar: oldAvatar }: any = req.user
     const { login, email: newEmail, username, avatar, type } = req.body
 
     if (!login || !username) {
@@ -507,6 +509,18 @@ export async function updateUserData(
         status: false,
         message: 'Invalid data: login and username are required',
       })
+    }
+
+    if (avatar && oldAvatar !== 'default.avif') {
+      try {
+        const filePath = path.join(__dirname, '../../uploads', oldAvatar)
+        console.log('Deleting file at:', filePath)
+        await fsPromises.access(filePath)
+        await fsPromises.unlink(filePath)
+      } catch (err: any) {
+        if (err.code !== 'ENOENT')
+          console.error('Failed to delete avatar:', err)
+      }
     }
 
     if (type === 0) {

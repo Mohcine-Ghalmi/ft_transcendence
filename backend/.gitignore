@@ -3,3 +3,4 @@ node_modules
 src/uploads/*.png
 src/uploads/*.jpg
 src/uploads/*.jpeg
+src/uploads/*.webp
