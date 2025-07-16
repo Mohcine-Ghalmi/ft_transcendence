@@ -2,21 +2,20 @@
 import { Socket, Server } from 'socket.io'
 import CryptoJS from 'crypto-js'
 import crypto from 'crypto'
+import redis from '../../utils/redis'
+import { getSocketIds } from '../../socket'
 import { getFriend, getUserByEmail } from '../user/user.service'
-import {
-  InviteToGameData,
-  GameInviteData,
-  User,
+import { 
+  InviteToGameData, 
+  GameInviteData, 
+  User, 
   getPlayerData,
-  GameSocketHandler,
+  GameSocketHandler 
 } from './game.socket.types'
 import { emitToUsers } from './game.socket.utils'
-import redis, { getSocketIds } from '../../database/redis'
 
-export const handleGameInvitation: GameSocketHandler = (
-  socket: Socket,
-  io: Server
-) => {
+export const handleGameInvitation: GameSocketHandler = (socket: Socket, io: Server) => {
+  
   // Handle sending game invitations
   socket.on('InviteToGame', async (encryptedData: string) => {
     try {
@@ -31,7 +30,7 @@ export const handleGameInvitation: GameSocketHandler = (
       // Decrypt the invitation data
       const bytes = CryptoJS.AES.decrypt(encryptedData, key)
       const decrypted = bytes.toString(CryptoJS.enc.Utf8)
-
+      
       if (!decrypted) {
         return socket.emit('InviteToGameResponse', {
           status: 'error',
@@ -39,10 +38,8 @@ export const handleGameInvitation: GameSocketHandler = (
         })
       }
 
-      const { hisEmail: invitedUserEmail, myEmail } = JSON.parse(
-        decrypted
-      ) as InviteToGameData
-
+      const { hisEmail: invitedUserEmail, myEmail } = JSON.parse(decrypted) as InviteToGameData
+      
       if (!myEmail || !invitedUserEmail) {
         return socket.emit('InviteToGameResponse', {
           status: 'error',
@@ -92,8 +89,7 @@ export const handleGameInvitation: GameSocketHandler = (
       }
 
       // Check if guest is online
-      const guestSocketIds =
-        (await getSocketIds(invitedUserEmail, 'sockets')) || []
+      const guestSocketIds = await getSocketIds(invitedUserEmail, 'sockets') || []
       if (guestSocketIds.length === 0) {
         return socket.emit('InviteToGameResponse', {
           status: 'error',
@@ -103,18 +99,18 @@ export const handleGameInvitation: GameSocketHandler = (
 
       // Generate unique game ID
       const gameId = crypto.randomUUID()
-
+      
       // Store invitation in Redis with 30-second expiration
       const inviteData: GameInviteData = {
         gameId,
         hostEmail: host.email,
         guestEmail: guest.email,
-        createdAt: Date.now(),
+        createdAt: Date.now()
       }
-
+      
       await Promise.all([
         redis.setex(`game_invite:${gameId}`, 30, JSON.stringify(inviteData)),
-        redis.setex(`game_invite:${guest.email}`, 30, gameId),
+        redis.setex(`game_invite:${guest.email}`, 30, gameId)
       ])
 
       // Send invitation to guest with minimal data
@@ -124,7 +120,7 @@ export const handleGameInvitation: GameSocketHandler = (
         hostEmail: host.email,
         message: `${host.username} invited you to play!`,
         hostData: getPlayerData(host),
-        expiresAt: Date.now() + 30000,
+        expiresAt: Date.now() + 30000
       })
 
       // Confirm to host with minimal data
@@ -134,7 +130,7 @@ export const handleGameInvitation: GameSocketHandler = (
         message: `Invitation sent to ${guest.username}`,
         gameId,
         guestEmail: guest.email,
-        guestData: getPlayerData(guest),
+        guestData: getPlayerData(guest)
       })
 
       // Auto-expire invitation after 30 seconds
@@ -144,20 +140,16 @@ export const handleGameInvitation: GameSocketHandler = (
           if (stillExists) {
             await Promise.all([
               redis.del(`game_invite:${gameId}`),
-              redis.del(`game_invite:${guest.email}`),
+              redis.del(`game_invite:${guest.email}`)
             ])
-
-            await emitToUsers(
-              io,
-              [host.email, guest.email],
-              'GameInviteTimeout',
-              { gameId }
-            )
+            
+            await emitToUsers(io, [host.email, guest.email], 'GameInviteTimeout', { gameId })
           }
         } catch (error) {
           // Error handling for invitation timeout
         }
       }, 30000)
+
     } catch (error) {
       socket.emit('InviteToGameResponse', {
         status: 'error',
@@ -167,61 +159,58 @@ export const handleGameInvitation: GameSocketHandler = (
   })
 
   // Handle canceling invitations
-  socket.on(
-    'CancelGameInvite',
-    async (data: { gameId: string; hostEmail: string }) => {
-      try {
-        const { gameId, hostEmail } = data
-
-        if (!gameId || !hostEmail) {
-          return socket.emit('GameInviteResponse', {
-            status: 'error',
-            message: 'Missing required information.',
-          })
-        }
-
-        const inviteData = await redis.get(`game_invite:${gameId}`)
-        if (!inviteData) {
-          return socket.emit('GameInviteResponse', {
-            status: 'error',
-            message: 'Invitation not found or expired.',
-          })
-        }
-
-        const invite: GameInviteData = JSON.parse(inviteData)
-
-        if (invite.hostEmail !== hostEmail) {
-          return socket.emit('GameInviteResponse', {
-            status: 'error',
-            message: 'You can only cancel your own invitations.',
-          })
-        }
-
-        // Clean up invitation
-        await Promise.all([
-          redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${invite.guestEmail}`),
-        ])
-
-        // Notify guest
-        const guestSocketIds =
-          (await getSocketIds(invite.guestEmail, 'sockets')) || []
-        io.to(guestSocketIds).emit('GameInviteCanceled', {
-          gameId,
-          canceledBy: hostEmail,
-        })
-
-        // Confirm to host
-        socket.emit('GameInviteResponse', {
-          status: 'success',
-          message: 'Invitation canceled.',
-        })
-      } catch (error) {
-        socket.emit('GameInviteResponse', {
+  socket.on('CancelGameInvite', async (data: { gameId: string; hostEmail: string }) => {
+    try {
+      const { gameId, hostEmail } = data
+      
+      if (!gameId || !hostEmail) {
+        return socket.emit('GameInviteResponse', {
           status: 'error',
-          message: 'Failed to cancel invitation.',
+          message: 'Missing required information.',
         })
       }
+
+      const inviteData = await redis.get(`game_invite:${gameId}`)
+      if (!inviteData) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'Invitation not found or expired.',
+        })
+      }
+
+      const invite: GameInviteData = JSON.parse(inviteData)
+      
+      if (invite.hostEmail !== hostEmail) {
+        return socket.emit('GameInviteResponse', {
+          status: 'error',
+          message: 'You can only cancel your own invitations.',
+        })
+      }
+
+      // Clean up invitation
+      await Promise.all([
+        redis.del(`game_invite:${gameId}`),
+        redis.del(`game_invite:${invite.guestEmail}`)
+      ])
+
+      // Notify guest
+      const guestSocketIds = await getSocketIds(invite.guestEmail, 'sockets') || []
+      io.to(guestSocketIds).emit('GameInviteCanceled', {
+        gameId,
+        canceledBy: hostEmail
+      })
+
+      // Confirm to host
+      socket.emit('GameInviteResponse', {
+        status: 'success',
+        message: 'Invitation canceled.',
+      })
+
+    } catch (error) {
+      socket.emit('GameInviteResponse', {
+        status: 'error',
+        message: 'Failed to cancel invitation.',
+      })
     }
-  )
-}
+  })
+} 

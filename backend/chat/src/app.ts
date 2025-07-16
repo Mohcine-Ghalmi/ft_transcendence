@@ -152,8 +152,6 @@ async function startServer() {
 
     setupSocketIO(server)
 
-    console.log('process.cwd() : ', process.cwd())
-
     await server.listen({
       port: parseInt(CHAT_BACK_END_PORT),
       host: '0.0.0.0',
