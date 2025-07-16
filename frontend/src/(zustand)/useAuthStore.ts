@@ -48,6 +48,17 @@ axiosInstance.interceptors.response.use(
 )
 
 interface UserDetails {
+  LeaderBoardData: [
+    {
+      id: number
+      username: string
+      email: string
+      avatar: string
+      login: string
+      total_games: number
+      win_rate_percentage: number
+    }
+  ]
   randomFriends: [
     {
       email: string

@@ -16,6 +16,8 @@ import { useRouter } from 'next/navigation'
 
 import { motion, AnimatePresence } from 'motion/react'
 import { useClickOutside } from '@/components/lib/clickOutSide'
+import { challengePlayer } from '@/utils/challengeUtils'
+import { useGameInvite } from '../../play/OneVsOne/GameInviteProvider'
 
 const ChatHeader = () => {
   const [more, setMore] = useState(false)
@@ -154,6 +156,9 @@ const SendMessageInput = ({
   setImage: any
 }) => {
   const { chatHeader } = useChatStore()
+  const { user } = useAuthStore()
+  const { socket } = useGameInvite()
+  const router = useRouter()
   const [imagePath, setImagePath] = useState<string | null>(null)
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     // if (chatHeader.status === 'BLOCKED') return
@@ -161,6 +166,22 @@ const SendMessageInput = ({
       setImagePath(null)
       sendMessage()
     }
+  }
+  console.log('chatHeader : ', chatHeader)
+
+  const handleGameInviteInChat = async () => {
+    await challengePlayer(
+      {
+        email: chatHeader.email,
+        name: chatHeader.username,
+        username: chatHeader.username,
+        login: chatHeader.login,
+        avatar: chatHeader.avatar,
+      },
+      socket,
+      user,
+      router
+    )
   }
 
   const send = () => {
@@ -214,11 +235,11 @@ const SendMessageInput = ({
           className="outline-none w-full xl:p-4 xl:text-2xl p-2 text-xs"
           max={255}
         />
-        <div className="flex items-center justify-around h-full xl:gap-6 gap-2">
+        <div className="flex items-center justify-around h-[40px] xl:gap-6 gap-2">
           <div>
             <label htmlFor="files">
               <Image
-                className="w-[65px] h-[65px] cursor-pointer"
+                className="w-[45px] h-full cursor-pointer"
                 src="/addimage.svg"
                 alt="image"
                 width={100}
@@ -237,9 +258,9 @@ const SendMessageInput = ({
               accept="image/*"
             />
           </div>
-          <div className="xl:flex hidden">
+          <div onClick={() => handleGameInviteInChat()}>
             <Image
-              className="w-[65px] h-[65px] cursor-pointer"
+              className="w-[50px] h-full cursor-pointer"
               src="/Game.svg"
               alt="game"
               width={100}
@@ -252,7 +273,7 @@ const SendMessageInput = ({
               message || imagePath
                 ? 'bg-blue-400 cursor-pointer'
                 : 'bg-gray-400'
-            } rounded-2xl flex items-center justify-center xl:w-[100px] h-full w-[55px] px-2 py-4`}
+            } rounded-2xl flex items-center justify-center h-full w-[55px] px-2 py-4`}
           >
             {isLoading ? (
               <div className="w-[20px] h-[20px] xl:w-[35px] xl:h-[35px] flex items-center justify-center">
@@ -309,7 +330,12 @@ const Chat = () => {
   }
 
   const sendMessage = async () => {
-    if (selectedConversationId === undefined || (!message.trim() && !image))
+    const key = process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+    if (
+      selectedConversationId === undefined ||
+      (!message.trim() && !image) ||
+      !key
+    )
       return
 
     setIsLoading(true)
@@ -341,25 +367,19 @@ const Chat = () => {
         }
       }
 
-      // const payload = CryptoJs.AES.encrypt(
-      //   JSON.stringify({
-      //     recieverId: selectedConversationId,
-      //     senderEmail: user.email,
-      //     senderId: user.id,
-      //     message: message.trim(),
-      //     image: imagePath,
-      //   }),
-      //   process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-      // ).toString()
-
-      if (chatSocket?.connected) {
-        chatSocket.emit('sendMessage', {
+      const payload = CryptoJs.AES.encrypt(
+        JSON.stringify({
           recieverId: selectedConversationId,
           senderEmail: user.email,
           senderId: user.id,
           message: message.trim(),
           image: imagePath,
-        })
+        }),
+        key
+      ).toString()
+
+      if (chatSocket?.connected) {
+        chatSocket.emit('sendMessage', payload)
 
         setMessage('')
         setImage(null)

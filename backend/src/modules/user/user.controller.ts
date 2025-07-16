@@ -588,6 +588,29 @@ export async function updateUserData(
 export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
   try {
     const user: any = req.user
+    const LeaderBoardData = db
+      .prepare(
+        `SELECT
+            u.id,
+            u.username,
+            u.email,
+            u.avatar,
+            u.login,
+            COUNT(mh.id) AS total_games,
+            ROUND(
+                CAST(SUM(CASE WHEN mh.winner = u.email THEN 1 ELSE 0 END) AS FLOAT)
+                / COUNT(mh.id) * 100,
+                2
+            ) AS win_rate_percentage
+        FROM User u
+        LEFT JOIN match_history mh
+            ON u.email = mh.player1_email OR u.email = mh.player2_email
+        GROUP BY u.id, u.username, u.email
+        ORDER BY win_rate_percentage DESC, total_games DESC;
+        `
+      )
+      .all()
+
     const randomFriends = db
       .prepare(
         `SELECT User.email , User.username ,User.avatar, User.login , FriendRequest.fromEmail, FriendRequest.toEmail, FriendRequest.status
@@ -640,7 +663,14 @@ export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
 
     const { wins, losses } = sql.get(user.email, user.email)
 
-    return rep.send({ wins, losses, chartData, matchHistory, randomFriends })
+    return rep.send({
+      wins,
+      losses,
+      chartData,
+      matchHistory,
+      randomFriends,
+      LeaderBoardData,
+    })
   } catch (err) {
     console.log('getUserDetails : ', err)
     return rep

@@ -1,43 +1,46 @@
-"use client"
-import React, { useState, useRef, useEffect } from 'react';
-import { Search } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+'use client'
+import React, { useState, useRef, useEffect } from 'react'
+import { Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
-import { PlayerCard } from './Locale';
-import { useGameInvite } from './GameInviteProvider';
-import { PingPongGame } from '../game/PingPongGame';
-import CryptoJS from 'crypto-js';
-import Image from 'next/image';
+import { PlayerCard } from './Locale'
+import { useGameInvite } from './GameInviteProvider'
+import { PingPongGame } from '../game/PingPongGame'
+import CryptoJS from 'crypto-js'
+import Image from 'next/image'
 
 export const sendGameInvite = async (playerEmail, socket, user) => {
   if (!socket || !user?.email || !playerEmail) {
-    return false;
+    return false
   }
 
   try {
-    const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
+    const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY
     if (!encryptionKey) {
-      throw new Error('Encryption key not found');
+      throw new Error('Encryption key not found')
     }
 
     const inviteData = {
       myEmail: user.email,
-      hisEmail: playerEmail
-    };
-    
-    const encrypted = CryptoJS.AES.encrypt(JSON.stringify(inviteData), encryptionKey).toString();
-    
-    socket.emit('InviteToGame', encrypted);
-    
-    return true;
+      hisEmail: playerEmail,
+    }
+
+    const encrypted = CryptoJS.AES.encrypt(
+      JSON.stringify(inviteData),
+      encryptionKey
+    ).toString()
+
+    socket.emit('InviteToGame', encrypted)
+
+    return true
   } catch (error) {
-    console.error('Failed to send invite:', error);
-    return false;
+    console.error('Failed to send invite:', error)
+    return false
   }
-};
+}
 
 export const PlayerListItem = ({ player, onInvite, isInviting }) => {
-  const isAvailable = player.GameStatus === 'Available';
+  const isAvailable = player.GameStatus === 'Available'
 
   return (
     <div className="flex items-center justify-between p-4 hover:bg-[#1a1d23] rounded-lg transition-colors">
@@ -53,15 +56,20 @@ export const PlayerListItem = ({ player, onInvite, isInviting }) => {
         </div>
         <div>
           <h3 className="text-white font-medium text-lg">{player.name}</h3>
-          <p className={`text-sm ${
-            player.GameStatus === 'Available' ? 'text-green-400' : 
-            player.GameStatus === 'In a match' ? 'text-yellow-400' : 'text-gray-400'
-          }`}>
+          <p
+            className={`text-sm ${
+              player.GameStatus === 'Available'
+                ? 'text-green-400'
+                : player.GameStatus === 'In a match'
+                ? 'text-yellow-400'
+                : 'text-gray-400'
+            }`}
+          >
             {player.GameStatus}
           </p>
         </div>
       </div>
-      
+
       <button
         onClick={() => onInvite(player)}
         disabled={!isAvailable || isInviting}
@@ -74,27 +82,48 @@ export const PlayerListItem = ({ player, onInvite, isInviting }) => {
         {isInviting ? 'Inviting...' : 'Invite'}
       </button>
     </div>
-  );
-};
+  )
+}
 
-const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost, gameId }) => {
+const WaitingPage = ({
+  currentUser,
+  opponent,
+  onStartGame,
+  onCancelGame,
+  isHost,
+  gameId,
+}) => {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
       <div className="w-full max-w-4xl text-center">
-        <h1 className="text-4xl md:text-5xl font-bold mb-12 text-white">Game Ready!</h1>
-        
+        <h1 className="text-4xl md:text-5xl font-bold mb-12 text-white">
+          Game Ready!
+        </h1>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12">
-          <PlayerCard player={currentUser} playerNumber={1} onAddPlayer={() => {}} />
-          <PlayerCard player={opponent} playerNumber={2} onAddPlayer={() => {}} />
+          <PlayerCard
+            player={currentUser}
+            playerNumber={1}
+            onAddPlayer={() => {}}
+          />
+          <PlayerCard
+            player={opponent}
+            playerNumber={2}
+            onAddPlayer={() => {}}
+          />
         </div>
-        
+
         <div className="mb-8">
-          <p className="text-xl text-green-400 mb-4">🎮 Both players are ready!</p>
+          <p className="text-xl text-green-400 mb-4">
+            🎮 Both players are ready!
+          </p>
           <p className="text-gray-300">
-            {isHost ? "You are the host. Click 'Start Game' to begin!" : "Waiting for host to start the game..."}
+            {isHost
+              ? "You are the host. Click 'Start Game' to begin!"
+              : 'Waiting for host to start the game...'}
           </p>
         </div>
-        
+
         <div className="flex justify-center space-x-4">
           {isHost && (
             <button
@@ -113,8 +142,8 @@ const WaitingPage = ({ currentUser, opponent, onStartGame, onCancelGame, isHost,
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
 const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
   return (
@@ -124,31 +153,31 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12 md:mb-20">
           {/* Player 1 */}
           <PlayerCard player={player} playerNumber={1} onAddPlayer={() => {}} />
-          
+
           {/* Player 2 - Waiting for Response */}
           <div className="flex items-center">
             <div className="flex flex-col items-center">
               <p className="text-white text-lg mb-8">
                 Waiting for {player?.name} to respond...
               </p>
-              
+
               {/* Progress Bar */}
               <div className="w-full mb-4">
                 <div className="bg-gray-700 rounded-full">
-                  <div 
+                  <div
                     className="bg-white rounded-full h-2 transition-all duration-1000 ease-linear"
                     style={{ width: `${((30 - waitTime) / 30) * 100}%` }}
                   ></div>
                 </div>
               </div>
-              
+
               <p className="text-gray-400 text-sm">
                 Estimated wait time: {waitTime} seconds
               </p>
             </div>
           </div>
         </div>
-        
+
         {/* Action Buttons */}
         <div className="flex justify-center space-x-4">
           <button
@@ -160,103 +189,131 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-function handleHostLeaveBeforeStart({ isHost, gameId, gameState, socket, user }) {
-  if (isHost && gameId && gameState === 'waiting_to_start' && socket && user?.email) {
-    socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
+function handleHostLeaveBeforeStart({
+  isHost,
+  gameId,
+  gameState,
+  socket,
+  user,
+}) {
+  if (
+    isHost &&
+    gameId &&
+    gameState === 'waiting_to_start' &&
+    socket &&
+    user?.email
+  ) {
+    socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email })
   }
 }
 
 export default function OnlineMatch() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
-  const [invitedPlayer, setInvitedPlayer] = useState(null);
-  const [gameAccepted, setGameAccepted] = useState(false);
-  const [waitTime, setWaitTime] = useState(30);
-  const [showGame, setShowGame] = useState(false);
-  const [friends, setFriends] = useState([]);
-  const [gameId, setGameId] = useState(null);
-  const [isInviting, setIsInviting] = useState(false);
-  const [gameState, setGameState] = useState('idle'); // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
-  const [isHost, setIsHost] = useState(false);
-  const [notification, setNotification] = useState({ message: '', type: 'info' });
-  
-  const { user } = useAuthStore();
-  const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } = useGameInvite();
-  const router = useRouter();
-  
-  const countdownIntervalRef = useRef(null);
-  const [currentPath, setCurrentPath] = useState('');
-  
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
+  const [invitedPlayer, setInvitedPlayer] = useState(null)
+  const [gameAccepted, setGameAccepted] = useState(false)
+  const [waitTime, setWaitTime] = useState(30)
+  const [showGame, setShowGame] = useState(false)
+  const [friends, setFriends] = useState([])
+  const [gameId, setGameId] = useState(null)
+  const [isInviting, setIsInviting] = useState(false)
+  const [gameState, setGameState] = useState('idle') // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
+  const [isHost, setIsHost] = useState(false)
+  const [notification, setNotification] = useState({
+    message: '',
+    type: 'info',
+  })
+
+  const { user } = useAuthStore()
+  const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } =
+    useGameInvite()
+  const router = useRouter()
+
+  const countdownIntervalRef = useRef(null)
+  const [currentPath, setCurrentPath] = useState('')
+
   useEffect(() => {
     // Set initial path
     if (typeof window !== 'undefined') {
-      setCurrentPath(window.location.pathname);
+      setCurrentPath(window.location.pathname)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     const checkExternalState = () => {
-      const externalGameStateStr = sessionStorage.getItem('externalGameState');
+      const externalGameStateStr = sessionStorage.getItem('externalGameState')
       if (externalGameStateStr) {
         try {
-          const externalGameState = JSON.parse(externalGameStateStr);
-          
-          setGameId(externalGameState.gameId);
-          setGameState(externalGameState.gameState);
-          setGameAccepted(externalGameState.gameAccepted);
-          setIsHost(externalGameState.isHost);
-          setInvitedPlayer(externalGameState.invitedPlayer);
-          
-          sessionStorage.removeItem('externalGameState');
+          const externalGameState = JSON.parse(externalGameStateStr)
 
+          setGameId(externalGameState.gameId)
+          setGameState(externalGameState.gameState)
+          setGameAccepted(externalGameState.gameAccepted)
+          setIsHost(externalGameState.isHost)
+          setInvitedPlayer(externalGameState.invitedPlayer)
+
+          sessionStorage.removeItem('externalGameState')
         } catch (error) {
-          sessionStorage.removeItem('externalGameState');
+          sessionStorage.removeItem('externalGameState')
         }
       }
-    };
-    
-    const timeoutId = setTimeout(checkExternalState, 100);
-    return () => clearTimeout(timeoutId);
-  }, []);
+    }
+
+    const timeoutId = setTimeout(checkExternalState, 100)
+    return () => clearTimeout(timeoutId)
+  }, [])
 
   // Handle route changes and page navigation
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return
 
     const handleRouteChange = () => {
-      const newPath = window.location.pathname;
-      
+      const newPath = window.location.pathname
+
       // Handle different game states when player leaves
       if (currentPath && newPath !== currentPath) {
-        if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
+        if (
+          gameState === 'waiting_to_start' &&
+          gameId &&
+          socket &&
+          user?.email
+        ) {
           if (isHost) {
             // Host leaving - emit both events to ensure guest gets notified
-            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('PlayerLeftBeforeGameStart', {
+              gameId,
+              leaver: user.email,
+            })
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
           } else {
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
           }
         } else if (gameState === 'in_game' && gameId && socket && user?.email) {
           // Player left during active game - mark as lost
-          socket.emit('LeaveGame', { 
-            gameId, 
-            playerEmail: user.email,
-            reason: 'player_left_page'
-          });
-        } else if (gameState === 'waiting_response' && gameId && socket && user?.email) {
-          // Player left while waiting for response - cancel invite
-          socket.emit('CancelGameInvite', { 
+          socket.emit('LeaveGame', {
             gameId,
-            hostEmail: user.email
-          });
+            playerEmail: user.email,
+            reason: 'player_left_page',
+          })
+        } else if (
+          gameState === 'waiting_response' &&
+          gameId &&
+          socket &&
+          user?.email
+        ) {
+          // Player left while waiting for response - cancel invite
+          socket.emit('CancelGameInvite', {
+            gameId,
+            hostEmail: user.email,
+          })
         }
       }
-      
-      setTimeout(() => setCurrentPath(newPath), 0);
-    };
+
+      setTimeout(() => setCurrentPath(newPath), 0)
+    }
 
     const handleBeforeUnload = (e) => {
       // Handle page refresh/close for different game states
@@ -264,290 +321,331 @@ export default function OnlineMatch() {
         // Both host and guest should emit appropriate events when leaving waiting room
         if (isHost) {
           // Host leaving - emit both events to ensure guest gets notified
-          socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          socket.emit('PlayerLeftBeforeGameStart', {
+            gameId,
+            leaver: user.email,
+          })
+          socket.emit('LeaveGame', { gameId, playerEmail: user.email })
         } else {
-          socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+          socket.emit('LeaveGame', { gameId, playerEmail: user.email })
         }
       } else if (gameState === 'in_game' && gameId && socket && user?.email) {
         // Show confirmation dialog for active games
-        e.preventDefault();
-        e.returnValue = 'Are you sure you want to leave the game? This will result in a loss.';
-        
+        e.preventDefault()
+        e.returnValue =
+          'Are you sure you want to leave the game? This will result in a loss.'
+
         // Emit leave event
-        socket.emit('LeaveGame', { 
-          gameId, 
-          playerEmail: user.email,
-          reason: 'player_closed_page'
-        });
-        
-        return 'Are you sure you want to leave the game? This will result in a loss.';
-      } else if (gameState === 'waiting_response' && gameId && socket && user?.email) {
-        socket.emit('CancelGameInvite', { 
+        socket.emit('LeaveGame', {
           gameId,
-          hostEmail: user.email
-        });
+          playerEmail: user.email,
+          reason: 'player_closed_page',
+        })
+
+        return 'Are you sure you want to leave the game? This will result in a loss.'
+      } else if (
+        gameState === 'waiting_response' &&
+        gameId &&
+        socket &&
+        user?.email
+      ) {
+        socket.emit('CancelGameInvite', {
+          gameId,
+          hostEmail: user.email,
+        })
       }
-    };
+    }
 
     const handleVisibilityChange = () => {
       // Handle when user navigates to another tab or minimizes browser
       if (document.visibilityState === 'hidden') {
-        if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
+        if (
+          gameState === 'waiting_to_start' &&
+          gameId &&
+          socket &&
+          user?.email
+        ) {
           // Both host and guest should emit appropriate events when leaving waiting room
           if (isHost) {
             // Host leaving - emit both events to ensure guest gets notified
-            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('PlayerLeftBeforeGameStart', {
+              gameId,
+              leaver: user.email,
+            })
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
           } else {
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email });
+            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
           }
         } else if (gameState === 'in_game' && gameId && socket && user?.email) {
           // Player left during active game - mark as lost
-          socket.emit('LeaveGame', { 
-            gameId, 
-            playerEmail: user.email,
-            reason: 'player_changed_tab'
-          });
-        } else if (gameState === 'waiting_response' && gameId && socket && user?.email) {
-          socket.emit('CancelGameInvite', { 
+          socket.emit('LeaveGame', {
             gameId,
-            hostEmail: user.email
-          });
+            playerEmail: user.email,
+            reason: 'player_changed_tab',
+          })
+        } else if (
+          gameState === 'waiting_response' &&
+          gameId &&
+          socket &&
+          user?.email
+        ) {
+          socket.emit('CancelGameInvite', {
+            gameId,
+            hostEmail: user.email,
+          })
         }
       }
-    };
+    }
 
     const handlePopState = () => {
-      handleRouteChange();
-    };
+      handleRouteChange()
+    }
 
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('popstate', handlePopState)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     // Also listen for pushState and replaceState (for programmatic navigation)
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
+    const originalPushState = history.pushState
+    const originalReplaceState = history.replaceState
 
-    history.pushState = function(...args) {
-      originalPushState.apply(history, args);
-      handleRouteChange();
-    };
+    history.pushState = function (...args) {
+      originalPushState.apply(history, args)
+      handleRouteChange()
+    }
 
-    history.replaceState = function(...args) {
-      originalReplaceState.apply(history, args);
-      handleRouteChange();
-    };
+    history.replaceState = function (...args) {
+      originalReplaceState.apply(history, args)
+      handleRouteChange()
+    }
 
     return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      history.pushState = originalPushState;
-      history.replaceState = originalReplaceState;
-    };
-  }, [currentPath, gameState, gameId, isHost, socket, user]);
+      window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      history.pushState = originalPushState
+      history.replaceState = originalReplaceState
+    }
+  }, [currentPath, gameState, gameId, isHost, socket, user])
 
   // Helper function to show notifications
   const showNotification = (message, type = 'info') => {
-    setNotification({ message, type });
+    setNotification({ message, type })
     // Auto-hide after 5 seconds
-    setTimeout(() => setNotification({ message: '', type: 'info' }), 5000);
-  };
+    setTimeout(() => setNotification({ message: '', type: 'info' }), 5000)
+  }
 
   // Load game state from memory storage (not localStorage due to artifact restrictions)
   const [persistentGameState, setPersistentGameState] = useState({
     gameState: 'idle',
     gameId: null,
     opponent: null,
-    isHost: false
-  });
+    isHost: false,
+  })
 
   // Socket event listeners
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) return
 
     const handleInviteResponse = (data) => {
-      setIsInviting(false);
-      
+      setIsInviting(false)
+
       if (data.status === 'success' && data.type === 'invite_sent') {
-        setGameId(data.gameId);
+        setGameId(data.gameId)
         setInvitedPlayer({
           ...data.guestData,
           name: data.guestData.username || data.guestData.login,
           login: data.guestData.login,
           avatar: data.guestData.avatar || '/avatar/Default.svg',
-          GameStatus: 'Available'
-        });
-        setGameState('waiting_response');
-        setIsHost(true);
+          GameStatus: 'Available',
+        })
+        setGameState('waiting_response')
+        setIsHost(true)
         setPersistentGameState({
           gameState: 'waiting_response',
           gameId: data.gameId,
           opponent: data.guestData,
-          isHost: true
-        });
+          isHost: true,
+        })
       } else if (data.status === 'error') {
-        showNotification(data.message, 'error');
-        resetGameState();
+        showNotification(data.message, 'error')
+        resetGameState()
       }
-    };
+    }
 
     // FIXED: Improved logic for handling game invite acceptance
     const handleGameInviteAccepted = (data) => {
       if (data.status === 'ready_to_start') {
-        setGameAccepted(true);
-        setGameState('waiting_to_start');
-        setIsWaitingForResponse(false);
-        clearCountdown();
+        setGameAccepted(true)
+        setGameState('waiting_to_start')
+        setIsWaitingForResponse(false)
+        clearCountdown()
 
         if (gameState === 'waiting_response') {
           // We are the host
-          setIsHost(true);
+          setIsHost(true)
           setInvitedPlayer({
             ...data.guestData,
             name: data.guestData.username || data.guestData.login,
             login: data.guestData.login,
             avatar: data.guestData.avatar || '/avatar/Default.svg',
-            GameStatus: 'Available'
-          });
+            GameStatus: 'Available',
+          })
         } else {
           // We are the guest
-          setIsHost(false);
+          setIsHost(false)
           setInvitedPlayer({
             ...data.hostData,
             name: data.hostData?.username || data.hostData?.login,
             login: data.hostData?.login,
             avatar: data.hostData?.avatar || '/avatar/Default.svg',
-            GameStatus: 'Available'
-          });
+            GameStatus: 'Available',
+          })
         }
 
         setPersistentGameState({
           gameState: 'waiting_to_start',
           gameId: data.gameId,
           opponent: isHost ? data.guestData : data.hostData,
-          isHost: gameState === 'waiting_response'
-        });
+          isHost: gameState === 'waiting_response',
+        })
       }
-    };
+    }
 
     const handleGameInviteDeclined = (data) => {
-      setIsInviting(false);
-      setInvitedPlayer(null);
-      setIsWaitingForResponse(false);
-      setWaitTime(0);
-      clearCountdown();
-      
-      showNotification(`${data.guestLogin || data.guestName} declined your invitation.`, 'error');
-      
+      setIsInviting(false)
+      setInvitedPlayer(null)
+      setIsWaitingForResponse(false)
+      setWaitTime(0)
+      clearCountdown()
+
+      showNotification(
+        `${data.guestLogin || data.guestName} declined your invitation.`,
+        'error'
+      )
+
       // Reset game state and redirect host back to play page
-      resetGameState();
-      
-      router.push('/play');
-    };
+      resetGameState()
+
+      router.push('/play')
+    }
 
     const handleGameInviteTimeout = (data) => {
-      setIsInviting(false);
-      setInvitedPlayer(null);
-      setIsWaitingForResponse(false);
-      setWaitTime(0);
-      clearCountdown();
-      
-      showNotification('Game invitation expired.', 'error');
-      
+      setIsInviting(false)
+      setInvitedPlayer(null)
+      setIsWaitingForResponse(false)
+      setWaitTime(0)
+      clearCountdown()
+
+      showNotification('Game invitation expired.', 'error')
+
       // Reset game state and redirect host back to play page
-      resetGameState();
-      
+      resetGameState()
+
       // Navigate back to the main play page using React router
       // router.push('/play');
-    };
+    }
 
     const handleGameInviteCanceled = (data) => {
-      setIsInviting(false);
-      setInvitedPlayer(null);
-      setIsWaitingForResponse(false);
-      setWaitTime(0);
-      clearCountdown();
-      
-      showNotification('Game invitation was canceled by host.', 'error');
-      
+      setIsInviting(false)
+      setInvitedPlayer(null)
+      setIsWaitingForResponse(false)
+      setWaitTime(0)
+      clearCountdown()
+
+      showNotification('Game invitation was canceled by host.', 'error')
+
       // Reset game state and redirect host back to play page
-      resetGameState();
-      
+      resetGameState()
+
       // Navigate back to the main play page using React router
       // router.push('/play');
-    };
+    }
 
     const handlePlayerLeft = (data) => {
-      setIsInviting(false);
-      setInvitedPlayer(null);
-      setIsWaitingForResponse(false);
-      setWaitTime(0);
-      clearCountdown();
-      
-      showNotification('Opponent left the game. You win!', 'success');
-      
+      setIsInviting(false)
+      setInvitedPlayer(null)
+      setIsWaitingForResponse(false)
+      setWaitTime(0)
+      clearCountdown()
+
+      showNotification('Opponent left the game. You win!', 'success')
+
       // Reset game state
-      resetGameState();
-      
+      resetGameState()
+
       // Clean up any stale game data
       if (socket && user?.email) {
-        socket.emit('CleanupGameData', { email: user.email });
+        socket.emit('CleanupGameData', { email: user.email })
       }
-      
+
       // Redirect to win page since the current user wins when opponent leaves
-      const winnerName = user?.username || user?.login || 'You';
-      const loserName = data.playerWhoLeft || 'Opponent';
-      router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
-    };
+      const winnerName = user?.username || user?.login || 'You'
+      const loserName = data.playerWhoLeft || 'Opponent'
+      router.push(
+        `/play/result/win?winner=${encodeURIComponent(
+          winnerName
+        )}&loser=${encodeURIComponent(loserName)}`
+      )
+    }
 
     const handleGameEnded = (data) => {
-      setIsInviting(false);
-      setInvitedPlayer(null);
-      setIsWaitingForResponse(false);
-      setWaitTime(0);
-      clearCountdown();
-      
+      setIsInviting(false)
+      setInvitedPlayer(null)
+      setIsWaitingForResponse(false)
+      setWaitTime(0)
+      clearCountdown()
+
       // Determine if current user won
-      const isWinner = data.winner === user?.email;
-      const winnerName = isWinner ? (user?.username || user?.login || 'You') : (data.winner || 'Opponent');
-      const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.login || 'You');
-      
-      showNotification(data.message || 'Game ended.', 'info');
-      
+      const isWinner = data.winner === user?.email
+      const winnerName = isWinner
+        ? user?.username || user?.login || 'You'
+        : data.winner || 'Opponent'
+      const loserName = isWinner
+        ? data.loser || 'Opponent'
+        : user?.username || user?.login || 'You'
+
+      showNotification(data.message || 'Game ended.', 'info')
+
       // Reset game state
-      resetGameState();
-      
+      resetGameState()
+
       // Clean up any stale game data
       if (socket && user?.email) {
-        socket.emit('CleanupGameData', { email: user.email });
+        socket.emit('CleanupGameData', { email: user.email })
       }
-      
+
       // Redirect to appropriate result page based on whether user won or lost
       if (isWinner) {
-        router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+        router.push(
+          `/play/result/win?winner=${encodeURIComponent(
+            winnerName
+          )}&loser=${encodeURIComponent(loserName)}`
+        )
       } else {
-        router.push(`/play/result/loss?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
+        router.push(
+          `/play/result/loss?winner=${encodeURIComponent(
+            winnerName
+          )}&loser=${encodeURIComponent(loserName)}`
+        )
       }
-    };
+    }
 
     const handleGameCanceled = (data) => {
-      setIsInviting(false);
-      setInvitedPlayer(null);
-      setIsWaitingForResponse(false);
-      setWaitTime(0);
-      clearCountdown();
-      
-      showNotification('Game was canceled.', 'error');
-      
+      setIsInviting(false)
+      setInvitedPlayer(null)
+      setIsWaitingForResponse(false)
+      setWaitTime(0)
+      clearCountdown()
+
+      showNotification('Game was canceled.', 'error')
+
       // Reset game state and redirect back to play page
-      resetGameState();
-      
+      resetGameState()
+
       // Navigate back to the main play page using React router
-      router.push('/play');
-    };
+      router.push('/play')
+    }
 
     // FIXED: Handle game start response - navigate both players to game
     const handleGameStartResponse = (data) => {
@@ -555,98 +653,106 @@ export default function OnlineMatch() {
         // Only the guest should navigate to the game page
         // The host should stay on the current page and the game will start there
         if (!isHost) {
-          const targetPath = `/play/game/${gameId}`;
-          window.location.href = targetPath;
+          const targetPath = `/play/game/${gameId}`
+          window.location.href = targetPath
         } else {
           // The host should stay on this page and the game component will be rendered here
           // We need to transition to the game state
-          setShowGame(true);
+          setShowGame(true)
         }
       } else {
         // Game start failed - could add user feedback here if needed
       }
-    };
+    }
 
     // Handle game started event
     const handleGameStarted = (data) => {
       if (data.gameId === gameId) {
         // Update game state to indicate the game is now active
-        setGameState('in_game');
+        setGameState('in_game')
         // The game component will handle the actual game start
         // This event confirms that the server has started the game
       }
-    };
+    }
 
     // Handler for guest leaving before game starts
     const handleGameEndedByOpponentLeave = (data) => {
-      setIsInviting(false);
-      setInvitedPlayer(null);
-      setIsWaitingForResponse(false);
-      setWaitTime(0);
-      clearCountdown();
-      showNotification('Opponent left the game.', 'error');
-      resetGameState();
-      router.push('/play');
-    };
+      setIsInviting(false)
+      setInvitedPlayer(null)
+      setIsWaitingForResponse(false)
+      setWaitTime(0)
+      clearCountdown()
+      showNotification('Opponent left the game.', 'error')
+      resetGameState()
+      router.push('/play')
+    }
 
     // Add event listeners
-    socket.on('InviteToGameResponse', handleInviteResponse);
-    socket.on('GameInviteAccepted', handleGameInviteAccepted);
-    socket.on('GameInviteDeclined', handleGameInviteDeclined);
-    socket.on('GameInviteTimeout', handleGameInviteTimeout);
-    socket.on('GameInviteCanceled', handleGameInviteCanceled);
-    socket.on('PlayerLeft', handlePlayerLeft);
-    socket.on('GameEnded', handleGameEnded);
-    socket.on('GameCanceled', handleGameCanceled);
-    socket.on('GameStartResponse', handleGameStartResponse);
-    socket.on('GameStarted', handleGameStarted);
-    socket.on('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave);
+    socket.on('InviteToGameResponse', handleInviteResponse)
+    socket.on('GameInviteAccepted', handleGameInviteAccepted)
+    socket.on('GameInviteDeclined', handleGameInviteDeclined)
+    socket.on('GameInviteTimeout', handleGameInviteTimeout)
+    socket.on('GameInviteCanceled', handleGameInviteCanceled)
+    socket.on('PlayerLeft', handlePlayerLeft)
+    socket.on('GameEnded', handleGameEnded)
+    socket.on('GameCanceled', handleGameCanceled)
+    socket.on('GameStartResponse', handleGameStartResponse)
+    socket.on('GameStarted', handleGameStarted)
+    socket.on('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
 
     return () => {
-      socket.off('InviteToGameResponse', handleInviteResponse);
-      socket.off('GameInviteAccepted', handleGameInviteAccepted);
-      socket.off('GameInviteDeclined', handleGameInviteDeclined);
-      socket.off('GameInviteTimeout', handleGameInviteTimeout);
-      socket.off('GameInviteCanceled', handleGameInviteCanceled);
-      socket.off('PlayerLeft', handlePlayerLeft);
-      socket.off('GameEnded', handleGameEnded);
-      socket.off('GameCanceled', handleGameCanceled);
-      socket.off('GameStartResponse', handleGameStartResponse);
-      socket.off('GameStarted', handleGameStarted);
-      socket.off('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave);
-    };
-  }, [socket, gameId, clearInvite, user?.email, gameState, isHost, receivedInvite]);
+      socket.off('InviteToGameResponse', handleInviteResponse)
+      socket.off('GameInviteAccepted', handleGameInviteAccepted)
+      socket.off('GameInviteDeclined', handleGameInviteDeclined)
+      socket.off('GameInviteTimeout', handleGameInviteTimeout)
+      socket.off('GameInviteCanceled', handleGameInviteCanceled)
+      socket.off('PlayerLeft', handlePlayerLeft)
+      socket.off('GameEnded', handleGameEnded)
+      socket.off('GameCanceled', handleGameCanceled)
+      socket.off('GameStartResponse', handleGameStartResponse)
+      socket.off('GameStarted', handleGameStarted)
+      socket.off('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
+    }
+  }, [
+    socket,
+    gameId,
+    clearInvite,
+    user?.email,
+    gameState,
+    isHost,
+    receivedInvite,
+  ])
 
   // Handle page refresh and disconnection
   useEffect(() => {
     const handleBeforeUnload = () => {
       // If we're in a game, notify the server that we're leaving
       if (socket && gameId && user?.email) {
-        socket.emit('LeaveGame', { 
-          gameId, 
-          playerEmail: user.email 
-        });
+        socket.emit('LeaveGame', {
+          gameId,
+          playerEmail: user.email,
+        })
       }
-    };
+    }
 
     const handleVisibilityChange = () => {
       // If page becomes hidden (user switches tabs or minimizes), treat as leaving
       if (document.hidden && socket && gameId && user?.email) {
-        socket.emit('LeaveGame', { 
-          gameId, 
-          playerEmail: user.email 
-        });
+        socket.emit('LeaveGame', {
+          gameId,
+          playerEmail: user.email,
+        })
       }
-    };
+    }
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [socket, gameId, user?.email]);
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [socket, gameId, user?.email])
 
   // Handle accepting invite from context
   useEffect(() => {
@@ -654,146 +760,148 @@ export default function OnlineMatch() {
       setInvitedPlayer({
         ...receivedInvite.hostData,
         name: receivedInvite.hostData.username,
-        GameStatus: 'Available'
-      });
-      setGameId(receivedInvite.gameId);
-      setIsHost(false); // Guest is not host
+        GameStatus: 'Available',
+      })
+      setGameId(receivedInvite.gameId)
+      setIsHost(false) // Guest is not host
       setPersistentGameState({
         gameState: 'idle',
         gameId: receivedInvite.gameId,
         opponent: receivedInvite.hostData,
-        isHost: false
-      });
+        isHost: false,
+      })
     }
-  }, [receivedInvite, gameState]);
-  
+  }, [receivedInvite, gameState])
+
   // Fetch friends effect
   useEffect(() => {
     async function fetchFriends() {
-      if (!user?.email) return;
-      
+      if (!user?.email) return
+
       try {
-        const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
-        
+        const res = await fetch(
+          `http://localhost:5005/api/users/friends?email=${user.email}`
+        )
+
         if (!res.ok) {
-          setFriends([]);
-          return;
+          setFriends([])
+          return
         }
-        
-        const data = await res.json();
-        
+
+        const data = await res.json()
+
         if (data.friends && Array.isArray(data.friends)) {
-          const formatted = data.friends.map(f => ({
+          const formatted = data.friends.map((f) => ({
             name: f.username,
             avatar: f.avatar,
             nickname: f.login,
             GameStatus: 'Available',
             ...f,
-          }));
-          setFriends(formatted);
+          }))
+          setFriends(formatted)
         } else {
-          setFriends([]);
+          setFriends([])
         }
       } catch (err) {
-        setFriends([]);
+        setFriends([])
         // Don't show alert to user, just log the error
       }
     }
-    fetchFriends();
-  }, [user]);
+    fetchFriends()
+  }, [user])
 
   const resetGameState = () => {
-    setGameState('idle');
-    setIsWaitingForResponse(false);
-    setInvitedPlayer(null);
-    setGameAccepted(false);
-    setWaitTime(30);
-    setGameId(null);
-    setIsHost(false);
-    setShowGame(false);
-    setIsInviting(false);
+    setGameState('idle')
+    setIsWaitingForResponse(false)
+    setInvitedPlayer(null)
+    setGameAccepted(false)
+    setWaitTime(30)
+    setGameId(null)
+    setIsHost(false)
+    setShowGame(false)
+    setIsInviting(false)
     setPersistentGameState({
       gameState: 'idle',
       gameId: null,
       opponent: null,
-      isHost: false
-    });
-    clearCountdown();
-  };
+      isHost: false,
+    })
+    clearCountdown()
+  }
 
   const clearCountdown = () => {
     if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
+      clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = null
     }
-  };
+  }
 
-  const filteredPlayers = friends.filter(player =>
+  const filteredPlayers = friends.filter((player) =>
     player.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  )
 
   const handleInvite = async (player) => {
     if (!socket) {
-      return;
+      return
     }
-    
-    setIsInviting(true);
-    setInvitedPlayer(player);
-    setIsWaitingForResponse(true);
-    setGameAccepted(false);
-    setWaitTime(30);
-    clearCountdown();
-    
-    const success = await sendGameInvite(player.email, socket, user);
-    
+
+    setIsInviting(true)
+    setInvitedPlayer(player)
+    setIsWaitingForResponse(true)
+    setGameAccepted(false)
+    setWaitTime(30)
+    clearCountdown()
+
+    const success = await sendGameInvite(player.email, socket, user)
+
     if (success) {
       // Start countdown
       countdownIntervalRef.current = setInterval(() => {
-        setWaitTime(prev => {
+        setWaitTime((prev) => {
           if (prev <= 1) {
-            clearInterval(countdownIntervalRef.current);
-            countdownIntervalRef.current = null;
+            clearInterval(countdownIntervalRef.current)
+            countdownIntervalRef.current = null
             // If time runs out, cancel the invite automatically
-            handleCancelInvite();
-            return 0;
+            handleCancelInvite()
+            return 0
           }
-          return prev - 1;
-        });
-      }, 1000);
+          return prev - 1
+        })
+      }, 1000)
     } else {
-      setIsInviting(false);
-      resetGameState();
+      setIsInviting(false)
+      resetGameState()
     }
-  };
+  }
 
   const handleCancelInvite = () => {
     if (socket && gameId && user?.email) {
-      socket.emit('CancelGameInvite', { 
+      socket.emit('CancelGameInvite', {
         gameId,
-        hostEmail: user.email
-      });
+        hostEmail: user.email,
+      })
     }
-    resetGameState();
-  };
+    resetGameState()
+  }
 
   // FIXED: Simplified start game logic
   const handleStartGame = () => {
     if (socket && gameId) {
-      socket.emit('StartGame', { gameId });
+      socket.emit('StartGame', { gameId })
     }
     // If no socket or gameId, the button should be disabled anyway
-  };
+  }
 
   const handleCancelGame = () => {
     if (socket && gameId) {
-      socket.emit('CancelGame', { gameId });
+      socket.emit('CancelGame', { gameId })
     }
-    resetGameState();
-  };
+    resetGameState()
+  }
 
   const handleGameEnd = () => {
-    resetGameState();
-  };
+    resetGameState()
+  }
 
   // If waiting to start game, show waiting page
   if (gameState === 'waiting_to_start' && gameAccepted && invitedPlayer) {
@@ -806,7 +914,7 @@ export default function OnlineMatch() {
         isHost={isHost}
         gameId={gameId}
       />
-    );
+    )
   }
 
   return (
@@ -815,9 +923,11 @@ export default function OnlineMatch() {
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-7xl">
           {!gameAccepted && gameState === 'idle' && (
-            <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">1v1 Online Match</h1>
+            <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
+              1v1 Online Match
+            </h1>
           )}
-          
+
           {!showGame ? (
             gameState === 'idle' ? (
               <>
@@ -834,10 +944,12 @@ export default function OnlineMatch() {
                     className="w-full pl-12 pr-4 py-4 bg-[#2a2f3a] text-white rounded-lg border-none outline-none focus:bg-[#3a3f4a] transition-colors text-lg"
                   />
                 </div>
-                
+
                 {/* Online Players Section */}
                 <div className="mb-8">
-                  <h2 className="text-2xl font-semibold text-white mb-6">Online Players</h2>
+                  <h2 className="text-2xl font-semibold text-white mb-6">
+                    Online Players
+                  </h2>
                   <div className="space-y-2">
                     {filteredPlayers.length > 0 ? (
                       filteredPlayers.map((player, index) => (
@@ -845,13 +957,17 @@ export default function OnlineMatch() {
                           key={`${player.name}-${index}`}
                           player={player}
                           onInvite={handleInvite}
-                          isInviting={isInviting && invitedPlayer?.email === player.email}
+                          isInviting={
+                            isInviting && invitedPlayer?.email === player.email
+                          }
                         />
                       ))
                     ) : (
                       <div className="text-center py-12">
                         <p className="text-gray-400 text-lg mb-4">
-                          {searchQuery ? 'No players found matching your search.' : 'No friends online right now.'}
+                          {searchQuery
+                            ? 'No players found matching your search.'
+                            : 'No friends online right now.'}
                         </p>
                         {!searchQuery && (
                           <div className="space-y-2">
@@ -894,5 +1010,5 @@ export default function OnlineMatch() {
         </div>
       </div>
     </div>
-  );
+  )
 }
