@@ -35,13 +35,13 @@ export default function ClientLayout({
 
     checkSocket()
     const timeout = setTimeout(checkSocket, 1000)
-    
+
     return () => clearTimeout(timeout)
   }, [user])
 
   return (
     <>
-      <ToastContainer theme="dark" stacked />
+      <ToastContainer theme="dark" stacked hideProgressBar />
       <Header />
       {!socketConnected ? (
         <div className="flex items-center justify-center h-screen">

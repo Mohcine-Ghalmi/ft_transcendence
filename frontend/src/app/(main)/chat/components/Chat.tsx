@@ -78,7 +78,7 @@ const ChatHeader = () => {
           <div
             className={` ${
               onlineUsers.includes(user.email) ? 'bg-green-400' : 'bg-red-400'
-            } w-[15px] h-[15px] md:w-[25px] md:h-[25px] rounded-full border-4 border-[#1A1A1A] absolute top-0 right-0`}
+            } w-[15px] h-[15px] rounded-full border-4 border-[#1A1A1A] absolute -top-1 -right-0`}
           ></div>
         </div>
         <div className="ml-2 xl:ml-6">
@@ -167,7 +167,6 @@ const SendMessageInput = ({
       sendMessage()
     }
   }
-  console.log('chatHeader : ', chatHeader)
 
   const handleGameInviteInChat = async () => {
     await challengePlayer(
@@ -185,7 +184,6 @@ const SendMessageInput = ({
   }
 
   const send = () => {
-    // if (chatHeader.status === 'BLOCKED') return
     setImagePath(null)
     sendMessage()
   }
