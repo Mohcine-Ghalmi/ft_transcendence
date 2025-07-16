@@ -1,10 +1,11 @@
+// chat back end running on port 5006
 import { Namespace, Socket } from 'socket.io'
-import { addSocketId, removeSocketId, io, getSocketIds } from '../../socket'
-import { getFriend, getUserByEmail, getUserById } from '../user/user.service'
+import { addSocketId, removeSocketId, getSocketIds } from '../../database/redis'
 import { addMessage, getConversations } from './chat.controller'
 import { db } from '../../app'
 import CryptoJs from 'crypto-js'
-import { changeFriendStatus } from '../friends/friends.socket'
+import { io } from '../../socket'
+import { getFriend, getUserById, getUserByEmail } from '../user/user.service'
 
 interface SentMessageData {
   recieverId: number
@@ -17,6 +18,8 @@ interface SentMessageData {
 export function setupChatNamespace(chatNamespace: Namespace) {
   chatNamespace.on('connection', (socket: Socket) => {
     const cryptedMail = socket.handshake.query.cryptedMail
+    console.log('cryptedMail : ', cryptedMail)
+
     if (!cryptedMail) {
       console.error('No cryptedMail provided in handshake query')
       return
@@ -173,7 +176,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           return
         }
 
-        const friend = await getFriend(senderEmail, receiver.email)
+        const friend: any = await getFriend(senderEmail, receiver.email)
         if (!friend) {
           socket.emit(
             'failedToSendMessage',

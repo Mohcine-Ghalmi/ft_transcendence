@@ -510,10 +510,11 @@ export async function updateUserData(
         message: 'Invalid data: login and username are required',
       })
     }
-
+    /// /goinfre/msarda/tmp/backend/uploads
+    /// /goinfre/msarda/tmp/uploads
     if (avatar && oldAvatar !== 'default.avif') {
       try {
-        const filePath = path.join(__dirname, '../../uploads', oldAvatar)
+        const filePath = path.join(__dirname, '../../../uploads', oldAvatar)
         console.log('Deleting file at:', filePath)
         await fsPromises.access(filePath)
         await fsPromises.unlink(filePath)

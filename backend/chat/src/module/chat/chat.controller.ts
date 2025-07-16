@@ -1,14 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import {
-  addFriend,
-  addFriendById,
-  getFriend,
-  getUserByEmail,
-  getUserById,
-  isBlockedStatus,
-} from '../user/user.service'
+
 import { db } from '../../app'
 import axios from 'axios'
+import { isBlockedStatus, getUserById } from '../user/user.service'
 
 const fs = require('fs')
 const path = require('path')
@@ -317,7 +311,9 @@ export const generateUniqueFilename = (originalFilename: string) => {
 
 export async function downloadAndSaveImage(imageUrl: string, filename: string) {
   const response = await axios.get(imageUrl, { responseType: 'stream' })
-  const filepath = path.join(__dirname, '../../uploads', filename)
+  const filepath = path.join(__dirname, '../../../../uploads', filename)
+  console.log('filepath : ', filepath)
+
   const writer = fs.createWriteStream(filepath)
   response.data.pipe(writer)
 
@@ -336,6 +332,8 @@ export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
     }
 
     const data = await request.file()
+    //     [20:46:19.021] INFO (42455): incoming request
+    // [20:46:19.032] ERROR (42455): ENOENT: no such file or directory, open '/goinfre/msarda/tmp/backend/chat/uploads/1752695179027-2609298eef2a92e6.png'
 
     if (!data) {
       return reply
@@ -357,7 +355,10 @@ export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
     }
 
     const filename = generateUniqueFilename(data.filename)
-    const filepath = path.join(__dirname, '../../uploads', filename)
+    console.log('__dirname : ', __dirname)
+
+    const filepath = path.join(__dirname, '../../../../uploads', filename)
+    console.log('filepath : ', filepath)
 
     await pipeline(data.file, fs.createWriteStream(filepath))
 

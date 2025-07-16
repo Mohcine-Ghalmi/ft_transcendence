@@ -4,11 +4,30 @@ import server from '../../app'
 import type { CreateUserInput, LoginInput } from './user.schema'
 import { createUser, getUserByEmail } from './user.service'
 import { verifyPassword } from '../../utils/hash'
-import { sign } from 'crypto'
-import {
-  downloadAndSaveImage,
-  generateUniqueFilename,
-} from '../chat/chat.controller'
+import crypto from 'crypto'
+import path from 'path'
+import axios from 'axios'
+import fs from 'fs'
+
+export const generateUniqueFilename = (originalFilename: string) => {
+  const timestamp = Date.now()
+  const randomString = crypto.randomBytes(8).toString('hex')
+  const extension = path.extname(originalFilename) || '.png'
+  return `${timestamp}-${randomString}${extension}`
+}
+export async function downloadAndSaveImage(imageUrl: string, filename: string) {
+  const response = await axios.get(imageUrl, { responseType: 'stream' })
+  const filepath = path.join(__dirname, '../../../../uploads', filename)
+  console.log('filepath : ', filepath)
+
+  const writer = fs.createWriteStream(filepath)
+  response.data.pipe(writer)
+
+  return new Promise((resolve: any, reject) => {
+    writer.on('finish', resolve)
+    writer.on('error', reject)
+  })
+}
 
 // {
 //   id: '116279595096157558841',

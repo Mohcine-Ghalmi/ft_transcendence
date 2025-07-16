@@ -6,14 +6,13 @@ import { toast } from 'react-toastify'
 import { ConversationContainer, EmptyChat, More } from './server/ChatSide'
 import CryptoJs from 'crypto-js'
 import '@fortawesome/fontawesome-free/css/all.min.css'
+import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import {
-  axiosInstance,
-  socketInstance,
-  useAuthStore,
-} from '@/(zustand)/useAuthStore'
-import { chatSocket, useChatStore } from '@/(zustand)/useChatStore'
+  axiosChatInstance,
+  chatSocket,
+  useChatStore,
+} from '@/(zustand)/useChatStore'
 import { useRouter } from 'next/navigation'
-
 import { motion, AnimatePresence } from 'motion/react'
 import { useClickOutside } from '@/components/lib/clickOutSide'
 import { challengePlayer } from '@/utils/challengeUtils'
@@ -316,7 +315,7 @@ const Chat = () => {
     const formData = new FormData()
     formData.append('file', image)
     try {
-      const res = await axiosInstance.post('/api/chat/postImage', formData)
+      const res = await axiosChatInstance.post('/api/chat/postImage', formData)
       // toast.success('Image uploaded successfully')
       setImage(null)
       return res.data.filename

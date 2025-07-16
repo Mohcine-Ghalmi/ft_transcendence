@@ -5,17 +5,10 @@ import fs from 'fs'
 import dotenv from 'dotenv'
 
 import userRoutes from './modules/user/user.route'
-import chatRoutes from './modules/chat/chat.route'
 import mailRoutes from './modules/Mail/mail.route'
 import gameRoute from './modules/game/game.route'
 
 import { userSchemas } from './modules/user/user.schema'
-
-import {
-  addFriendById,
-  getFriend,
-  getUserByEmail,
-} from './modules/user/user.service'
 
 import { initializeMatchHistoryTable } from './modules/game/game.service'
 
@@ -131,7 +124,7 @@ async function registerPlugins() {
   })
 
   await server.register(fastifyStatic, {
-    root: path.join(__dirname, 'uploads'),
+    root: path.resolve(process.cwd(), '../uploads'),
     prefix: '/images/',
     decorateReply: false,
   })
@@ -281,7 +274,7 @@ async function registerRoutes() {
 
   server.register(userRoutes, { prefix: 'api/users' })
   server.register(mailRoutes, { prefix: 'api/mail' })
-  server.register(chatRoutes, { prefix: 'api/chat' })
+  // server.register(chatRoutes, { prefix: 'api/chat' })
   server.register(twoFARoutes, { prefix: 'api/2fa' })
   server.register(loginRouter)
   server.register(gameRoute)
