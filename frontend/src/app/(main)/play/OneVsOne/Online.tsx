@@ -197,6 +197,31 @@ export default function OnlineMatch() {
     }
   }, []);
 
+  useEffect(() => {
+    const checkExternalState = () => {
+      const externalGameStateStr = sessionStorage.getItem('externalGameState');
+      if (externalGameStateStr) {
+        try {
+          const externalGameState = JSON.parse(externalGameStateStr);
+          
+          setGameId(externalGameState.gameId);
+          setGameState(externalGameState.gameState);
+          setGameAccepted(externalGameState.gameAccepted);
+          setIsHost(externalGameState.isHost);
+          setInvitedPlayer(externalGameState.invitedPlayer);
+          
+          sessionStorage.removeItem('externalGameState');
+
+        } catch (error) {
+          sessionStorage.removeItem('externalGameState');
+        }
+      }
+    };
+    
+    const timeoutId = setTimeout(checkExternalState, 100);
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   // Handle route changes and page navigation
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -207,7 +232,6 @@ export default function OnlineMatch() {
       // Handle different game states when player leaves
       if (currentPath && newPath !== currentPath) {
         if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
-          // Player left while waiting to start - emit appropriate event for both host and guest
           if (isHost) {
             // Host leaving - emit both events to ensure guest gets notified
             socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
@@ -393,9 +417,9 @@ export default function OnlineMatch() {
           setIsHost(false);
           setInvitedPlayer({
             ...data.hostData,
-            name: data.hostData.username || data.hostData.login,
-            login: data.hostData.login,
-            avatar: data.hostData.avatar || '/avatar/Default.svg',
+            name: data.hostData?.username || data.hostData?.login,
+            login: data.hostData?.login,
+            avatar: data.hostData?.avatar || '/avatar/Default.svg',
             GameStatus: 'Available'
           });
         }
@@ -784,17 +808,6 @@ export default function OnlineMatch() {
       />
     );
   }
-
-  // Function to handle game exit (triggered by route change or manual exit)
-  // This will run for both host and guest (any player in the game)
-  const handleGameExit = () => {
-    if (socket && gameId && user?.email && gameState === 'in_game') {
-      socket.emit('LeaveGame', {
-        gameId,
-        playerEmail: user.email,
-      });
-    }
-  };
 
   return (
     <div className="h-full w-full text-white">

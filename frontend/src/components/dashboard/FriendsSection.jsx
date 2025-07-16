@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../(zustand)/useAuthStore'
+import { useGameInvite } from '../../app/(main)/play/OneVsOne/GameInviteProvider'
+import { useRouter } from 'next/navigation'
+import { challengePlayer } from '@/utils/challengeUtils'
 
-// Friends Section Component
 export const FriendsSection = () => {
-  const { userDetails, onlineUsers } = useAuthStore()
+  const { userDetails, onlineUsers, user } = useAuthStore()
+  const { socket } = useGameInvite()
   const [friends, setFriends] = useState([])
+  const router = useRouter();
 
   useEffect(() => {
     if (userDetails?.randomFriends?.length > 0) {
@@ -16,6 +20,21 @@ export const FriendsSection = () => {
       setFriends(userDetails.randomFriends)
     }
   }, [userDetails])
+
+  const handleChallenge = async (friend) => {
+    await challengePlayer(
+        {
+          email: friend.email,
+          name: friend.username,
+          username: friend.username,
+          login: friend.login,
+          avatar: friend.avatar
+        },
+        socket,
+        user,
+        router,
+      )
+  }
 
   return (
     <div className="rounded-2xl p-3 sm:p-4 lg:p-5 xl:p-6">
@@ -49,7 +68,15 @@ export const FriendsSection = () => {
                 {onlineUsers.includes(friend.email) ? 'Online' : 'Offline'}
               </p>
             </div>
-            <button className="bg-gray-700 hover:bg-gray-600 text-white px-2 sm:px-3 lg:px-4 py-1 sm:py-2 lg:py-3 rounded-lg text-xs sm:text-sm lg:text-base font-medium transition-colors">
+            <button 
+              onClick={() => handleChallenge(friend)}
+              disabled={!onlineUsers.includes(friend.email)}
+              className={`px-2 sm:px-3 lg:px-4 py-1 sm:py-2 lg:py-3 rounded-lg text-xs sm:text-sm lg:text-base font-medium transition-colors ${
+                onlineUsers.includes(friend.email)
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              }`}
+            >
               Challenge
             </button>
           </div>
