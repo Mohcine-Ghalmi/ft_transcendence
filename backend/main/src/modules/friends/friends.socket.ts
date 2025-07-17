@@ -47,7 +47,7 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
         key
       ).toString(CryptoJS.enc.Utf8)
       const invitedUser: any = await getUserByEmail(toEmail)
-      console.log('invitedUser : ', invitedUser)
+      const me: any = await getUserByEmail(myEmail)
 
       if (!invitedUser)
         return socket.emit('friendResponse', {
@@ -69,11 +69,10 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
       console.log('userSockets : ', userSockets)
 
       if (isAdded && userSockets?.length)
-        io.to(userSockets).emit('friendResponse', {
-          status: 'success',
-          message: `You Recieved A friend request from ${myEmail}`,
-          hisEmail: myEmail,
-          desc: 'PENDING',
+        io.to(userSockets).emit('newNotification', {
+          type: 'friend_request',
+          message: `You Recieved A friend request from ${me.login}`,
+          senderEmail: myEmail,
         })
     } catch (err) {
       console.log('addFriend : ', err)

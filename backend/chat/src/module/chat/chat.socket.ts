@@ -248,10 +248,16 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         }
 
         if (receiverGlobalSockets?.length) {
-          io.to(receiverGlobalSockets).emit('newMessageNotification', {
+          io.to(receiverGlobalSockets).emit('newNotification', {
             type: 'message',
-            me,
-            newMessage,
+            sender: {
+              email: me.email,
+              username: me.username,
+              id: me.id,
+              avatar: me.avatar,
+              login: me.login,
+            },
+            message: newMessage.message || 'sent you a new message',
           })
         }
       } catch (error) {
