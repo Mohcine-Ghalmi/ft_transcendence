@@ -1,90 +1,93 @@
-"use client"
-import Image from 'next/image';
-import Link from 'next/link';
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-
+'use client'
+import Image from 'next/image'
+import Link from 'next/link'
+import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useGameStore } from '@/(zustand)/useGameStore'
 
 // Ping Pong Table Illustration Component
 const PingPongTableIllustration = () => {
   return (
-     <div className="absolute inset-0 overflow-hidden">
-        <Image
-            src="/game/1v1.png"
-            alt="Play 1v1"
-            fill
-            className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/20"></div>
+    <div className="absolute inset-0 overflow-hidden">
+      <Image
+        src="/game/1v1.png"
+        alt="Play 1v1"
+        fill
+        className="w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 bg-black/20"></div>
     </div>
-  );
-};
+  )
+}
 
 // Tournament Scene Illustration Component
 const TournamentSceneIllustration = () => {
   return (
-      <div className="absolute inset-0 overflow-hidden">
-        <Image
-         src="/game/Tournemant.png" 
-            alt="Tournament Scene"
-            fill
-            className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/20"></div>
+    <div className="absolute inset-0 overflow-hidden">
+      <Image
+        src="/game/Tournemant.png"
+        alt="Tournament Scene"
+        fill
+        className="w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 bg-black/20"></div>
     </div>
-  );
-};
+  )
+}
 
 // AI Sphere Illustration Component
 const AISphereIllustration = () => {
   return (
-     <div className="absolute inset-0 overflow-hidden">
-        <Image
-         src="/game/againstAI.png" 
-            alt="AI Robot"
-            fill
-            className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/20"></div>
+    <div className="absolute inset-0 overflow-hidden">
+      <Image
+        src="/game/againstAI.png"
+        alt="AI Robot"
+        fill
+        className="w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 bg-black/20"></div>
     </div>
-    
-  );
-};
+  )
+}
 
 // Game Mode Card Component
-const GameModeCard = ({ title, description, subDescription, illustration, buttons }) => {
-    return (
-        <div className="bg-[#121417] rounded-2xl overflow-hidden hover:bg-[#252a32] transition-all duration-300 max">
-            <div className="flex flex-col lg:flex-row min-h-[360px]">
-                <div className="lg:w-1/2 relative">
-                    {illustration}
-                </div>
-                <div className="lg:w-1/2 p-8 lg:p-12 flex flex-col justify-center">
-                    <h2 className="text-2xl font-bold mb-4">{title}</h2>
-                    <p className="text-gray-400 mb-2">{description}</p>
-                    <p className="text-gray-400 mb-8">{subDescription}</p>
-                    <div className="flex justify-end space-x-4">
-                        {buttons}
-                    </div>
-                </div>
-            </div>
+const GameModeCard = ({
+  title,
+  description,
+  subDescription,
+  illustration,
+  buttons,
+}) => {
+  return (
+    <div className="bg-[#121417] rounded-2xl overflow-hidden hover:bg-[#252a32] transition-all duration-300 max">
+      <div className="flex flex-col lg:flex-row min-h-[360px]">
+        <div className="lg:w-1/2 relative">{illustration}</div>
+        <div className="lg:w-1/2 p-8 lg:p-12 flex flex-col justify-center">
+          <h2 className="text-2xl font-bold mb-4">{title}</h2>
+          <p className="text-gray-400 mb-2">{description}</p>
+          <p className="text-gray-400 mb-8">{subDescription}</p>
+          <div className="flex justify-end space-x-4">{buttons}</div>
         </div>
-    );
-};
+      </div>
+    </div>
+  )
+}
 
 // Local Games Component
 export const LocalGames = () => {
-  const router = useRouter();
+  const router = useRouter()
 
   const handleLocalGame = (gameType: string, difficulty?: string) => {
     if (gameType === 'tournament') {
-      router.push('/play/tournament');
+      router.push('/play/tournament')
     } else if (gameType === 'one-vs-one') {
-      router.push('/play/OneVsOne');
+      router.push('/play/OneVsOne')
     } else {
-      router.push(`/play/game/local/${gameType}${difficulty ? `/${difficulty}` : ''}`);
+      router.push(
+        `/play/game/local/${gameType}${difficulty ? `/${difficulty}` : ''}`
+      )
     }
-  };
+  }
 
   return (
     <div className="space-y-8">
@@ -96,7 +99,7 @@ export const LocalGames = () => {
         illustration={<PingPongTableIllustration />}
         buttons={
           <Link href={`/play/OneVsOne?mode=Local`}>
-            <button 
+            <button
               onClick={() => handleLocalGame('1v1 Match')}
               className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
@@ -113,8 +116,8 @@ export const LocalGames = () => {
         subDescription="Compete in a tournament with multiple players."
         illustration={<TournamentSceneIllustration />}
         buttons={
-        <Link href="/play/tournament?mode=Local">
-          <button 
+          <Link href="/play/tournament?mode=Local">
+            <button
               onClick={() => handleLocalGame('Tournament')}
               className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
             >
@@ -132,19 +135,19 @@ export const LocalGames = () => {
         illustration={<AISphereIllustration />}
         buttons={
           <>
-            <button 
+            <button
               onClick={() => handleLocalGame('AI', 'Easy')}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Easy
             </button>
-            <button 
+            <button
               onClick={() => handleLocalGame('AI', 'Medium')}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Medium
             </button>
-            <button 
+            <button
               onClick={() => handleLocalGame('AI', 'Hard')}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
@@ -154,22 +157,34 @@ export const LocalGames = () => {
         }
       />
     </div>
-  );
-};
+  )
+}
 
 // Online Games Component
 export const OnlineGames = () => {
-  const router = useRouter();
+  const router = useRouter()
+  const { connectSocket } = useGameStore()
+  useEffect(() => {
+    connectSocket()
+  }, [])
 
-  const handleOnlineGame = (gameType: string, difficulty?: string, action?: string) => {
+  const handleOnlineGame = (
+    gameType: string,
+    difficulty?: string,
+    action?: string
+  ) => {
     if (gameType === 'tournament') {
-      router.push('/play/tournament');
+      router.push('/play/tournament')
     } else if (gameType === 'one-vs-one') {
-      router.push('/play/OneVsOne');
+      router.push('/play/OneVsOne')
     } else {
-      router.push(`/play/${gameType}${difficulty ? `/${difficulty}` : ''}${action ? `/${action}` : ''}`);
+      router.push(
+        `/play/${gameType}${difficulty ? `/${difficulty}` : ''}${
+          action ? `/${action}` : ''
+        }`
+      )
     }
-  };
+  }
 
   return (
     <div className="space-y-8">
@@ -182,7 +197,7 @@ export const OnlineGames = () => {
         buttons={
           <>
             <Link href={`/play/OneVsOne?mode=Online`}>
-              <button 
+              <button
                 onClick={() => handleOnlineGame('1v1 Match', null, 'Invite')}
                 className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
               >
@@ -190,8 +205,10 @@ export const OnlineGames = () => {
               </button>
             </Link>
             <Link href={`/play/OneVsOne?mode=Online&matchmaking=true`}>
-              <button 
-                onClick={() => handleOnlineGame('1v1 Match', null, 'Matchmaking')}
+              <button
+                onClick={() =>
+                  handleOnlineGame('1v1 Match', null, 'Matchmaking')
+                }
                 className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
               >
                 Random Matchmaking
@@ -210,7 +227,7 @@ export const OnlineGames = () => {
         buttons={
           <>
             <Link href="/play/tournament/join">
-              <button 
+              <button
                 onClick={() => handleOnlineGame('tournament', null, 'Join')}
                 className="bg-[#BFD6ED] hover:bg-[#A7C4E2] text-black px-6 py-3 rounded-lg transition-colors duration-300"
               >
@@ -218,7 +235,7 @@ export const OnlineGames = () => {
               </button>
             </Link>
             <Link href="/play/tournament?mode=Online">
-              <button 
+              <button
                 onClick={() => handleOnlineGame('Tournament', null, 'Create')}
                 className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
               >
@@ -237,19 +254,19 @@ export const OnlineGames = () => {
         illustration={<AISphereIllustration />}
         buttons={
           <>
-            <button 
+            <button
               onClick={() => handleOnlineGame('AI', 'Easy', null)}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Easy
             </button>
-            <button 
+            <button
               onClick={() => handleOnlineGame('AI', 'Medium', null)}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
               Medium
             </button>
-            <button 
+            <button
               onClick={() => handleOnlineGame('AI', 'Hard', null)}
               className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
             >
@@ -259,5 +276,5 @@ export const OnlineGames = () => {
         }
       />
     </div>
-  );
-};
+  )
+}

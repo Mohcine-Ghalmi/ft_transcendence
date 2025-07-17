@@ -1,9 +1,16 @@
-"use client"
-import { useState } from "react";
-import { LocalGames, OnlineGames } from "./play";
+'use client'
+import { useEffect, useState } from 'react'
+import { LocalGames, OnlineGames } from './play'
+import { gameSocketInstance, useGameStore } from '@/(zustand)/useGameStore'
 
 // Tab Navigation Component
-const TabNavigation = ({ selectedTab , onTabChange } : {selectedTab : string , onTabChange : (tab: string)=>void}) => {
+const TabNavigation = ({
+  selectedTab,
+  onTabChange,
+}: {
+  selectedTab: string
+  onTabChange: (tab: string) => void
+}) => {
   return (
     <div className=" flex justify-center mb-12">
       <div className="bg-[#1e2328] rounded-full p-1 flex">
@@ -29,13 +36,17 @@ const TabNavigation = ({ selectedTab , onTabChange } : {selectedTab : string , o
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
 // Main Component
 export default function ChooseYourGame() {
-  const [selectedTab, setSelectedTab] = useState('Local');
+  const [selectedTab, setSelectedTab] = useState('Local')
+  const { connectSocket } = useGameStore()
 
+  useEffect(() => {
+    connectSocket()
+  }, [])
   return (
     <div className="h-full text-white">
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4 py-4">
@@ -44,14 +55,14 @@ export default function ChooseYourGame() {
             Choose Your Game
           </h1>
 
-          <TabNavigation 
-            selectedTab={selectedTab} 
-            onTabChange={setSelectedTab} 
+          <TabNavigation
+            selectedTab={selectedTab}
+            onTabChange={setSelectedTab}
           />
 
           {selectedTab === 'Local' ? <LocalGames /> : <OnlineGames />}
         </div>
       </div>
     </div>
-  );
+  )
 }

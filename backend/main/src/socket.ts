@@ -1,7 +1,6 @@
 import { Server } from 'socket.io'
 import { FastifyInstance } from 'fastify'
 import redis from './utils/redis'
-import { handleGameSocket } from './modules/game/game.socket'
 import { getUserByEmail } from './modules/user/user.service'
 import { createUserResponseSchema } from './modules/user/user.schema'
 import CryptoJS from 'crypto-js'
@@ -64,6 +63,7 @@ export async function cleanupStaleSocketsOnStartup() {
 import { createAdapter } from '@socket.io/redis-adapter'
 
 export async function setupSocketIO(server: FastifyInstance) {
+  // the main server running on :5005
   const subClient = redis.duplicate()
 
   io = new Server(server.server, {
@@ -120,7 +120,7 @@ export async function setupSocketIO(server: FastifyInstance) {
 
       setupUserSocket(socket, io)
       setupFriendsSocket(socket, io)
-      handleGameSocket(socket, io)
+      // handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {
         console.log('Socket disconnected:', { socketId: socket.id, userEmail })

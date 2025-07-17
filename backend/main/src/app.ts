@@ -1,16 +1,13 @@
 'use strict'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
-import path, { parse } from 'path'
+import path from 'path'
 import fs from 'fs'
 import dotenv from 'dotenv'
 
 import userRoutes from './modules/user/user.route'
 import mailRoutes from './modules/Mail/mail.route'
-import gameRoute from './modules/game/game.route'
 
 import { userSchemas } from './modules/user/user.schema'
-
-import { initializeMatchHistoryTable } from './modules/game/game.service'
 
 import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
@@ -250,22 +247,23 @@ async function registerRoutes() {
   server.register(mailRoutes, { prefix: 'api/mail' })
   server.register(twoFARoutes, { prefix: 'api/2fa' })
   server.register(loginRouter)
-  server.register(gameRoute)
 }
 
 async function startServer() {
   try {
+    const BACK_END_PORT = process.env.BACK_END_PORT as string
+    if (!BACK_END_PORT) {
+      console.error('BACK_END_PORT environment variable is not set.')
+      process.exit(1)
+    }
     await registerPlugins()
-
-    // Initialize match history table
-    await initializeMatchHistoryTable()
 
     await registerRoutes()
 
     await cleanupStaleSocketsOnStartup()
 
     await server.listen({
-      port: parseInt(process.env.BACK_END_PORT || '5005'),
+      port: parseInt(BACK_END_PORT),
       host: '0.0.0.0',
     })
 
