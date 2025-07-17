@@ -48,34 +48,6 @@ axiosGameInstance.interceptors.response.use(
   }
 )
 
-interface UserDetails {
-  LeaderBoardData: [
-    {
-      id: number
-      username: string
-      email: string
-      avatar: string
-      login: string
-      total_games: number
-      win_rate_percentage: number
-    }
-  ]
-  randomFriends: [
-    {
-      email: string
-      username: string
-      avatar: string
-      login: string
-      fromEmail: string
-      toEmail: string
-      status: string
-    }
-  ]
-  matchHistory: any[]
-  chartData: { label: string; wins: number; losses: number }[]
-  wins: number
-  losses: number
-}
 
 export let gameSocketInstance: Socket | null = null
 

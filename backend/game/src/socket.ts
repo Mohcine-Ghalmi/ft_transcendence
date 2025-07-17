@@ -52,17 +52,12 @@ export async function setupSocketIO(server: FastifyInstance) {
         const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
         const me: any = await getUserByEmail(email)
         if (!me) {
-          console.log('User not found for email:', email)
           return socket.emit('error-in-connection', {
             status: 'error',
             message: 'User not found',
           })
         }
 
-        console.log('User authenticated:', {
-          email,
-          username: (me as any).username,
-        })
         addSocketId(email, socket.id, 'sockets')
 
         // Store user email on socket for later use
@@ -73,15 +68,12 @@ export async function setupSocketIO(server: FastifyInstance) {
       handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {
-        console.log('Socket disconnected:', { socketId: socket.id, userEmail })
         if (userEmail) {
           const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
           removeSocketId(email, socket.id, 'sockets')
         }
       })
     } catch (error) {
-      console.log('Socket connection error:', error)
-
       return socket.emit('error-in-connection', {
         status: 'error',
         message: 'An error occurred during connection',
