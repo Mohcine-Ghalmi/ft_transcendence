@@ -690,11 +690,16 @@ export default function OnlineTournament() {
         addNotification({
           type: 'match_starting',
           title: 'Match Starting Soon!',
-          message: 'Your tournament match will begin shortly. Get ready!',
-          countdown: 10,
+          message: `Your tournament match will begin in ${data.countdown || 10} seconds. Get ready!`,
+          countdown: data.countdown || 10,
           tournamentId: data.tournamentId,
           matchId: data.matchId,
-          autoClose: false
+          autoClose: false,
+          autoRedirect: true,
+          redirectTo: `/play/game/${data.matchId}`,
+          onTimeout: () => {
+            router.push(`/play/game/${data.matchId}`);
+          }
         });
       }
     };
@@ -792,6 +797,7 @@ export default function OnlineTournament() {
     socket.on('TournamentCancelled', handleTournamentCancelled);
     socket.on('TournamentCancelResponse', handleTournamentCancelResponse);
     socket.on('MatchStartingSoon', handleMatchStartingSoon);
+    socket.on('GlobalMatchStartingSoon', handleMatchStartingSoon);
     socket.on('TournamentMatchReady', handleTournamentMatchReady);
     return () => {
       socket.off('TournamentCreated', handleTournamentCreated);
@@ -804,6 +810,7 @@ export default function OnlineTournament() {
       socket.off('TournamentCancelled', handleTournamentCancelled);
       socket.off('TournamentCancelResponse', handleTournamentCancelResponse);
       socket.off('MatchStartingSoon', handleMatchStartingSoon);
+      socket.off('GlobalMatchStartingSoon', handleMatchStartingSoon);
       socket.off('TournamentMatchReady', handleTournamentMatchReady);
     };
   }, [socket, tournamentId, user?.email, router]);
@@ -820,7 +827,7 @@ export default function OnlineTournament() {
     });
   };
 
-  // Handle route changes and page unload - completely remove participant tracking
+  // Handle route changes and page unload - allow free navigation for all players
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
@@ -1145,7 +1152,7 @@ export default function OnlineTournament() {
           {/* Tournament Complete Section */}
           {tournamentComplete && (
             <div className="text-center space-y-6">
-              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]">
+              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]"> 
                 <h2 className="text-3xl font-bold text-white mb-4">Tournament Complete!</h2>
                 {champion && (
                   <div className="mb-6">

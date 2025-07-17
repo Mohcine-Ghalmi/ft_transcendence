@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ToastContainer } from 'react-toastify'
+import TournamentRejoinHelper from '../../utils/tournament/TournamentRejoinHelper'
 
 export default function ClientLayout({
   children,
@@ -48,7 +49,10 @@ export default function ClientLayout({
           <div className="text-white">Connecting to server...</div>
         </div>
       ) : (
-        children
+        <>
+          {children}
+          <TournamentRejoinHelper />
+        </>
       )}
     </>
   )

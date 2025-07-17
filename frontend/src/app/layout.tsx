@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { GameInviteProvider } from './(main)/play/OneVsOne/GameInviteProvider'
 import { TournamentInviteProvider } from './(main)/play/tournament/TournamentInviteProvider'
+import { TournamentNotificationProvider } from '../utils/tournament/TournamentNotificationProvider'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -36,7 +37,11 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <GameInviteProvider>
-          <TournamentInviteProvider>{children}</TournamentInviteProvider>
+          <TournamentInviteProvider>
+            <TournamentNotificationProvider>
+              {children}
+            </TournamentNotificationProvider>
+          </TournamentInviteProvider>
         </GameInviteProvider>
       </body>
     </html>

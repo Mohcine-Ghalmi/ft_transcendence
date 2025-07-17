@@ -270,51 +270,67 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
         // Check if user is in this tournament and it's active
         const isParticipant = tournament.participants.some((p: any) => p.email === userEmail);
         
-        // IMPORTANT: Only handle disconnect forfeit for IN_PROGRESS tournaments
-        // Participants should NOT be automatically removed from lobby tournaments on disconnect
-        // They must explicitly leave using the "Leave Tournament" button (ExplicitLeaveTournament event)
+        // CRITICAL: Only handle disconnect forfeit for participants who are IN AN ACTIVE MATCH
+        // Do NOT forfeit players who are just navigating around the site
+        // They must be in an actual game match to trigger forfeit on disconnect
         if (isParticipant && tournament.status === 'in_progress') {
-          // Handle disconnect as tournament forfeit ONLY for active tournaments
-          const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
+          // Check if this player is currently in an active match
+          const activeMatch = tournament.matches.find((match: any) => 
+            match.state === 'in_progress' && 
+            (match.player1?.email === userEmail || match.player2?.email === userEmail)
+          );
           
-          const { updatedTournament, affectedMatch, forfeitedPlayer, advancingPlayer, isAutoWin } = 
-            handleTournamentPlayerForfeit(tournament, userEmail);
-          
-          // Save updated tournament
-          const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
-          await redis.setex(key, 3600, JSON.stringify(updatedTournament));
-          
-          // Notify all tournament participants
-          const allParticipantEmails = updatedTournament.participants.map((p: any) => p.email);
-          const allSocketIds: string[] = [];
-          
-          for (const email of allParticipantEmails) {
-            const socketIds = await getSocketIds(email, 'sockets') || [];
-            allSocketIds.push(...socketIds);
-          }
-          
-          if (isAutoWin) {
-            // Tournament completed due to auto-win
-            io.to(allSocketIds).emit('TournamentCompleted', {
-              tournamentId,
-              tournament: updatedTournament,
-              winner: advancingPlayer,
-              winnerEmail: advancingPlayer?.email,
-              autoWin: true,
-              message: `${advancingPlayer?.nickname} wins the tournament by default!`
-            });
+          // Only forfeit if the player is actually in an active match
+          if (activeMatch) {
+            console.log(`Player ${userEmail} disconnected from active match ${activeMatch.id}, processing forfeit`);
+            
+            // Handle disconnect as tournament forfeit ONLY for players in active matches
+            const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
+            
+            const { updatedTournament, affectedMatch, forfeitedPlayer, advancingPlayer, isAutoWin } = 
+              handleTournamentPlayerForfeit(tournament, userEmail);
+            
+            // Save updated tournament
+            const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
+            await redis.setex(key, 3600, JSON.stringify(updatedTournament));
+            
+            // Notify all tournament participants
+            const allParticipantEmails = updatedTournament.participants.map((p: any) => p.email);
+            const allSocketIds: string[] = [];
+            
+            for (const email of allParticipantEmails) {
+              const socketIds = await getSocketIds(email, 'sockets') || [];
+              allSocketIds.push(...socketIds);
+            }
+            
+            if (isAutoWin) {
+              // Tournament completed due to auto-win
+              io.to(allSocketIds).emit('TournamentCompleted', {
+                tournamentId,
+                tournament: updatedTournament,
+                winner: advancingPlayer,
+                winnerEmail: advancingPlayer?.email,
+                autoWin: true,
+                message: `${advancingPlayer?.nickname} wins the tournament by default!`
+              });
+            } else {
+              // Regular forfeit
+              io.to(allSocketIds).emit('TournamentPlayerForfeited', {
+                tournamentId,
+                forfeitedPlayer,
+                advancingPlayer,
+                affectedMatch,
+                tournament: updatedTournament,
+                message: `${forfeitedPlayer?.nickname} has disconnected and forfeited the tournament. ${advancingPlayer?.nickname} advances to the next round.`
+              });
+            }
           } else {
-            // Regular forfeit
-            io.to(allSocketIds).emit('TournamentPlayerForfeited', {
-              tournamentId,
-              forfeitedPlayer,
-              advancingPlayer,
-              affectedMatch,
-              tournament: updatedTournament,
-              message: `${forfeitedPlayer?.nickname} has disconnected and forfeited the tournament. ${advancingPlayer?.nickname} advances to the next round.`
-            });
+            // Player is in tournament but not in active match - they can disconnect freely
+            console.log(`Player ${userEmail} disconnected from tournament ${tournament.id} but not in active match - no forfeit`);
           }
         }
+        // If participant is in lobby state or not in active match, they can disconnect freely
+        // They remain in the tournament and will get global notifications
       }
     } catch (error) {
       console.error('Error handling tournament forfeit on disconnect:', error);

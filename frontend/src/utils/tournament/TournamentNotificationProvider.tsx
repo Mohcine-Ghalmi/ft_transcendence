@@ -17,8 +17,11 @@ interface TournamentNotification {
   showJoinButton?: boolean;
   autoClose?: boolean;
   duration?: number;
+  autoRedirect?: boolean;
+  redirectTo?: string;
   onJoin?: () => void;
   onIgnore?: () => void;
+  onTimeout?: () => void;
 }
 
 interface TournamentNotificationContextType {
@@ -67,7 +70,13 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
             
             // Handle timeout for match notifications
             if (notification.type === 'match_starting') {
-              if (notification.onIgnore) {
+              if (notification.onTimeout) {
+                // Call the custom timeout handler (includes auto-redirect)
+                notification.onTimeout();
+              } else if (notification.autoRedirect && notification.redirectTo) {
+                // Auto-redirect to match page
+                router.push(notification.redirectTo);
+              } else if (notification.onIgnore) {
                 notification.onIgnore();
               } else if (socket && user?.email && notification.tournamentId) {
                 // Mark player as lost due to timeout
@@ -88,7 +97,7 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
 
       return () => clearInterval(timer);
     }
-  }, [notification.countdown, notification.type, notification.tournamentId, notification.matchId, router, socket, user?.email, onClose, notification]);
+  }, [notification.countdown, notification.type, notification.tournamentId, notification.matchId, notification.onTimeout, notification.autoRedirect, notification.redirectTo, router, socket, user?.email, onClose, notification]);
 
   useEffect(() => {
     if (notification.autoClose && notification.duration) {
@@ -220,8 +229,9 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
 
 export const TournamentNotificationProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<TournamentNotification[]>([]);
-  const { user } = useAuthStore();
   const [socket, setSocket] = useState<any>(null);
+  const { user } = useAuthStore();
+  const router = useRouter();
 
   // Initialize socket connection
   useEffect(() => {
@@ -260,16 +270,22 @@ export const TournamentNotificationProvider = ({ children }: { children: ReactNo
     };
 
     const handleMatchStartingSoon = (data: any) => {
-      if (data.playerEmail === user.email) {
+      if (data.playerEmail === user?.email) {
         addNotification({
           type: 'match_starting',
           title: 'Your Match is Starting!',
-          message: `Your tournament match will begin in 10 seconds. Join now or you'll be marked as lost!`,
+          message: `Your tournament match will begin in 10 seconds. Get ready!`,
           countdown: 10,
           tournamentId: data.tournamentId,
           matchId: data.matchId,
           showJoinButton: true,
-          autoClose: false
+          autoClose: false,
+          autoRedirect: true,
+          redirectTo: `/play/game/${data.matchId}`,
+          onTimeout: () => {
+            // Auto-redirect to match page after 10 seconds
+            router.push(`/play/game/${data.matchId}`);
+          }
         });
       }
     };
@@ -286,15 +302,41 @@ export const TournamentNotificationProvider = ({ children }: { children: ReactNo
       });
     };
 
+    // Handle global tournament notifications (match starting, etc.)
+    const handleGlobalTournamentNotification = (data: any) => {
+      if (data.type === 'match_starting' && data.tournamentId && data.matchId && data.countdown) {
+        // Show notification to user
+        addNotification({
+          type: 'match_starting',
+          title: data.title || '⚡ Your Match is Starting!',
+          message: data.message || `Your match will begin in ${data.countdown} seconds!`,
+          countdown: data.countdown,
+          tournamentId: data.tournamentId,
+          matchId: data.matchId,
+          autoClose: true,
+          duration: data.countdown * 1000,
+          showJoinButton: true,
+          autoRedirect: true,
+          redirectTo: `/play/game/${data.matchId}`,
+          onTimeout: () => {
+            // Auto-redirect to match page after countdown
+            router.push(`/play/game/${data.matchId}`);
+          }
+        });
+      }
+    };
+
     // Global socket listeners
     socket.on('GlobalTournamentStarted', handleTournamentStarted);
     socket.on('GlobalMatchStartingSoon', handleMatchStartingSoon);
     socket.on('GlobalTournamentBracketReady', handleTournamentBracketReady);
+    socket.on('GlobalTournamentNotification', handleGlobalTournamentNotification);
 
     return () => {
       socket.off('GlobalTournamentStarted', handleTournamentStarted);
       socket.off('GlobalMatchStartingSoon', handleMatchStartingSoon);
       socket.off('GlobalTournamentBracketReady', handleTournamentBracketReady);
+      socket.off('GlobalTournamentNotification', handleGlobalTournamentNotification);
     };
   }, [socket, user?.email]);
 

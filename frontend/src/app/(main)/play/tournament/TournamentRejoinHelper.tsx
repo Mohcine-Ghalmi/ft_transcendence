@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/(zustand)/useAuthStore';
 import { getGameSocketInstance } from '@/(zustand)/useGameStore'
-import { useTournamentNotifications } from './TournamentNotificationProvider';
+import { useTournamentNotifications } from '../../../../utils/tournament/TournamentNotificationProvider';
 
 interface ActiveTournament {
   tournamentId: string;
