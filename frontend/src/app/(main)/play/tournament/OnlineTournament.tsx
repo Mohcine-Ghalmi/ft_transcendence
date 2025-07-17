@@ -11,32 +11,28 @@ import { useAuthStore } from '@/(zustand)/useAuthStore'
 import CryptoJS from 'crypto-js'
 import { PlayerListItem } from '../../play/OneVsOne/Online'
 import { getGameSocketInstance } from '@/(zustand)/useGameStore'
+import { useTournamentNotifications } from '../../../../utils/tournament/TournamentNotificationProvider';
 
 interface Player {
-  name: string
-  email: string
-  avatar: string
-  GameStatus: string
-  nickname: string
+  name: string;
+  email: string;
+  avatar: string;
+  GameStatus: string;
+  nickname: string;
 }
 
 interface OnlinePlayModeProps {
-  onInvitePlayer: (player: Player) => void
-  pendingInvites: Map<string, any>
-  sentInvites: Map<string, any>
+  onInvitePlayer: (player: Player) => void;
+  pendingInvites: Map<string, any>;
+  sentInvites: Map<string, any>;
 }
 
-const OnlinePlayMode = ({
-  onInvitePlayer,
-  pendingInvites,
-  sentInvites,
-  friends,
-}: OnlinePlayModeProps & { friends: Player[] }) => {
-  const [searchQuery, setSearchQuery] = useState('')
+const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends }: OnlinePlayModeProps & { friends: Player[] }) => {
+  const [searchQuery, setSearchQuery] = useState('');
   // Use the same filtering logic as OneVsOne
-  const filteredPlayers = friends.filter((player) =>
+  const filteredPlayers = friends.filter(player =>
     player.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  );
   return (
     <div className="bg-[#0f1419] rounded-lg p-6 border border-[#2a2f3a]">
       <h3 className="text-white text-xl font-semibold mb-4">Invite Players</h3>
@@ -69,9 +65,7 @@ const OnlinePlayMode = ({
         ) : (
           <div className="text-center py-8">
             <p className="text-gray-400 text-lg mb-4">
-              {searchQuery
-                ? 'No players found matching your search.'
-                : 'No friends online right now.'}
+              {searchQuery ? 'No players found matching your search.' : 'No friends online right now.'}
             </p>
             {!searchQuery && (
               <div className="space-y-2">
@@ -90,23 +84,20 @@ const OnlinePlayMode = ({
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-const ParticipantItem = ({
-  player,
-  isHost,
-}: {
-  player: any
-  isHost: boolean
+const ParticipantItem = ({ player, isHost }: {
+  player: any;
+  isHost: boolean;
 }) => {
   return (
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
-        <Image
-          src={`/images/${player.avatar}`}
-          alt={player.login || 'zahay'}
-          width={40}
+        <Image 
+          src={`/images/${player.avatar}`} 
+          alt={player.login || "zahay"} 
+          width={40}  
           height={40}
           className="w-full h-full object-cover"
         />
@@ -116,32 +107,27 @@ const ParticipantItem = ({
         {player.nickname && player.nickname !== player.login && (
           <div className="text-gray-400 text-sm">{player.nickname}</div>
         )}
-        {player.isHost && <div className="text-blue-400 text-xs">Host</div>}
+        {player.isHost && (
+          <div className="text-blue-400 text-xs">Host</div>
+        )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-const RoundControls = ({
-  currentRound,
-  totalRounds,
-  onAdvanceRound,
-  canAdvance,
-}: {
-  currentRound: number
-  totalRounds: number
-  onAdvanceRound: () => void
-  canAdvance: boolean
+const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }: {
+  currentRound: number;
+  totalRounds: number;
+  onAdvanceRound: () => void;
+  canAdvance: boolean;
 }) => {
   return (
     <div className="flex items-center justify-center mb-6 bg-[#1a1d23] rounded-lg p-4 border border-[#2a2f3a]">
       <div className="flex items-center space-x-3">
         <span className="text-white text-lg">Round:</span>
-        <span className="text-blue-400 font-bold text-xl">
-          {currentRound + 1}/{totalRounds}
-        </span>
+        <span className="text-blue-400 font-bold text-xl">{currentRound + 1}/{totalRounds}</span>
       </div>
-
+      
       <button
         onClick={onAdvanceRound}
         disabled={!canAdvance}
@@ -151,99 +137,138 @@ const RoundControls = ({
             : 'bg-[#2a2f3a] cursor-not-allowed opacity-50 border border-[#3a3f4a]'
         }`}
       >
-        {currentRound + 1 === totalRounds ? 'End Tournament' : 'Next Round'}
+        {currentRound + 1 === totalRounds ? "End Tournament" : "Next Round"}
       </button>
     </div>
-  )
-}
+  );
+};
 
 // Main Tournament Component
 export default function OnlineTournament() {
-  const { user } = useAuthStore()
-  const router = useRouter()
-  const [tournamentState, setTournamentState] = useState('setup') // setup, lobby, in_progress
-  const [tournamentName, setTournamentName] = useState(
-    'Online Pong Championship'
-  )
-  const [tournamentNameError, setTournamentNameError] = useState<string | null>(
-    null
-  )
-  const [tournamentSize, setTournamentSize] = useState(4)
-  const [tournamentId, setTournamentId] = useState<string | null>(null)
-  const [currentRound, setCurrentRound] = useState(0)
-  const [participants, setParticipants] = useState(
-    user
-      ? [
-          {
-            id: user.id || 'host',
-            login: user.name,
-            avatar: user.avatar,
-            nickname: user.nickname,
-            isHost: true,
-          },
-        ]
-      : []
-  )
-  const [matches, setMatches] = useState([])
-  const [sentInvites, setSentInvites] = useState(new Map())
-  const [pendingInvites, setPendingInvites] = useState(new Map())
-  const [tournamentComplete, setTournamentComplete] = useState(false)
-  const [champion, setChampion] = useState(null)
-  const [tournaments, setTournaments] = useState([])
-  const [friends, setFriends] = useState<Player[]>([])
-  const [isInviting, setIsInviting] = useState(false)
-  const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null)
-  const [inviteId, setInviteId] = useState<string | null>(null)
-  const [waitTime, setWaitTime] = useState(30)
-  const [waitingForResponse, setWaitingForResponse] = useState(false)
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const { addNotification } = useTournamentNotifications();
+  const [tournamentState, setTournamentState] = useState('setup'); // setup, lobby, in_progress
+  const [tournamentName, setTournamentName] = useState('Online Pong Championship');
+  const [tournamentNameError, setTournamentNameError] = useState<string | null>(null);
+  const [tournamentSize, setTournamentSize] = useState(4);
+  const [tournamentId, setTournamentId] = useState<string | null>(null);
+  const [currentRound, setCurrentRound] = useState(0);
+  const [participants, setParticipants] = useState(user ? [{
+    id: user.id || 'host',
+    login: user.name, 
+    avatar: user.avatar,
+    nickname: user.nickname,
+    isHost: true
+  }] : []);
+  const [matches, setMatches] = useState([]);
+  const [sentInvites, setSentInvites] = useState(new Map());
+  const [pendingInvites, setPendingInvites] = useState(new Map());
+  const [tournamentComplete, setTournamentComplete] = useState(false);
+  const [champion, setChampion] = useState(null);
+  const [tournaments, setTournaments] = useState([]);
+  const [friends, setFriends] = useState<Player[]>([]);
+  const [isInviting, setIsInviting] = useState(false);
+  const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null);
+  const [inviteId, setInviteId] = useState<string | null>(null);
+  const [waitTime, setWaitTime] = useState(30);
+  const [waitingForResponse, setWaitingForResponse] = useState(false);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const totalRounds = Math.log2(tournamentSize)
+  const totalRounds = Math.log2(tournamentSize);
 
   // Use getSocketInstance at runtime
-  const [socket, setSocket] = useState<any>(null)
+  const [socket, setSocket] = useState<any>(null);
 
   // Initialize socket connection
   useEffect(() => {
-    const socketInstance = getGameSocketInstance()
+    const socketInstance = getGameSocketInstance();
     if (socketInstance) {
-      setSocket(socketInstance)
+      setSocket(socketInstance);
     }
-  }, [])
+  }, []);
+
+  // Check for active tournament participation on component mount
+  useEffect(() => {
+    if (!socket || !user?.email) return;
+
+    // Check if user is part of any active tournament
+    const checkActiveTournaments = () => {
+      socket.emit('CheckUserTournamentStatus', { userEmail: user.email });
+    };
+
+    const handleUserTournamentStatus = (data: any) => {
+      if (data.activeTournament && tournamentState === 'setup') {
+        // User is part of an active tournament, rejoin it
+        setTournamentId(data.activeTournament.tournamentId);
+        setTournamentName(data.activeTournament.name);
+        setTournamentState(data.activeTournament.status);
+        setTournamentSize(data.activeTournament.size);
+        
+        if (data.activeTournament.participants) {
+          const formattedParticipants = data.activeTournament.participants.map((p: any) => ({
+            id: p.email,
+            login: p.nickname,
+            avatar: p.avatar,
+            nickname: p.nickname,
+            isHost: p.isHost,
+            email: p.email
+          }));
+          setParticipants(formattedParticipants);
+        }
+
+        // Show notification that user has been rejoined
+        addNotification({
+          type: 'tournament_info',
+          title: 'Rejoined Tournament',
+          message: `Welcome back to "${data.activeTournament.name}"! You were automatically rejoined.`,
+          tournamentId: data.activeTournament.tournamentId,
+          showBracketLink: data.activeTournament.status !== 'lobby',
+          autoClose: true,
+          duration: 5000
+        });
+      }
+    };
+
+    socket.on('UserTournamentStatus', handleUserTournamentStatus);
+    checkActiveTournaments();
+
+    return () => {
+      socket.off('UserTournamentStatus', handleUserTournamentStatus);
+    };
+  }, [socket, user?.email, tournamentState, addNotification]);
 
   // Fetch tournaments from backend
   useEffect(() => {
-    if (!socket) return
-
-    socket.emit('ListTournaments')
-
+    if (!socket) return;
+    
+    socket.emit('ListTournaments');
+    
     const handleTournamentList = (data: any) => {
-      setTournaments(data)
-    }
-
-    socket.on('TournamentList', handleTournamentList)
-
+      setTournaments(data);
+    };
+    
+    socket.on('TournamentList', handleTournamentList);
+    
     return () => {
-      socket.off('TournamentList', handleTournamentList)
-    }
-  }, [socket])
+      socket.off('TournamentList', handleTournamentList);
+    };
+  }, [socket]);
 
   useEffect(() => {
     async function fetchFriends() {
-      if (!user?.email) return
-
+      if (!user?.email) return;
+      
       try {
-        const res = await fetch(
-          `http://localhost:5005/api/users/friends?email=${user.email}`
-        )
-
+        const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
+        
         if (!res.ok) {
-          setFriends([])
-          return
+          setFriends([]);
+          return;
         }
-
-        const data = await res.json()
-
+        
+        const data = await res.json();
+        
         if (data.friends && Array.isArray(data.friends)) {
           const formatted = data.friends.map((f, index) => ({
             id: f.id || `friend-${index}`,
@@ -252,739 +277,662 @@ export default function OnlineTournament() {
             nickname: f.login,
             GameStatus: 'Available',
             ...f,
-          }))
-          setFriends(formatted)
+          }));
+          setFriends(formatted);
         } else {
-          setFriends([])
+          setFriends([]);
         }
       } catch (err) {
-        setFriends([])
+        setFriends([]);
       }
     }
-    fetchFriends()
-  }, [user])
+    fetchFriends();
+  }, [user]);
 
   // Helper function to get display name
   const getDisplayName = (player: any) => {
-    return player?.nickname?.trim() || player?.login || 'Unknown Player'
-  }
+    return player?.nickname?.trim() || player?.login || 'Unknown Player';
+  };
 
   // Handle match updates
-  const handleMatchUpdate = (
-    roundIndex: number,
-    matchIndex: number,
-    newState: string
-  ) => {
-    setMatches((prevMatches) => {
-      const updatedMatches = [...prevMatches]
+  const handleMatchUpdate = (roundIndex: number, matchIndex: number, newState: string) => {
+    setMatches(prevMatches => {
+      const updatedMatches = [...prevMatches];
       const matchToUpdateIndex = updatedMatches.findIndex(
-        (m) => m.round === roundIndex && m.matchIndex === matchIndex
-      )
-
-      if (matchToUpdateIndex === -1) return prevMatches
-
-      const matchToUpdate = { ...updatedMatches[matchToUpdateIndex] }
-      matchToUpdate.state = newState
-      updatedMatches[matchToUpdateIndex] = matchToUpdate
-
+        m => m.round === roundIndex && m.matchIndex === matchIndex
+      );
+      
+      if (matchToUpdateIndex === -1) return prevMatches;
+      
+      const matchToUpdate = { ...updatedMatches[matchToUpdateIndex] };
+      matchToUpdate.state = newState;
+      updatedMatches[matchToUpdateIndex] = matchToUpdate;
+      
       // If we have a winner, update next round's match
-      if (
-        newState === MATCH_STATES.PLAYER1_WIN ||
-        newState === MATCH_STATES.PLAYER2_WIN
-      ) {
-        const winner =
-          newState === MATCH_STATES.PLAYER1_WIN
-            ? matchToUpdate.player1
-            : matchToUpdate.player2
-
+      if (newState === MATCH_STATES.PLAYER1_WIN || newState === MATCH_STATES.PLAYER2_WIN) {
+        const winner = newState === MATCH_STATES.PLAYER1_WIN ? matchToUpdate.player1 : matchToUpdate.player2;
+        
         // Check if this is the final match
         if (roundIndex === totalRounds - 1) {
-          setChampion(winner)
-          setTournamentComplete(true)
+          setChampion(winner);
+          setTournamentComplete(true);
         }
         // Calculate position in next round
         else if (roundIndex < totalRounds - 1) {
-          const nextRound = roundIndex + 1
-          const nextMatchIndex = Math.floor(matchIndex / 2)
-          const isFirstMatchOfPair = matchIndex % 2 === 0
-
+          const nextRound = roundIndex + 1;
+          const nextMatchIndex = Math.floor(matchIndex / 2);
+          const isFirstMatchOfPair = matchIndex % 2 === 0;
+          
           const nextMatchIndex2 = updatedMatches.findIndex(
-            (m) => m.round === nextRound && m.matchIndex === nextMatchIndex
-          )
-
+            m => m.round === nextRound && m.matchIndex === nextMatchIndex
+          );
+          
           if (nextMatchIndex2 !== -1) {
-            const nextMatch = { ...updatedMatches[nextMatchIndex2] }
-
+            const nextMatch = { ...updatedMatches[nextMatchIndex2] };
+            
             // Update player1 or player2 based on which match this was
             if (isFirstMatchOfPair) {
-              nextMatch.player1 = winner
+              nextMatch.player1 = winner;
             } else {
-              nextMatch.player2 = winner
+              nextMatch.player2 = winner;
             }
-
-            updatedMatches[nextMatchIndex2] = nextMatch
+            
+            updatedMatches[nextMatchIndex2] = nextMatch;
           }
         }
       }
-
-      return updatedMatches
-    })
-  }
+      
+      return updatedMatches;
+    });
+  };
 
   // Check if all matches in current round are completed
   const canAdvanceRound = () => {
-    const currentRoundMatches = matches.filter((m) => m.round === currentRound)
-    return (
-      currentRoundMatches.length > 0 &&
-      currentRoundMatches.every(
-        (m) =>
-          m.state === MATCH_STATES.PLAYER1_WIN ||
-          m.state === MATCH_STATES.PLAYER2_WIN
-      )
-    )
-  }
+    const currentRoundMatches = matches.filter(m => m.round === currentRound);
+    return currentRoundMatches.length > 0 && currentRoundMatches.every(m => 
+      m.state === MATCH_STATES.PLAYER1_WIN || m.state === MATCH_STATES.PLAYER2_WIN
+    );
+  };
 
   // Advance to next round
   const advanceRound = () => {
     if (currentRound < totalRounds - 1) {
-      setCurrentRound((prevRound) => prevRound + 1)
+      setCurrentRound(prevRound => prevRound + 1);
     } else {
       // Tournament is completed
-      const finalMatch = matches.find(
-        (m) => m.round === totalRounds - 1 && m.matchIndex === 0
-      )
+      const finalMatch = matches.find(m => m.round === totalRounds - 1 && m.matchIndex === 0);
       if (finalMatch) {
-        const winner =
-          finalMatch.state === MATCH_STATES.PLAYER1_WIN
-            ? finalMatch.player1
-            : finalMatch.player2
-        setChampion(winner)
+        const winner = finalMatch.state === MATCH_STATES.PLAYER1_WIN ? 
+          finalMatch.player1 : finalMatch.player2;
+        setChampion(winner);
       }
-      setTournamentComplete(true)
+      setTournamentComplete(true);
     }
-  }
+  };
 
   // Start tournament logic - only creates bracket and redirects players
   const startTournament = () => {
     if (!tournamentId || !socket) {
-      return
+      return;
     }
-    socket.emit('StartTournament', { tournamentId, hostEmail: user.email })
-  }
+    socket.emit('StartTournament', { tournamentId, hostEmail: user.email });
+  };
 
-  // Start matches for current round
+  // Start matches for current round with global notifications
   const startCurrentRoundMatches = () => {
     if (!tournamentId || !socket) {
-      return
+      return;
     }
-    socket.emit('StartCurrentRound', { tournamentId, hostEmail: user.email })
-  }
+    
+    // Emit to backend to start the round and send notifications to all players
+    socket.emit('StartCurrentRound', { 
+      tournamentId, 
+      hostEmail: user.email,
+      notifyCountdown: 10 // 10 second countdown for players to join matches
+    });
+  };
 
   // Tournament invite handler (encrypt and emit)
   const handleInvitePlayer = async (player: Player) => {
     if (participants.length >= tournamentSize || !tournamentId || !socket) {
-      return
+      return;
     }
-    setIsInviting(true)
-    setInvitedPlayer(player)
-    setWaitingForResponse(true)
-    setWaitTime(30)
-    setInviteId(null)
+    setIsInviting(true);
+    setInvitedPlayer(player);
+    setWaitingForResponse(true);
+    setWaitTime(30);
+    setInviteId(null);
     if (!process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
-      setIsInviting(false)
-      setWaitingForResponse(false)
-      return
+      setIsInviting(false);
+      setWaitingForResponse(false);
+      return;
     }
     const inviteData = {
       tournamentId: tournamentId,
       hostEmail: user.email,
-      inviteeEmail: player.email,
-    }
+      inviteeEmail: player.email
+    };
     const encrypted = CryptoJS.AES.encrypt(
       JSON.stringify(inviteData),
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY
-    ).toString()
-    socket.emit('InviteToTournament', encrypted)
+    ).toString();
+    socket.emit('InviteToTournament', encrypted);
     // Start countdown
-    if (countdownIntervalRef.current)
-      clearInterval(countdownIntervalRef.current)
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     countdownIntervalRef.current = setInterval(() => {
-      setWaitTime((prev) => {
+      setWaitTime(prev => {
         if (prev <= 1) {
-          clearInterval(countdownIntervalRef.current!)
-          setWaitingForResponse(false)
-          setIsInviting(false)
-          setInvitedPlayer(null)
-          setInviteId(null)
-          return 0
+          clearInterval(countdownIntervalRef.current!);
+          setWaitingForResponse(false);
+          setIsInviting(false);
+          setInvitedPlayer(null);
+          setInviteId(null);
+          return 0;
         }
-        return prev - 1
-      })
-    }, 1000)
-  }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   // Socket event listeners for tournament invite
   useEffect(() => {
-    if (!socket) return
+    if (!socket) return;
     const handleInviteResponse = (data: any) => {
       if (data.status === 'success' && data.type === 'invite_sent') {
-        setInviteId(data.inviteId)
+        setInviteId(data.inviteId);
       } else if (data.status === 'error') {
-        setIsInviting(false)
-        setWaitingForResponse(false)
-        setInvitedPlayer(null)
-        setInviteId(null)
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
       }
-    }
+    };
     const handleInviteAccepted = (data: any) => {
       if (data.inviteId === inviteId) {
-        setIsInviting(false)
-        setWaitingForResponse(false)
-        setInvitedPlayer(null)
-        setInviteId(null)
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
         if (data.newParticipant) {
-          setParticipants((prev) => [...prev, data.newParticipant])
+          setParticipants(prev => [...prev, data.newParticipant]);
         }
       }
-    }
+    };
     const handleInviteDeclined = (data: any) => {
       if (data.inviteId === inviteId) {
-        setIsInviting(false)
-        setWaitingForResponse(false)
-        setInvitedPlayer(null)
-        setInviteId(null)
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
       }
-    }
+    };
     const handleInviteTimeout = (data: any) => {
       if (data.inviteId === inviteId) {
-        setIsInviting(false)
-        setWaitingForResponse(false)
-        setInvitedPlayer(null)
-        setInviteId(null)
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
       }
-    }
+    };
     const handleInviteCanceled = (data: any) => {
       if (data.inviteId === inviteId) {
-        setIsInviting(false)
-        setWaitingForResponse(false)
-        setInvitedPlayer(null)
-        setInviteId(null)
+        setIsInviting(false);
+        setWaitingForResponse(false);
+        setInvitedPlayer(null);
+        setInviteId(null);
       }
-    }
-    socket.on('InviteToTournamentResponse', handleInviteResponse)
-    socket.on('TournamentInviteAccepted', handleInviteAccepted)
-    socket.on('TournamentInviteDeclined', handleInviteDeclined)
-    socket.on('TournamentInviteTimeout', handleInviteTimeout)
-    socket.on('TournamentInviteCanceled', handleInviteCanceled)
+    };
+    socket.on('InviteToTournamentResponse', handleInviteResponse);
+    socket.on('TournamentInviteAccepted', handleInviteAccepted);
+    socket.on('TournamentInviteDeclined', handleInviteDeclined);
+    socket.on('TournamentInviteTimeout', handleInviteTimeout);
+    socket.on('TournamentInviteCanceled', handleInviteCanceled);
     return () => {
-      socket.off('InviteToTournamentResponse', handleInviteResponse)
-      socket.off('TournamentInviteAccepted', handleInviteAccepted)
-      socket.off('TournamentInviteDeclined', handleInviteDeclined)
-      socket.off('TournamentInviteTimeout', handleInviteTimeout)
-      socket.off('TournamentInviteCanceled', handleInviteCanceled)
-      if (countdownIntervalRef.current)
-        clearInterval(countdownIntervalRef.current)
-    }
-  }, [socket, inviteId, user?.email])
+      socket.off('InviteToTournamentResponse', handleInviteResponse);
+      socket.off('TournamentInviteAccepted', handleInviteAccepted);
+      socket.off('TournamentInviteDeclined', handleInviteDeclined);
+      socket.off('TournamentInviteTimeout', handleInviteTimeout);
+      socket.off('TournamentInviteCanceled', handleInviteCanceled);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, [socket, inviteId, user?.email]);
 
   // Cancel invite
   const handleCancelInvite = () => {
     if (socket && inviteId && user?.email) {
-      socket.emit('CancelTournamentInvite', { inviteId, hostEmail: user.email })
+      socket.emit('CancelTournamentInvite', { inviteId, hostEmail: user.email });
     }
-    setIsInviting(false)
-    setWaitingForResponse(false)
-    setInvitedPlayer(null)
-    setInviteId(null)
-    if (countdownIntervalRef.current)
-      clearInterval(countdownIntervalRef.current)
-  }
+    setIsInviting(false);
+    setWaitingForResponse(false);
+    setInvitedPlayer(null);
+    setInviteId(null);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+  };
 
   const leaveTournament = () => {
     if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
       // Check if user is the host
-      const isHost = participants.some(
-        (p) =>
-          (p.id === user.id ||
-            p.id === user.email ||
-            (p as any).email === user.email) &&
-          p.isHost
-      )
-
+      const isHost = participants.some(p => 
+        (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+      );
+      
       if (isHost) {
-        handleCancelTournament()
+        // Host cancels the entire tournament
+        handleCancelTournament();
       } else {
-        // Participant leaves the tournament
-        socket.emit('LeaveTournament', {
+        // Participants explicitly leave tournament (button click only)
+        // This is different from navigation - this actually removes them
+        socket.emit('ExplicitLeaveTournament', {
           tournamentId,
           playerEmail: user.email,
-        })
-
-        // Reset local state for participants immediately
-        setTournamentId(null)
-        setParticipants([
-          {
-            id: user.id || user.nickname || 'host',
-            login: user.name,
-            avatar: user.avatar,
-            nickname: user.nickname,
-            isHost: true,
-          },
-        ])
-        setMatches([])
-        setCurrentRound(0)
-        setTournamentState('setup')
-        setSentInvites(new Map())
-        setPendingInvites(new Map())
-        setTournamentComplete(false)
-        setChampion(null)
-        return
+          reason: 'explicit_leave_button'
+        });
+        
+        // Reset local state for participants after explicit leave
+        setTournamentId(null);
+        setParticipants([{
+          id: user.id || user.nickname || 'host',
+          login: user.name, 
+          avatar: user.avatar,
+          nickname: user.nickname,
+          isHost: true
+        }]);
+        setMatches([]);
+        setCurrentRound(0);
+        setTournamentState('setup');
+        setSentInvites(new Map());
+        setPendingInvites(new Map());
+        setTournamentComplete(false);
+        setChampion(null);
+        return;
       }
     }
-
+    
     // Reset local state for host after canceling or if not in lobby
-    setTournamentId(null)
-    setParticipants([
-      {
-        id: user.id || user.nickname || 'host',
-        login: user.name,
-        avatar: user.avatar,
-        nickname: user.nickname,
-        isHost: true,
-      },
-    ])
-    setMatches([])
-    setCurrentRound(0)
-    setTournamentState('setup')
-    setSentInvites(new Map())
-    setPendingInvites(new Map())
-    setTournamentComplete(false)
-    setChampion(null)
-  }
+    setTournamentId(null);
+    setParticipants([{
+      id: user.id || user.nickname || 'host',
+      login: user.name, 
+      avatar: user.avatar,
+      nickname: user.nickname,
+      isHost: true
+    }]);
+    setMatches([]);
+    setCurrentRound(0);
+    setTournamentState('setup');
+    setSentInvites(new Map());
+    setPendingInvites(new Map());
+    setTournamentComplete(false);
+    setChampion(null);
+  };
 
   // Reset tournament
   const resetTournament = () => {
-    leaveTournament()
-  }
+    leaveTournament();
+  };
 
   // Get players who are still in the tournament (not eliminated)
   const getActivePlayers = () => {
-    const eliminatedPlayerIds = new Set()
-
+    const eliminatedPlayerIds = new Set();
+    
     // Find all eliminated players
-    matches.forEach((match) => {
+    matches.forEach(match => {
       if (match.state === MATCH_STATES.PLAYER1_WIN && match.player2) {
-        eliminatedPlayerIds.add(match.player2.id)
+        eliminatedPlayerIds.add(match.player2.id);
       } else if (match.state === MATCH_STATES.PLAYER2_WIN && match.player1) {
-        eliminatedPlayerIds.add(match.player1.id)
+        eliminatedPlayerIds.add(match.player1.id);
       }
-    })
-
+    });
+    
     // Return active players
-    return participants.filter((p) => !eliminatedPlayerIds.has(p.id))
-  }
+    return participants.filter(p => !eliminatedPlayerIds.has(p.id));
+  };
 
   // Create tournament handler
   const handleCreateTournament = () => {
     // Clear any existing errors
-    setTournamentNameError(null)
-
+    setTournamentNameError(null);
+    
     if (!tournamentName || tournamentName.trim().length === 0) {
-      setTournamentNameError('Please enter a tournament name')
-      return
+      setTournamentNameError('Please enter a tournament name');
+      return;
     }
-
+    
     if (!user?.email || !socket) {
-      return
+      return;
     }
-
+    
     socket.emit('CreateTournament', {
       name: tournamentName,
       hostEmail: user.email,
       hostNickname: user.login || user.name || user.username,
       hostAvatar: user.avatar,
       size: tournamentSize,
-    })
-  }
+    });
+  };
 
   // Handle tournament creation response
   useEffect(() => {
-    if (!socket) return
+    if (!socket) return;
     const handleTournamentCreated = (tournament: any) => {
-      setTournamentId(tournament.tournamentId)
-      setTournamentState('lobby')
+      setTournamentId(tournament.tournamentId);
+      setTournamentState('lobby');
       // Clear any name errors on successful creation
-      setTournamentNameError(null)
-    }
+      setTournamentNameError(null);
+    };
     const handleTournamentError = (error: any) => {
       // Check if it's a duplicate name error
-      if (
-        error.message &&
-        error.message.toLowerCase().includes('name') &&
-        error.message.toLowerCase().includes('exists')
-      ) {
-        setTournamentNameError(error.message)
+      if (error.message && error.message.toLowerCase().includes('name') && error.message.toLowerCase().includes('exists')) {
+        setTournamentNameError(error.message);
       }
-    }
+    };
     const handleTournamentUpdated = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        const updatedParticipants = data.tournament.participants.map(
-          (p: any) => ({
+        const updatedParticipants = data.tournament.participants.map((p: any) => ({
+          id: p.email,
+          login: p.nickname,
+          avatar: p.avatar,
+          nickname: p.nickname,
+          isHost: p.isHost,
+          email: p.email
+        }));
+        setParticipants(updatedParticipants);
+        
+        // Also update other tournament properties if they've changed
+        if (data.tournament.status !== tournamentState)
+          setTournamentState(data.tournament.status);
+      }
+    };
+    const handleTournamentReady = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentState('ready');
+      }
+    };
+    const handleTournamentStarted = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentState('in_progress');
+        
+        // Check if user is the host
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
+        if (isHost) {
+          // Host gets notification about joining the game bracket
+          addNotification({
+            type: 'tournament_started',
+            title: 'Tournament Started!',
+            message: 'Your tournament has begun! You can now view the bracket and manage matches.',
+            tournamentId: data.tournamentId,
+            showBracketLink: true,
+            autoClose: false
+          });
+          
+          // Redirect host to tournament page
+          router.push(`/play/tournament/${tournamentId}`);
+        } else {
+          // Participants get notification about tournament start
+          addNotification({
+            type: 'tournament_started',
+            title: 'Tournament Started!',
+            message: 'The tournament has begun! Check the bracket and wait for your match.',
+            tournamentId: data.tournamentId,
+            showBracketLink: true,
+            autoClose: false
+          });
+        }
+      }
+    };
+    
+    const handleMatchStartingSoon = (data: any) => {
+      if (data.tournamentId === tournamentId && data.playerEmail === user?.email) {
+        // Player has a match starting soon - show countdown using global notification
+        addNotification({
+          type: 'match_starting',
+          title: 'Match Starting Soon!',
+          message: 'Your tournament match will begin shortly. Get ready!',
+          countdown: 10,
+          tournamentId: data.tournamentId,
+          matchId: data.matchId,
+          autoClose: false
+        });
+      }
+    };
+    
+    const handleTournamentMatchReady = (data: any) => {
+      if (data.tournamentId === tournamentId && 
+          (data.player1Email === user?.email || data.player2Email === user?.email)) {
+        // This player's match is ready - use global notification
+        addNotification({
+          type: 'match_starting',
+          title: 'Match Ready!',
+          message: 'Your tournament match is about to start!',
+          tournamentId: data.tournamentId,
+          matchId: data.matchId,
+          autoClose: true,
+          duration: 3000
+        });
+      }
+    };
+    const handleTournamentStartResponse = (data: any) => {
+      if (data.status === 'error') {
+        // Handle tournament start error
+      }
+    };
+    const handleTournamentParticipantLeft = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        
+        // Remove participant using multiple identifiers for robustness
+        setParticipants(prev => prev.filter(p => {
+          const leftPlayerEmail = data.leftPlayer?.email || data.playerEmail;
+          const leftPlayerId = data.leftPlayer?.id;
+          const leftPlayerNickname = data.leftPlayer?.nickname;
+          const participant = p as any;
+          
+          // Check multiple identifiers to ensure robust removal
+          return !(
+            participant.id === leftPlayerEmail ||
+            participant.email === leftPlayerEmail ||
+            (leftPlayerId && participant.id === leftPlayerId) ||
+            (leftPlayerNickname && participant.nickname === leftPlayerNickname)
+          );
+        }));
+        
+        if (data.tournament?.participants) {
+          const updatedParticipants = data.tournament.participants.map((p: any) => ({
             id: p.email,
             login: p.nickname,
             avatar: p.avatar,
             nickname: p.nickname,
             isHost: p.isHost,
-            email: p.email,
-          })
-        )
-        setParticipants(updatedParticipants)
-
-        // Also update other tournament properties if they've changed
-        if (data.tournament.status !== tournamentState)
-          setTournamentState(data.tournament.status)
-      }
-    }
-    const handleTournamentReady = (data: any) => {
-      if (data.tournamentId === tournamentId) {
-        setTournamentState('ready')
-      }
-    }
-    const handleTournamentStarted = (data: any) => {
-      if (data.tournamentId === tournamentId) {
-        setTournamentState('in_progress')
-        router.push(`/play/tournament/${tournamentId}`)
-      }
-    }
-    const handleTournamentStartResponse = (data: any) => {
-      if (data.status === 'error') {
-        // Handle tournament start error
-      }
-    }
-    const handleTournamentParticipantLeft = (data: any) => {
-      if (data.tournamentId === tournamentId) {
-        // Remove participant using multiple identifiers for robustness
-        setParticipants((prev) =>
-          prev.filter((p) => {
-            const leftPlayerEmail = data.leftPlayer?.email || data.playerEmail
-            const leftPlayerId = data.leftPlayer?.id
-            const leftPlayerNickname = data.leftPlayer?.nickname
-            const participant = p as any
-
-            // Check multiple identifiers to ensure robust removal
-            return !(
-              participant.id === leftPlayerEmail ||
-              participant.email === leftPlayerEmail ||
-              (leftPlayerId && participant.id === leftPlayerId) ||
-              (leftPlayerNickname &&
-                participant.nickname === leftPlayerNickname)
-            )
-          })
-        )
-
-        if (data.tournament?.participants) {
-          const updatedParticipants = data.tournament.participants.map(
-            (p: any) => ({
-              id: p.email,
-              login: p.nickname,
-              avatar: p.avatar,
-              nickname: p.nickname,
-              isHost: p.isHost,
-              email: p.email,
-            })
-          )
-          setParticipants(updatedParticipants)
+            email: p.email
+          }));
+          setParticipants(updatedParticipants);
         }
       }
-    }
+    };
     const handleTournamentCancelled = (data: any) => {
       if (data.tournamentId === tournamentId) {
         // Reset tournament state
-        setTournamentState('setup')
-        setTournamentId(null)
-        setParticipants(
-          user
-            ? [
-                {
-                  id: user.id || user.nickname || 'host',
-                  login: user.name,
-                  avatar: user.avatar,
-                  nickname: user.nickname,
-                  isHost: true,
-                },
-              ]
-            : []
-        )
-        setMatches([])
+        setTournamentState('setup');
+        setTournamentId(null);
+        setParticipants(user ? [{
+          id: user.id || user.nickname || 'host',
+          login: user.name, 
+          avatar: user.avatar,
+          nickname: user.nickname,
+          isHost: true
+        }] : []);
+        setMatches([]);
       }
-    }
+    };
     const handleTournamentCancelResponse = (data: any) => {
       if (data.status === 'success') {
         // Reset tournament state
-        setTournamentState('setup')
-        setTournamentId(null)
-        setParticipants(
-          user
-            ? [
-                {
-                  id: user.id || user.nickname || 'host',
-                  login: user.name,
-                  avatar: user.avatar,
-                  nickname: user.nickname,
-                  isHost: true,
-                },
-              ]
-            : []
-        )
-        setMatches([])
+        setTournamentState('setup');
+        setTournamentId(null);
+        setParticipants(user ? [{
+          id: user.id || user.nickname || 'host',
+          login: user.name, 
+          avatar: user.avatar,
+          nickname: user.nickname,
+          isHost: true
+        }] : []);
+        setMatches([]);
       }
-    }
-
-    socket.on('TournamentCreated', handleTournamentCreated)
-    socket.on('TournamentError', handleTournamentError)
-    socket.on('TournamentUpdated', handleTournamentUpdated)
-    socket.on('TournamentReady', handleTournamentReady)
-    socket.on('TournamentStarted', handleTournamentStarted)
-    socket.on('TournamentStartResponse', handleTournamentStartResponse)
-    socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft)
-    socket.on('TournamentCancelled', handleTournamentCancelled)
-    socket.on('TournamentCancelResponse', handleTournamentCancelResponse)
+    };
+    
+    socket.on('TournamentCreated', handleTournamentCreated);
+    socket.on('TournamentError', handleTournamentError);
+    socket.on('TournamentUpdated', handleTournamentUpdated);
+    socket.on('TournamentReady', handleTournamentReady);
+    socket.on('TournamentStarted', handleTournamentStarted);
+    socket.on('TournamentStartResponse', handleTournamentStartResponse);
+    // socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
+    socket.on('TournamentCancelled', handleTournamentCancelled);
+    socket.on('TournamentCancelResponse', handleTournamentCancelResponse);
+    socket.on('MatchStartingSoon', handleMatchStartingSoon);
+    socket.on('TournamentMatchReady', handleTournamentMatchReady);
     return () => {
-      socket.off('TournamentCreated', handleTournamentCreated)
-      socket.off('TournamentError', handleTournamentError)
-      socket.off('TournamentUpdated', handleTournamentUpdated)
-      socket.off('TournamentReady', handleTournamentReady)
-      socket.off('TournamentStarted', handleTournamentStarted)
-      socket.off('TournamentStartResponse', handleTournamentStartResponse)
-      socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft)
-      socket.off('TournamentCancelled', handleTournamentCancelled)
-      socket.off('TournamentCancelResponse', handleTournamentCancelResponse)
-    }
-  }, [socket, tournamentId, user?.email, router])
+      socket.off('TournamentCreated', handleTournamentCreated);
+      socket.off('TournamentError', handleTournamentError);
+      socket.off('TournamentUpdated', handleTournamentUpdated);
+      socket.off('TournamentReady', handleTournamentReady);
+      socket.off('TournamentStarted', handleTournamentStarted);
+      socket.off('TournamentStartResponse', handleTournamentStartResponse);
+      // socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
+      socket.off('TournamentCancelled', handleTournamentCancelled);
+      socket.off('TournamentCancelResponse', handleTournamentCancelResponse);
+      socket.off('MatchStartingSoon', handleMatchStartingSoon);
+      socket.off('TournamentMatchReady', handleTournamentMatchReady);
+    };
+  }, [socket, tournamentId, user?.email, router]);
 
   // Cancel tournament handler
   const handleCancelTournament = () => {
     if (!tournamentId || !user?.email || !socket) {
-      return
+      return;
     }
-
+    
     socket.emit('CancelTournament', {
       tournamentId,
-      hostEmail: user.email,
-    })
-  }
+      hostEmail: user.email
+    });
+  };
 
-  // Handle route changes and page unload - cancel tournament if host leaves
+  // Handle route changes and page unload - completely remove participant tracking
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (
-        tournamentState === 'lobby' &&
-        tournamentId &&
-        user?.email &&
-        socket
-      ) {
+      if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
         // Check if user is the host
-        const isHost = participants.some(
-          (p) =>
-            (p.id === user.id ||
-              p.id === user.email ||
-              (p as any).email === user.email) &&
-            p.isHost
-        )
-
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
         if (isHost) {
-          // Cancel tournament when host leaves
+          // Only cancel tournament when HOST closes browser/tab
           socket.emit('CancelTournament', {
             tournamentId,
-            hostEmail: user.email,
-          })
-        } else {
-          // Remove participant when they leave
-          socket.emit('LeaveTournament', {
-            tournamentId,
-            playerEmail: user.email,
-          })
+            hostEmail: user.email
+          });
         }
+        // Participants can close browser/tab freely - they remain in tournament
+        // NO socket events are sent for participants
       }
-    }
+    };
 
     const handleRouteChange = () => {
-      if (
-        tournamentState === 'lobby' &&
-        tournamentId &&
-        user?.email &&
-        socket
-      ) {
+      // Only check if host is navigating away from tournament pages
+      const currentPath = window.location.pathname;
+      const isTournamentPage = currentPath.includes('/tournament') || currentPath.includes('/play');
+      
+      if (tournamentState === 'lobby' && tournamentId && user?.email && socket && !isTournamentPage) {
         // Check if user is the host
-        const isHost = participants.some(
-          (p) =>
-            (p.id === user.id ||
-              p.id === user.email ||
-              (p as any).email === user.email) &&
-            p.isHost
-        )
-
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
         if (isHost) {
-          // Cancel tournament when host navigates away
+          // Only cancel tournament when HOST navigates away from tournament area
           socket.emit('CancelTournament', {
             tournamentId,
-            hostEmail: user.email,
-          })
-        } else {
-          // Remove participant when they navigate away
-          socket.emit('LeaveTournament', {
-            tournamentId,
-            playerEmail: user.email,
-          })
+            hostEmail: user.email
+          });
         }
+        // Participants can navigate anywhere freely - NO tracking, NO removal
+        // They will stay in the tournament and get global notifications
       }
+    };
+
+    // Only add event listeners for hosts to prevent tournament cancellation
+    const isHost = participants.some(p => 
+      (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+    );
+
+    if (isHost) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      // Listen for route changes (Next.js App Router)
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
+      
+      history.pushState = function() {
+        handleRouteChange();
+        return originalPushState.apply(history, arguments);
+      };
+      
+      history.replaceState = function() {
+        handleRouteChange();
+        return originalReplaceState.apply(history, arguments);
+      };
+
+      window.addEventListener('popstate', handleRouteChange);
+
+      // Cleanup
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('popstate', handleRouteChange);
+        history.pushState = originalPushState;
+        history.replaceState = originalReplaceState;
+      };
     }
-
-    // Add event listeners
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
-    // Listen for route changes (Next.js App Router)
-    const originalPushState = history.pushState
-    const originalReplaceState = history.replaceState
-
-    history.pushState = function () {
-      handleRouteChange()
-      return originalPushState.apply(history, arguments)
-    }
-
-    history.replaceState = function () {
-      handleRouteChange()
-      return originalReplaceState.apply(history, arguments)
-    }
-
-    window.addEventListener('popstate', handleRouteChange)
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      window.removeEventListener('popstate', handleRouteChange)
-      history.pushState = originalPushState
-      history.replaceState = originalReplaceState
-    }
-  }, [tournamentState, tournamentId, user?.email, socket, participants])
+    // ZERO event listeners for participants - they can navigate completely freely
+    // They remain in tournament and get notifications wherever they are
+  }, [tournamentState, tournamentId, user?.email, socket, participants]);
 
   // Handle tournament name change and clear errors
-  const handleTournamentNameChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setTournamentName(e.target.value)
+  const handleTournamentNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTournamentName(e.target.value);
     // Clear error when user starts typing
     if (tournamentNameError) {
-      setTournamentNameError(null)
+      setTournamentNameError(null);
     }
-  }
-
-  // Monitor participants and ensure they're still in the lobby
-  useEffect(() => {
-    if (!tournamentId || !socket || tournamentState !== 'lobby') return
-
-    // Set up a periodic check to ensure participants are still active
-    const participantCheckInterval = setInterval(() => {
-      if (socket && tournamentId) {
-        socket.emit('CheckTournamentParticipants', { tournamentId })
-      }
-    }, 10000) // Check every 10 seconds
-
-    return () => {
-      if (participantCheckInterval) {
-        clearInterval(participantCheckInterval)
-      }
-    }
-  }, [tournamentId, socket, tournamentState])
-
-  // Handle visibility changes and tab switching
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (
-        document.hidden &&
-        tournamentState === 'lobby' &&
-        tournamentId &&
-        user?.email &&
-        socket
-      ) {
-        // Check if user is not the host
-        const isHost = participants.some(
-          (p) =>
-            (p.id === user.id ||
-              p.id === user.email ||
-              (p as any).email === user.email) &&
-            p.isHost
-        )
-
-        if (!isHost) {
-          // Emit a presence check when participant tab becomes hidden
-          socket.emit('ParticipantPresenceCheck', {
-            tournamentId,
-            playerEmail: user.email,
-            isActive: false,
-          })
-        }
-      } else if (
-        !document.hidden &&
-        tournamentState === 'lobby' &&
-        tournamentId &&
-        user?.email &&
-        socket
-      ) {
-        // Tab becomes visible again
-        const isHost = participants.some(
-          (p) =>
-            (p.id === user.id ||
-              p.id === user.email ||
-              (p as any).email === user.email) &&
-            p.isHost
-        )
-
-        if (!isHost) {
-          socket.emit('ParticipantPresenceCheck', {
-            tournamentId,
-            playerEmail: user.email,
-            isActive: true,
-          })
-        }
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [tournamentState, tournamentId, user?.email, socket, participants])
+  };
 
   return (
     <div className="h-full w-full text-white">
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl">
           <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
-            {tournamentState === 'setup' ? 'Online Tournament' : tournamentName}
+            {tournamentState === 'setup' ? "Online Tournament" : tournamentName}
           </h1>
-
+          
           {/* Tournament Setup Section */}
           {tournamentState === 'setup' && (
             <div className="space-y-6">
               {/* Tournament Settings */}
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
-                <h2 className="text-2xl font-semibold mb-6">
-                  Tournament Setup
-                </h2>
-
+                <h2 className="text-2xl font-semibold mb-6">Tournament Setup</h2>
+                
                 <div className="mb-6">
-                  <label className="block text-gray-300 mb-2 text-lg">
-                    Tournament Name
-                  </label>
+                  <label className="block text-gray-300 mb-2 text-lg">Tournament Name</label>
                   <input
                     type="text"
                     value={tournamentName}
                     onChange={handleTournamentNameChange}
                     className={`bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 border text-lg transition-all ${
-                      tournamentNameError
-                        ? 'border-red-500 focus:ring-red-500'
+                      tournamentNameError 
+                        ? 'border-red-500 focus:ring-red-500' 
                         : 'border-[#3a3f4a] focus:ring-blue-500'
                     }`}
                     placeholder="Enter tournament name"
@@ -997,20 +945,16 @@ export default function OnlineTournament() {
                     </p>
                   )}
                 </div>
-
+                
                 <div className="mb-6">
-                  <label className="block text-gray-300 mb-3 text-lg">
-                    Tournament Size
-                  </label>
+                  <label className="block text-gray-300 mb-3 text-lg">Tournament Size</label>
                   <div className="grid grid-cols-3 gap-3">
-                    {[4, 8, 16].map((size) => (
-                      <button
-                        key={size}
-                        className={`py-3 px-4 rounded-lg font-medium transition-colors ${
-                          tournamentSize === size
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-[#2a2f3a] text-gray-300 hover:bg-[#3a3f4a] border border-[#3a3f4a]'
-                        }`}
+                    {[4, 8, 16].map(size => (
+                      <button 
+                        key={size} 
+                        className={`py-3 px-4 rounded-lg font-medium transition-colors ${tournamentSize === size ? 
+                          'bg-blue-600 text-white' : 
+                          'bg-[#2a2f3a] text-gray-300 hover:bg-[#3a3f4a] border border-[#3a3f4a]'}`}
                         onClick={() => setTournamentSize(size)}
                       >
                         {size} Players
@@ -1019,14 +963,12 @@ export default function OnlineTournament() {
                   </div>
                 </div>
               </div>
-
+              
               {/* Create Button */}
               <div className="text-center">
                 <button
                   onClick={handleCreateTournament}
-                  disabled={
-                    !tournamentName || tournamentName.trim().length === 0
-                  }
+                  disabled={!tournamentName || tournamentName.trim().length === 0}
                   className={`w-full max-w-md text-white font-semibold rounded-lg py-4 text-xl transition-all ${
                     tournamentName && tournamentName.trim().length !== 0
                       ? 'bg-green-600 hover:bg-green-700'
@@ -1038,73 +980,64 @@ export default function OnlineTournament() {
               </div>
             </div>
           )}
-
+          
           {/* Tournament Lobby Section */}
           {tournamentState === 'lobby' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Tournament Info and Participants */}
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-semibold text-white">
-                    Tournament Lobby
-                  </h3>
+                  <h3 className="text-2xl font-semibold text-white">Tournament Lobby</h3>
                   <div className="flex items-center space-x-4">
                     <span className="px-3 py-1 bg-yellow-600/70 rounded-full text-white text-sm font-medium">
                       Waiting for Players
                     </span>
                   </div>
                 </div>
-
+                
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-white text-lg font-medium">
-                      Participants ({participants.length}/{tournamentSize})
-                    </h4>
+                    <h4 className="text-white text-lg font-medium">Participants ({participants.length}/{tournamentSize})</h4>
                   </div>
-
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                     {participants.map((player, index) => (
                       <ParticipantItem
-                        key={
-                          player.id ||
-                          player.nickname ||
-                          player.login ||
-                          `participant-${index}`
-                        }
+                        key={player.id || player.nickname || player.login || `participant-${index}`}
                         player={player}
                         isHost={true}
                       />
                     ))}
-
+                    
                     {/* Empty slots */}
-                    {Array.from({
-                      length: tournamentSize - participants.length,
-                    }).map((_, index) => (
-                      <div
-                        key={`empty-slot-${index}`}
-                        className="flex items-center justify-center bg-[#1a1d23] rounded-lg p-3 border border-[#2a2f3a] border-dashed min-h-[58px]"
-                      >
-                        <div className="text-gray-400">
-                          Waiting for player...
-                        </div>
+                    {Array.from({ length: tournamentSize - participants.length }).map((_, index) => (
+                      <div key={`empty-slot-${index}`} className="flex items-center justify-center bg-[#1a1d23] rounded-lg p-3 border border-[#2a2f3a] border-dashed min-h-[58px]">
+                        <div className="text-gray-400">Waiting for player...</div>
                       </div>
                     ))}
                   </div>
-
+                  
                   {participants.length < tournamentSize && (
                     <div className="text-yellow-400 text-sm mb-4">
-                      You need to invite {tournamentSize - participants.length}{' '}
-                      more players
+                      You need to invite {tournamentSize - participants.length} more players
                     </div>
                   )}
+                  
+                  <div className="text-gray-400 text-xs mb-4">
+                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) 
+                      ? 'As the host, you must stay on tournament pages. Leaving will cancel the tournament.'
+                      : 'You can freely navigate anywhere! You\'ll remain in the tournament and get notified when matches start. Only click "Leave Tournament" if you want to quit completely.'}
+                  </div>
                 </div>
-
+                
                 <div className="flex gap-3">
                   <button
                     onClick={leaveTournament}
                     className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
                   >
-                    Cancel Tournament
+                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) 
+                      ? 'Cancel Tournament' 
+                      : 'Leave Tournament'}
                   </button>
                   <button
                     onClick={startTournament}
@@ -1119,17 +1052,17 @@ export default function OnlineTournament() {
                   </button>
                 </div>
               </div>
-
+              
               {/* Online Player Search and Invite */}
-              <OnlinePlayMode
-                onInvitePlayer={handleInvitePlayer}
+              <OnlinePlayMode 
+                onInvitePlayer={handleInvitePlayer} 
                 pendingInvites={pendingInvites}
                 sentInvites={sentInvites}
                 friends={friends}
               />
             </div>
           )}
-
+          
           {/* Tournament Progress Section */}
           {tournamentState === 'in_progress' && !tournamentComplete && (
             <div className="space-y-6">
@@ -1139,31 +1072,25 @@ export default function OnlineTournament() {
                 onAdvanceRound={advanceRound}
                 canAdvance={canAdvanceRound()}
               />
-
+              
               {/* Start Matches Button */}
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Tournament Controls
-                </h3>
+                <h3 className="text-xl font-semibold text-white mb-4">Tournament Controls</h3>
                 <div className="flex flex-wrap gap-4">
                   <button
                     onClick={startCurrentRoundMatches}
-                    disabled={
-                      matches.filter(
-                        (m) =>
-                          m.round === currentRound &&
-                          m.state === MATCH_STATES.WAITING &&
-                          m.player1 &&
-                          m.player2
-                      ).length === 0
-                    }
+                    disabled={matches.filter(m => 
+                      m.round === currentRound && 
+                      m.state === MATCH_STATES.WAITING && 
+                      m.player1 && 
+                      m.player2
+                    ).length === 0}
                     className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                      matches.filter(
-                        (m) =>
-                          m.round === currentRound &&
-                          m.state === MATCH_STATES.WAITING &&
-                          m.player1 &&
-                          m.player2
+                      matches.filter(m => 
+                        m.round === currentRound && 
+                        m.state === MATCH_STATES.WAITING && 
+                        m.player1 && 
+                        m.player2
                       ).length > 0
                         ? 'bg-green-600 hover:bg-green-700 text-white'
                         : 'bg-[#2a2f3a] cursor-not-allowed text-gray-400 border border-[#3a3f4a]'
@@ -1172,20 +1099,16 @@ export default function OnlineTournament() {
                     Start Next Match
                   </button>
                   <div className="text-gray-300 text-sm flex items-center">
-                    {
-                      matches.filter(
-                        (m) =>
-                          m.round === currentRound &&
-                          m.state === MATCH_STATES.WAITING &&
-                          m.player1 &&
-                          m.player2
-                      ).length
-                    }{' '}
-                    matches waiting in Round {currentRound + 1}
+                    {matches.filter(m => 
+                      m.round === currentRound && 
+                      m.state === MATCH_STATES.WAITING && 
+                      m.player1 && 
+                      m.player2
+                    ).length} matches waiting in Round {currentRound + 1}
                   </div>
                 </div>
               </div>
-
+              
               <TournamentBracket
                 participants={participants}
                 tournamentSize={tournamentSize}
@@ -1194,27 +1117,17 @@ export default function OnlineTournament() {
                 onMatchUpdate={handleMatchUpdate}
                 onPlayMatch={() => {}}
               />
-
+              
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Active Players
-                </h3>
+                <h3 className="text-xl font-semibold text-white mb-4">Active Players</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                   {getActivePlayers().map((player, index) => (
-                    <div
-                      key={
-                        player.id ||
-                        player.nickname ||
-                        player.login ||
-                        `active-player-${index}`
-                      }
-                      className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]"
-                    >
+                    <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
-                        <Image
-                          src={`/images/${player.avatar}`}
-                          alt={player.login}
-                          width={48}
+                        <Image 
+                          src={`/images/${player.avatar}`} 
+                          alt={player.login} 
+                          width={48} 
                           height={48}
                           className="w-full h-full object-cover"
                         />
@@ -1228,22 +1141,16 @@ export default function OnlineTournament() {
               </div>
             </div>
           )}
-
+          
           {/* Tournament Complete Section */}
           {tournamentComplete && (
             <div className="text-center space-y-6">
               <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]">
-                <h2 className="text-3xl font-bold text-white mb-4">
-                  Tournament Complete!
-                </h2>
+                <h2 className="text-3xl font-bold text-white mb-4">Tournament Complete!</h2>
                 {champion && (
                   <div className="mb-6">
-                    <div className="text-2xl text-yellow-400 mb-2">
-                      🏆 Champion
-                    </div>
-                    <div className="text-xl text-white">
-                      {getDisplayName(champion)}
-                    </div>
+                    <div className="text-2xl text-yellow-400 mb-2">🏆 Champion</div>
+                    <div className="text-xl text-white">{getDisplayName(champion)}</div>
                   </div>
                 )}
                 <button
@@ -1258,5 +1165,5 @@ export default function OnlineTournament() {
         </div>
       </div>
     </div>
-  )
+  );
 }
