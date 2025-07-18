@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ToastContainer } from 'react-toastify'
 import TournamentRejoinHelper from '../../utils/tournament/TournamentRejoinHelper'
+import { TournamentNotificationProvider } from '../../utils/tournament/TournamentNotificationProvider'
 
 export default function ClientLayout({
   children,
@@ -52,6 +53,7 @@ export default function ClientLayout({
         <>
           {children}
           <TournamentRejoinHelper />
+          <TournamentNotificationProvider />
         </>
       )}
     </>

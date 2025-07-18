@@ -156,7 +156,7 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
   );
 };
 
-export const TournamentNotificationProvider = ({ children }: { children: ReactNode }) => {
+export const TournamentNotificationProvider = () => {
   const [notifications, setNotifications] = useState<TournamentNotification[]>([]);
   const [socket, setSocket] = useState<any>(null);
   const { user } = useAuthStore();
@@ -263,14 +263,7 @@ export const TournamentNotificationProvider = ({ children }: { children: ReactNo
   }, [socket, user?.email]);
 
   return (
-    <TournamentNotificationContext.Provider value={{
-      notifications,
-      addNotification,
-      removeNotification,
-      clearAllNotifications
-    }}>
-      {children}
-      
+    <>
       {notifications.map(notification => (
         <GlobalTournamentNotification
           key={notification.id}
@@ -278,6 +271,35 @@ export const TournamentNotificationProvider = ({ children }: { children: ReactNo
           onClose={() => removeNotification(notification.id)}
         />
       ))}
+    </>
+  );
+};
+
+// Context Provider Component (for wrapping app)
+export const TournamentNotificationContextProvider = ({ children }: { children: ReactNode }) => {
+  const [notifications, setNotifications] = useState<TournamentNotification[]>([]);
+
+  const addNotification = (notification: Omit<TournamentNotification, 'id'>) => {
+    const id = Date.now().toString() + Math.random().toString(36);
+    setNotifications(prev => [...prev, { ...notification, id }]);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+  };
+
+  return (
+    <TournamentNotificationContext.Provider value={{
+      notifications,
+      addNotification,
+      removeNotification,
+      clearAllNotifications
+    }}>
+      {children}
     </TournamentNotificationContext.Provider>
   );
 };
