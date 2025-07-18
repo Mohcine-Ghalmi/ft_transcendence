@@ -603,49 +603,55 @@ export default function TournamentGamePage() {
         
         // Only consider it "leaving" if going to non-tournament, non-game pages
         if (!isLeavingToGame && !isStayingInTournament && !isGoingToPlay && !isInternalRoute) {
-          if (isHost) {
-            // Host leaves lobby before tournament starts
+          // Only cancel tournament if host leaves during LOBBY state
+          // During active matches (in_progress), host can navigate freely
+          if (isHost && tournamentData?.status === 'lobby') {
             socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
-          } else {
-            // Player leaves lobby before tournament starts
-            socket.emit('LeaveTournament', { tournamentId, playerEmail: user.email });
           }
+          // During active matches or for participants: NO tracking, NO removal
+          // They stay in the tournament and get global notifications
         }
       }
       setTimeout(() => { currentPath = newPath; }, 0);
     };
 
     const handleBeforeUnload = () => {
-      // Only emit leave events on actual page close/refresh, not navigation
-      if (isHost) {
+      // Only cancel tournament on page close/refresh if host and in lobby state
+      if (isHost && tournamentData?.status === 'lobby') {
         socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
-      } else {
-        socket.emit('LeaveTournament', { tournamentId, playerEmail: user.email });
       }
+      // During active matches or for participants: they remain in tournament
+      // NO socket events are sent
     };
 
-    window.addEventListener('popstate', handleRouteChange);
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    // Only add event listeners for hosts during lobby state to prevent tournament cancellation
+    // During active matches, even hosts can navigate freely
+    if (isHost && tournamentData?.status === 'lobby') {
+      window.addEventListener('popstate', handleRouteChange);
+      window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Listen for pushState and replaceState
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
+      // Listen for pushState and replaceState
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
 
-    history.pushState = function(...args) {
-      originalPushState.apply(history, args);
-      handleRouteChange();
-    };
-    history.replaceState = function(...args) {
-      originalReplaceState.apply(history, args);
-      handleRouteChange();
-    };
+      history.pushState = function(...args) {
+        originalPushState.apply(history, args);
+        handleRouteChange();
+      };
+      history.replaceState = function(...args) {
+        originalReplaceState.apply(history, args);
+        handleRouteChange();
+      };
 
-    return () => {
-      window.removeEventListener('popstate', handleRouteChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      history.pushState = originalPushState;
-      history.replaceState = originalReplaceState;
-    };
+      return () => {
+        window.removeEventListener('popstate', handleRouteChange);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        history.pushState = originalPushState;
+        history.replaceState = originalReplaceState;
+      };
+    }
+    // NO event listeners during active matches or for participants
+    // Everyone can navigate completely freely during matches
   }, [socket, tournamentId, user?.email, isHost, tournamentData]);
 
   // Add Cancel Tournament button for host in the lobby

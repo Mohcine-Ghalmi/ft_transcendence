@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore, getSocketInstance } from '@/(zustand)/useAuthStore';
+import { getGameSocketInstance } from '@/(zustand)/useGameStore';
 import { useTournamentNotifications } from './TournamentNotificationProvider';
 
 interface ActiveTournament {
@@ -26,7 +27,8 @@ export const TournamentRejoinHelper = () => {
 
   // Initialize socket connection
   useEffect(() => {
-    const socketInstance = getSocketInstance();
+    // Use game socket for tournament functionality
+    const socketInstance = getGameSocketInstance();
     if (socketInstance) {
       setSocket(socketInstance);
     }
@@ -61,55 +63,63 @@ export const TournamentRejoinHelper = () => {
       }
     };
 
-    // Handle global tournament notifications (match starting, etc.)
-    const handleGlobalTournamentNotification = (data: any) => {
-      if (data.type === 'match_starting' && data.tournamentId && data.matchId && data.countdown) {
-        // Show notification to user
+    // Handle auto-rejoin when socket connects
+    const handleAutoRejoinedTournament = (data: any) => {
+      if (data.tournament) {
+        // Show notification that user has been auto-rejoined
         addNotification({
-          type: 'match_starting',
-          title: data.title || '⚡ Your Match is Starting!',
-          message: data.message || `Your match will begin in ${data.countdown} seconds!`,
-          countdown: data.countdown,
+          type: 'tournament_info',
+          title: 'Welcome Back!',
+          message: `You've been automatically rejoined to "${data.tournamentName}". The tournament is still active.`,
           tournamentId: data.tournamentId,
-          matchId: data.matchId,
+          showBracketLink: data.status !== 'lobby',
           autoClose: true,
-          duration: data.countdown * 1000
+          duration: 8000
         });
-
-        // Automatically join the tournament match
-        if (socket && user?.email) {
-          socket.emit('JoinTournamentMatch', {
-            tournamentId: data.tournamentId,
-            matchId: data.matchId,
-            playerEmail: user.email
-          });
-        }
       }
     };
 
-    // Handle match found - redirect to game
-    const handleMatchFound = (data: any) => {
-      if (data.isTournament && data.gameId) {
-        // Show notification about match starting
+    // Handle global tournament notifications (match starting, etc.)
+    const handleGlobalTournamentNotification = (data: any) => {
+      console.log('🎮 TournamentRejoinHelper received GlobalTournamentNotification:', data);
+      
+      if (data.type === 'match_starting' && data.tournamentId && data.matchId && data.countdown) {
+        console.log('🎮 Processing match starting notification for match:', data.matchId);
+        
+        // Show simple countdown notification - no join/leave options
         addNotification({
           type: 'match_starting',
-          title: '🎮 Tournament Match Found!',
-          message: 'Your tournament match is starting...',
-          autoClose: true,
-          duration: 3000
+          title: '🎮 Tournament Match Starting',
+          message: `Your match will start in ${data.countdown} seconds. Get ready!`,
+          countdown: data.countdown,
+          tournamentId: data.tournamentId,
+          matchId: data.matchId,
+          autoClose: false
         });
 
-        // Redirect to the game
-        setTimeout(() => {
-          router.push(`/play/game/${data.gameId}`);
-        }, 1000);
+        console.log('🎮 Match will auto-start and redirect after countdown completes.');
+      }
+    };
+
+    // Handle match found - redirect to game immediately (after countdown)
+    const handleMatchFound = (data: any) => {
+      console.log('🎮 MatchFound event received:', data);
+      
+      if (data.isTournament && data.gameId) {
+        console.log('🎮 Redirecting to game now:', `/play/game/${data.gameId}`);
+        
+        // Redirect immediately - countdown is already complete
+        router.push(`/play/game/${data.gameId}`);
       }
     };
 
     // Handle game starting - ensure we're in the right place
     const handleGameStarting = (data: any) => {
+      console.log('🎮 GameStarting event received:', data);
+      
       if (data.isTournament && data.gameId) {
         // Make sure we're redirected to the game
+        console.log('🎮 GameStarting - redirecting to game:', `/play/game/${data.gameId}`);
         router.push(`/play/game/${data.gameId}`);
       }
     };
@@ -119,6 +129,7 @@ export const TournamentRejoinHelper = () => {
     socket.on('GlobalTournamentNotification', handleGlobalTournamentNotification);
     socket.on('MatchFound', handleMatchFound);
     socket.on('GameStarting', handleGameStarting);
+    socket.on('AutoRejoinedTournament', handleAutoRejoinedTournament);
     fetchActiveTournaments();
 
     // Check every 30 seconds for active tournaments
@@ -130,6 +141,7 @@ export const TournamentRejoinHelper = () => {
       socket.off('GlobalTournamentNotification', handleGlobalTournamentNotification);
       socket.off('MatchFound', handleMatchFound);
       socket.off('GameStarting', handleGameStarting);
+      socket.off('AutoRejoinedTournament', handleAutoRejoinedTournament);
       clearInterval(interval);
     };
   }, [socket, user?.email, router, addNotification]);

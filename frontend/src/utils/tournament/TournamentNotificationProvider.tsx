@@ -68,26 +68,16 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
           if (prev === null || prev <= 1) {
             clearInterval(timer);
             
-            // Handle timeout for match notifications
-            if (notification.type === 'match_starting') {
-              if (notification.onTimeout) {
-                // Call the custom timeout handler (includes auto-redirect)
-                notification.onTimeout();
-              } else if (notification.autoRedirect && notification.redirectTo) {
-                // Auto-redirect to match page
-                router.push(notification.redirectTo);
-              } else if (notification.onIgnore) {
-                notification.onIgnore();
-              } else if (socket && user?.email && notification.tournamentId) {
-                // Mark player as lost due to timeout
-                socket.emit('PlayerMatchTimeout', {
-                  tournamentId: notification.tournamentId,
-                  playerEmail: user.email,
-                  matchId: notification.matchId
-                });
+            // Schedule the close action outside the render cycle
+            setTimeout(() => {
+              // Handle timeout for match notifications
+              if (notification.type === 'match_starting') {
+                // Just close the notification - games auto-start on backend
+                // Player will be redirected when MatchFound event is received
+                console.log('🎮 Countdown finished - waiting for game to auto-start...');
+                onClose();
               }
-              onClose();
-            }
+            }, 0);
             
             return null;
           }
@@ -206,20 +196,25 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
             </button>
           )}
           
-          {notification.type === 'match_starting' ? (
-            <button
-              onClick={handleIgnore}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-            >
-              Skip Match (Mark as Lost)
-            </button>
-          ) : (
-            <button
-              onClick={onClose}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-            >
-              Close
-            </button>
+          {/* Only show action buttons if not a match_starting notification without showJoinButton */}
+          {!(notification.type === 'match_starting' && !notification.showJoinButton) && (
+            <>
+              {notification.type === 'match_starting' ? (
+                <button
+                  onClick={handleIgnore}
+                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Skip Match (Mark as Lost)
+                </button>
+              ) : (
+                <button
+                  onClick={onClose}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Close
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

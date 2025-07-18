@@ -381,8 +381,18 @@ export default function OnlineTournament() {
   // Start matches for current round with global notifications
   const startCurrentRoundMatches = () => {
     if (!tournamentId || !socket) {
+      console.error('❌ Cannot start matches - missing tournamentId or socket:', {
+        tournamentId,
+        socket: !!socket
+      });
       return;
     }
+    
+    console.log('🎮 Starting current round matches:', {
+      tournamentId,
+      hostEmail: user.email,
+      notifyCountdown: 10
+    });
     
     // Emit to backend to start the round and send notifications to all players
     socket.emit('StartCurrentRound', { 
@@ -720,8 +730,31 @@ export default function OnlineTournament() {
       }
     };
     const handleTournamentStartResponse = (data: any) => {
+      console.log('🎮 TournamentStartResponse:', data);
       if (data.status === 'error') {
-        // Handle tournament start error
+        console.error('❌ Tournament start failed:', data.message);
+      }
+    };
+    
+    const handleStartCurrentRoundResponse = (data: any) => {
+      console.log('🎮 StartCurrentRoundResponse:', data);
+      if (data.status === 'error') {
+        console.error('❌ Start current round failed:', data.message);
+      } else {
+        console.log('✅ Round starting:', {
+          round: data.round,
+          matchCount: data.matchCount,
+          message: data.message
+        });
+        
+        // Show success message to host
+        addNotification({
+          type: 'tournament_info',
+          title: '🎮 Round Started',
+          message: data.message || `Round ${data.round + 1} is starting! Players will be notified and redirected automatically.`,
+          autoClose: true,
+          duration: 5000
+        });
       }
     };
     const handleTournamentParticipantLeft = (data: any) => {
@@ -793,6 +826,7 @@ export default function OnlineTournament() {
     socket.on('TournamentReady', handleTournamentReady);
     socket.on('TournamentStarted', handleTournamentStarted);
     socket.on('TournamentStartResponse', handleTournamentStartResponse);
+    socket.on('StartCurrentRoundResponse', handleStartCurrentRoundResponse);
     // socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
     socket.on('TournamentCancelled', handleTournamentCancelled);
     socket.on('TournamentCancelResponse', handleTournamentCancelResponse);
@@ -806,6 +840,7 @@ export default function OnlineTournament() {
       socket.off('TournamentReady', handleTournamentReady);
       socket.off('TournamentStarted', handleTournamentStarted);
       socket.off('TournamentStartResponse', handleTournamentStartResponse);
+      socket.off('StartCurrentRoundResponse', handleStartCurrentRoundResponse);
       // socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
       socket.off('TournamentCancelled', handleTournamentCancelled);
       socket.off('TournamentCancelResponse', handleTournamentCancelResponse);
