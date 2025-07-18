@@ -1,5 +1,5 @@
 build:
-	mkdir -p  /home/sleeps/sqlite_db
+	mkdir -p ../sqlite_db
 	docker compose -f  docker-compose.yml build
 
 up:
@@ -9,5 +9,5 @@ down:
 	docker compose -f docker-compose.yml down
 
 clean:
-	rm -rf  /home/sleeps/sqlite_db
+	rm -rf ../sqlite_db
 	./clean.sh

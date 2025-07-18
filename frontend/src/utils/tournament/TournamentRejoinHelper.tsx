@@ -25,16 +25,13 @@ export const TournamentRejoinHelper = () => {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Initialize socket connection
   useEffect(() => {
-    // Use game socket for tournament functionality
     const socketInstance = getGameSocketInstance();
     if (socketInstance) {
       setSocket(socketInstance);
     }
   }, []);
 
-  // Fetch user's active tournaments
   useEffect(() => {
     if (!socket || !user?.email) return;
 
@@ -50,7 +47,6 @@ export const TournamentRejoinHelper = () => {
 
     const handleRejoinResponse = (data: any) => {
       if (data.status === 'success' && data.redirectUrl) {
-        // Redirect user back to tournament
         router.push(data.redirectUrl);
       } else if (data.status === 'error') {
         addNotification({
@@ -63,10 +59,8 @@ export const TournamentRejoinHelper = () => {
       }
     };
 
-    // Handle auto-rejoin when socket connects
     const handleAutoRejoinedTournament = (data: any) => {
       if (data.tournament) {
-        // Show notification that user has been auto-rejoined
         addNotification({
           type: 'tournament_info',
           title: 'Welcome Back!',
@@ -79,14 +73,10 @@ export const TournamentRejoinHelper = () => {
       }
     };
 
-    // Handle global tournament notifications (match starting, etc.)
     const handleGlobalTournamentNotification = (data: any) => {
-      console.log('🎮 TournamentRejoinHelper received GlobalTournamentNotification:', data);
       
       if (data.type === 'match_starting' && data.tournamentId && data.matchId && data.countdown) {
-        console.log('🎮 Processing match starting notification for match:', data.matchId);
         
-        // Show simple countdown notification - no join/leave options
         addNotification({
           type: 'match_starting',
           title: '🎮 Tournament Match Starting',
@@ -97,29 +87,18 @@ export const TournamentRejoinHelper = () => {
           autoClose: false
         });
 
-        console.log('🎮 Match will auto-start and redirect after countdown completes.');
       }
     };
 
-    // Handle match found - redirect to game immediately (after countdown)
     const handleMatchFound = (data: any) => {
-      console.log('🎮 MatchFound event received:', data);
-      
       if (data.isTournament && data.gameId) {
-        console.log('🎮 Redirecting to game now:', `/play/game/${data.gameId}`);
-        
-        // Redirect immediately - countdown is already complete
         router.push(`/play/game/${data.gameId}`);
       }
     };
 
-    // Handle game starting - ensure we're in the right place
     const handleGameStarting = (data: any) => {
-      console.log('🎮 GameStarting event received:', data);
       
       if (data.isTournament && data.gameId) {
-        // Make sure we're redirected to the game
-        console.log('🎮 GameStarting - redirecting to game:', `/play/game/${data.gameId}`);
         router.push(`/play/game/${data.gameId}`);
       }
     };
@@ -173,7 +152,7 @@ export const TournamentRejoinHelper = () => {
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      {/* <div className="bg-[#1a1d23] rounded-lg p-4 border border-[#2a2f3a] shadow-lg max-w-sm">
+      <div className="bg-[#1a1d23] rounded-lg p-4 border border-[#2a2f3a] shadow-lg max-w-sm">
         <h3 className="text-white font-semibold mb-3">🏆 Active Tournaments</h3>
         <div className="space-y-2">
           {activeTournaments.map((tournament) => (
@@ -181,9 +160,6 @@ export const TournamentRejoinHelper = () => {
               <div className="flex-1">
                 <div className="text-white text-sm font-medium truncate">
                   {tournament.tournamentName}
-                </div>
-                <div className="text-gray-400 text-xs">
-                  {tournament.status === 'lobby' ? 'Waiting for players' : `Round ${(tournament.currentRound || 0) + 1}/${tournament.totalRounds || 1}`} • {tournament.participantCount}/{tournament.maxParticipants}
                 </div>
                 {tournament.isHost && (
                   <div className="text-blue-400 text-xs">Host</div>
@@ -198,7 +174,7 @@ export const TournamentRejoinHelper = () => {
             </div>
           ))}
         </div>
-      </div> */}
+      </div>
     </div>
   );
 };

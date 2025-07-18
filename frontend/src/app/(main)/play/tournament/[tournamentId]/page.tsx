@@ -24,26 +24,23 @@ export default function TournamentGamePage() {
   useEffect(() => {
     if (!socket || !tournamentId || !user?.email) return;
 
-    // First, try to get tournament data to check if it's completed
     socket.emit('GetTournamentData', { 
       tournamentId, 
       playerEmail: user.email 
     })
 
-    // Also emit JoinTournament for live tournaments
     socket.emit('JoinTournament', { 
       tournamentId, 
       playerEmail: user.email 
     })
     
-    // Set a timeout for authorization check - increased for completed tournaments
     const authTimeout = setTimeout(() => {
       if (!authorizationChecked) {
         setIsAuthorized(false)
         setAuthorizationChecked(true)
         router.push('/play')
       }
-    }, 8000) // Increased to 8 seconds for completed tournament data
+    }, 8000)
 
     return () => {
       clearTimeout(authTimeout)
@@ -180,14 +177,11 @@ export default function TournamentGamePage() {
           message: notificationMessage
         });
         
-        // Clear notification after 5 seconds
         setTimeout(() => {
           setNotification(null);
         }, 5000)
         
-      } else {
-        // Tournament ID mismatch, ignoring event
-      }
+      } 
     }
 
     const handleTournamentMatchCompleted = (data: any) => {
@@ -227,7 +221,6 @@ export default function TournamentGamePage() {
           }
         }
         
-        // Clear notification after 5 seconds
         setTimeout(() => setNotification(null), 5000)
       }
     }
@@ -236,7 +229,6 @@ export default function TournamentGamePage() {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         
-        // Show notification about tournament completion
         if (data.winnerEmail === user?.email) {
           setNotification({ 
             message: '🎉 Congratulations! You won the tournament!', 
@@ -249,8 +241,6 @@ export default function TournamentGamePage() {
             type: 'info' 
           })
         }
-        
-        // Clear notification after 10 seconds
         setTimeout(() => setNotification(null), 10000)
       }
     }
