@@ -58,6 +58,17 @@ CREATE TABLE "Block" (
     UNIQUE (blockedBy, blockedUser)
 );
 
+CREATE TABLE "Notifications" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "userEmail" TEXT NOT NULL,
+    "type" TEXT NOT NULL CHECK(type IN ('tournament', 'achievement', 'match_invite','friend_request', 'message')),
+    "refId" INTEGER,
+    "content" TEXT NOT NULL,
+    "isRead" BOOLEAN DEFAULT FALSE,
+    "createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("userEmail") REFERENCES "User" ("email") ON DELETE CASCADE
+);
+
 CREATE TABLE "match_history" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "game_id" TEXT UNIQUE NOT NULL,

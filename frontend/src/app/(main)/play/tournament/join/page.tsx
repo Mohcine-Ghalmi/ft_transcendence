@@ -1,11 +1,11 @@
-"use client";
+'use client'
 
-import Image from 'next/image';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/(zustand)/useAuthStore';
-import { getSocketInstance } from '@/(zustand)/useAuthStore';
-import { Search, Users, Clock, Trophy, ArrowLeft } from 'lucide-react';
+import Image from 'next/image'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { Search, Users, Clock, Trophy, ArrowLeft } from 'lucide-react'
+import { getGameSocketInstance } from '@/(zustand)/useGameStore'
 
 interface Tournament {
   tournamentId: string;
@@ -191,7 +191,7 @@ export default function JoinTournamentPage() {
 
   // Fetch tournaments on mount
   useEffect(() => {
-    const socketInstance = getSocketInstance();
+    const socketInstance = getGameSocketInstance();
     setSocket(socketInstance);
     if (!socketInstance) {
       setIsLoading(false);
@@ -401,3 +401,4 @@ export default function JoinTournamentPage() {
     </div>
   );
 }
+

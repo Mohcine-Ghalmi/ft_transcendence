@@ -47,6 +47,35 @@ axiosInstance.interceptors.response.use(
   }
 )
 
+interface UserDetails {
+  LeaderBoardData: [
+    {
+      id: number
+      username: string
+      email: string
+      avatar: string
+      login: string
+      total_games: number
+      win_rate_percentage: number
+    }
+  ]
+  randomFriends: [
+    {
+      email: string
+      username: string
+      avatar: string
+      login: string
+      fromEmail: string
+      toEmail: string
+      status: string
+    }
+  ]
+  matchHistory: any[]
+  chartData: { label: string; wins: number; losses: number }[]
+  wins: number
+  losses: number
+}
+
 export let socketInstance: Socket | null = null
 
 interface UserState {
@@ -67,12 +96,16 @@ interface UserState {
   seachedUsers: any
   setIsLoading: (data: boolean) => void
   setUser: (user: any) => void
+  getUser: () => Promise<void>
   changePassword: (data: {
     oldPassword: string
     newPassword: string
   }) => Promise<boolean>
   hidePopUp: boolean
   setHidePopUp: (data: boolean) => void
+  userDetails: UserDetails | null
+  setUserDetails: (data: UserDetails) => void
+  getUserDetails: () => Promise<void>
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -84,6 +117,24 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   notifications: null,
   seachedUsers: [],
   hidePopUp: false,
+  userDetails: null,
+
+  setUserDetails: (data: UserDetails) => {
+    set({ userDetails: data })
+  },
+
+  getUserDetails: async () => {
+    if (get().userDetails) return
+    try {
+      const res = await axiosInstance.get('/api/users/getUserDetails')
+      console.log('User Details:', res.data)
+
+      const data: UserDetails = res.data
+      get().setUserDetails(data)
+    } catch (err) {
+      console.log(err)
+    }
+  },
 
   setHidePopUp: (data: boolean) => {
     set({ hidePopUp: data })
@@ -97,6 +148,16 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
   setIsLoading: (data) => {
     set({ isLoading: data })
+  },
+  getUser: async () => {
+    try {
+      const res = await axiosInstance.get('/api/users/me')
+      get().setUser(res.data.user)
+    } catch (err) {
+      get().setUser(null)
+      get().logout()
+      console.log(err)
+    }
   },
   checkAuth: async () => {
     return true

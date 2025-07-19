@@ -1,15 +1,16 @@
-"use client";
+'use client'
 
-import Image from 'next/image';
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search } from 'lucide-react';
-import {MATCH_STATES} from '../../../../data/mockData';
-import TournamentBracket from './TournamentBracket';
-import { useAuthStore } from '@/(zustand)/useAuthStore';
-import { getSocketInstance } from '@/(zustand)/useAuthStore';
-import CryptoJS from 'crypto-js';
-import { PlayerListItem } from '../../play/OneVsOne/Online';
+import Image from 'next/image'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { Search } from 'lucide-react'
+import { MATCH_STATES } from '../../../../data/mockData'
+import TournamentBracket from './TournamentBracket'
+import { useAuthStore } from '@/(zustand)/useAuthStore'
+import CryptoJS from 'crypto-js'
+import { PlayerListItem } from '../../play/OneVsOne/Online'
+import { getGameSocketInstance } from '@/(zustand)/useGameStore'
+import { useTournamentNotifications } from '../../../../utils/tournament/TournamentNotificationProvider';
 
 interface Player {
   name: string;
@@ -145,6 +146,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
 export default function OnlineTournament() {
   const { user } = useAuthStore();
   const router = useRouter();
+  const { addNotification } = useTournamentNotifications();
   const [tournamentState, setTournamentState] = useState('setup'); // setup, lobby, in_progress
   const [tournamentName, setTournamentName] = useState('Online Pong Championship');
   const [tournamentNameError, setTournamentNameError] = useState<string | null>(null);
@@ -179,11 +181,61 @@ export default function OnlineTournament() {
 
   // Initialize socket connection
   useEffect(() => {
-    const socketInstance = getSocketInstance();
+    const socketInstance = getGameSocketInstance();
     if (socketInstance) {
       setSocket(socketInstance);
     }
   }, []);
+
+  // Check for active tournament participation on component mount
+  useEffect(() => {
+    if (!socket || !user?.email) return;
+
+    // Check if user is part of any active tournament
+    const checkActiveTournaments = () => {
+      socket.emit('CheckUserTournamentStatus', { userEmail: user.email });
+    };
+
+    const handleUserTournamentStatus = (data: any) => {
+      if (data.activeTournament && tournamentState === 'setup') {
+        // User is part of an active tournament, rejoin it
+        setTournamentId(data.activeTournament.tournamentId);
+        setTournamentName(data.activeTournament.name);
+        setTournamentState(data.activeTournament.status);
+        setTournamentSize(data.activeTournament.size);
+        
+        if (data.activeTournament.participants) {
+          const formattedParticipants = data.activeTournament.participants.map((p: any) => ({
+            id: p.email,
+            login: p.nickname,
+            avatar: p.avatar,
+            nickname: p.nickname,
+            isHost: p.isHost,
+            email: p.email
+          }));
+          setParticipants(formattedParticipants);
+        }
+
+        // Show notification that user has been rejoined
+        addNotification({
+          type: 'tournament_info',
+          title: 'Rejoined Tournament',
+          message: `Welcome back to "${data.activeTournament.name}"! You were automatically rejoined.`,
+          tournamentId: data.activeTournament.tournamentId,
+          showBracketLink: data.activeTournament.status !== 'lobby',
+          autoClose: true,
+          duration: 5000
+        });
+      }
+    };
+
+    socket.on('UserTournamentStatus', handleUserTournamentStatus);
+    checkActiveTournaments();
+
+    return () => {
+      socket.off('UserTournamentStatus', handleUserTournamentStatus);
+    };
+  }, [socket, user?.email, tournamentState, addNotification]);
 
   // Fetch tournaments from backend
   useEffect(() => {
@@ -325,12 +377,28 @@ export default function OnlineTournament() {
     socket.emit('StartTournament', { tournamentId, hostEmail: user.email });
   };
 
-  // Start matches for current round
+  // Start matches for current round with global notifications
   const startCurrentRoundMatches = () => {
     if (!tournamentId || !socket) {
+      console.error('❌ Cannot start matches - missing tournamentId or socket:', {
+        tournamentId,
+        socket: !!socket
+      });
       return;
     }
-    socket.emit('StartCurrentRound', { tournamentId, hostEmail: user.email });
+    
+    console.log('🎮 Starting current round matches:', {
+      tournamentId,
+      hostEmail: user.email,
+      notifyCountdown: 10
+    });
+    
+    // Emit to backend to start the round and send notifications to all players
+    socket.emit('StartCurrentRound', { 
+      tournamentId, 
+      hostEmail: user.email,
+      notifyCountdown: 10 // 10 second countdown for players to join matches
+    });
   };
 
   // Tournament invite handler (encrypt and emit)
@@ -458,15 +526,18 @@ export default function OnlineTournament() {
       );
       
       if (isHost) {
+        // Host cancels the entire tournament
         handleCancelTournament();
       } else {
-        // Participant leaves the tournament
-        socket.emit('LeaveTournament', {
+        // Participants explicitly leave tournament (button click only)
+        // This is different from navigation - this actually removes them
+        socket.emit('ExplicitLeaveTournament', {
           tournamentId,
-          playerEmail: user.email
+          playerEmail: user.email,
+          reason: 'explicit_leave_button'
         });
         
-        // Reset local state for participants immediately
+        // Reset local state for participants after explicit leave
         setTournamentId(null);
         setParticipants([{
           id: user.id || user.nickname || 'host',
@@ -589,12 +660,100 @@ export default function OnlineTournament() {
     const handleTournamentStarted = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setTournamentState('in_progress');
-        router.push(`/play/tournament/${tournamentId}`);
+        
+        // Check if user is the host
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
+        if (isHost) {
+          // Host gets notification about joining the game bracket
+          addNotification({
+            type: 'tournament_started',
+            title: 'Tournament Started!',
+            message: 'Your tournament has begun! You can now view the bracket and manage matches.',
+            tournamentId: data.tournamentId,
+            showBracketLink: true,
+            autoClose: false
+          });
+          
+          // Redirect host to tournament page
+          router.push(`/play/tournament/${tournamentId}`);
+        } else {
+          // Participants get notification about tournament start
+          addNotification({
+            type: 'tournament_started',
+            title: 'Tournament Started!',
+            message: 'The tournament has begun! Check the bracket and wait for your match.',
+            tournamentId: data.tournamentId,
+            showBracketLink: true,
+            autoClose: false
+          });
+        }
+      }
+    };
+    
+    const handleMatchStartingSoon = (data: any) => {
+      if (data.tournamentId === tournamentId && data.playerEmail === user?.email) {
+        // Player has a match starting soon - show countdown using global notification
+        addNotification({
+          type: 'match_starting',
+          title: 'Match Starting Soon!',
+          message: `Your tournament match will begin in ${data.countdown || 10} seconds. Get ready!`,
+          countdown: data.countdown || 10,
+          tournamentId: data.tournamentId,
+          matchId: data.matchId,
+          autoClose: false,
+          autoRedirect: true,
+          redirectTo: `/play/game/${data.matchId}`,
+          onTimeout: () => {
+            router.push(`/play/game/${data.matchId}`);
+          }
+        });
+      }
+    };
+    
+    const handleTournamentMatchReady = (data: any) => {
+      if (data.tournamentId === tournamentId && 
+          (data.player1Email === user?.email || data.player2Email === user?.email)) {
+        // This player's match is ready - use global notification
+        addNotification({
+          type: 'match_starting',
+          title: 'Match Ready!',
+          message: 'Your tournament match is about to start!',
+          tournamentId: data.tournamentId,
+          matchId: data.matchId,
+          autoClose: true,
+          duration: 3000
+        });
       }
     };
     const handleTournamentStartResponse = (data: any) => {
+      console.log('🎮 TournamentStartResponse:', data);
       if (data.status === 'error') {
-        // Handle tournament start error
+        console.error('❌ Tournament start failed:', data.message);
+      }
+    };
+    
+    const handleStartCurrentRoundResponse = (data: any) => {
+      console.log('🎮 StartCurrentRoundResponse:', data);
+      if (data.status === 'error') {
+        console.error('❌ Start current round failed:', data.message);
+      } else {
+        console.log('✅ Round starting:', {
+          round: data.round,
+          matchCount: data.matchCount,
+          message: data.message
+        });
+        
+        // Show success message to host
+        addNotification({
+          type: 'tournament_info',
+          title: '🎮 Round Started',
+          message: data.message || `Round ${data.round + 1} is starting! Players will be notified and redirected automatically.`,
+          autoClose: true,
+          duration: 5000
+        });
       }
     };
     const handleTournamentParticipantLeft = (data: any) => {
@@ -666,9 +825,13 @@ export default function OnlineTournament() {
     socket.on('TournamentReady', handleTournamentReady);
     socket.on('TournamentStarted', handleTournamentStarted);
     socket.on('TournamentStartResponse', handleTournamentStartResponse);
-    socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
+    socket.on('StartCurrentRoundResponse', handleStartCurrentRoundResponse);
+    // socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
     socket.on('TournamentCancelled', handleTournamentCancelled);
     socket.on('TournamentCancelResponse', handleTournamentCancelResponse);
+    socket.on('MatchStartingSoon', handleMatchStartingSoon);
+    socket.on('GlobalMatchStartingSoon', handleMatchStartingSoon);
+    socket.on('TournamentMatchReady', handleTournamentMatchReady);
     return () => {
       socket.off('TournamentCreated', handleTournamentCreated);
       socket.off('TournamentError', handleTournamentError);
@@ -676,9 +839,13 @@ export default function OnlineTournament() {
       socket.off('TournamentReady', handleTournamentReady);
       socket.off('TournamentStarted', handleTournamentStarted);
       socket.off('TournamentStartResponse', handleTournamentStartResponse);
-      socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
+      socket.off('StartCurrentRoundResponse', handleStartCurrentRoundResponse);
+      // socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
       socket.off('TournamentCancelled', handleTournamentCancelled);
       socket.off('TournamentCancelResponse', handleTournamentCancelResponse);
+      socket.off('MatchStartingSoon', handleMatchStartingSoon);
+      socket.off('GlobalMatchStartingSoon', handleMatchStartingSoon);
+      socket.off('TournamentMatchReady', handleTournamentMatchReady);
     };
   }, [socket, tournamentId, user?.email, router]);
 
@@ -694,7 +861,7 @@ export default function OnlineTournament() {
     });
   };
 
-  // Handle route changes and page unload - cancel tournament if host leaves
+  // Handle route changes and page unload - allow free navigation for all players
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
@@ -704,70 +871,74 @@ export default function OnlineTournament() {
         );
         
         if (isHost) {
-          // Cancel tournament when host leaves
+          // Only cancel tournament when HOST closes browser/tab
           socket.emit('CancelTournament', {
             tournamentId,
             hostEmail: user.email
           });
-        } else {
-          // Remove participant when they leave
-          socket.emit('LeaveTournament', {
-            tournamentId,
-            playerEmail: user.email
-          });
         }
+        // Participants can close browser/tab freely - they remain in tournament
+        // NO socket events are sent for participants
       }
     };
 
     const handleRouteChange = () => {
-      if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
+      // Only check if host is navigating away from tournament pages
+      const currentPath = window.location.pathname;
+      const isTournamentPage = currentPath.includes('/tournament') || currentPath.includes('/play');
+      
+      if (tournamentState === 'lobby' && tournamentId && user?.email && socket && !isTournamentPage) {
         // Check if user is the host
         const isHost = participants.some(p => 
           (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
         );
         
         if (isHost) {
-          // Cancel tournament when host navigates away
+          // Only cancel tournament when HOST navigates away from tournament area
           socket.emit('CancelTournament', {
             tournamentId,
             hostEmail: user.email
           });
-        } else {
-          // Remove participant when they navigate away
-          socket.emit('LeaveTournament', {
-            tournamentId,
-            playerEmail: user.email
-          });
         }
+        // Participants can navigate anywhere freely - NO tracking, NO removal
+        // They will stay in the tournament and get global notifications
       }
     };
 
-    // Add event listeners
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    // Listen for route changes (Next.js App Router)
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-    
-    history.pushState = function() {
-      handleRouteChange();
-      return originalPushState.apply(history, arguments);
-    };
-    
-    history.replaceState = function() {
-      handleRouteChange();
-      return originalReplaceState.apply(history, arguments);
-    };
+    // Only add event listeners for hosts to prevent tournament cancellation
+    const isHost = participants.some(p => 
+      (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+    );
 
-    window.addEventListener('popstate', handleRouteChange);
+    if (isHost) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      // Listen for route changes (Next.js App Router)
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
+      
+      history.pushState = function() {
+        handleRouteChange();
+        return originalPushState.apply(history, arguments);
+      };
+      
+      history.replaceState = function() {
+        handleRouteChange();
+        return originalReplaceState.apply(history, arguments);
+      };
 
-    // Cleanup
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('popstate', handleRouteChange);
-      history.pushState = originalPushState;
-      history.replaceState = originalReplaceState;
-    };
+      window.addEventListener('popstate', handleRouteChange);
+
+      // Cleanup
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('popstate', handleRouteChange);
+        history.pushState = originalPushState;
+        history.replaceState = originalReplaceState;
+      };
+    }
+    // ZERO event listeners for participants - they can navigate completely freely
+    // They remain in tournament and get notifications wherever they are
   }, [tournamentState, tournamentId, user?.email, socket, participants]);
 
   // Handle tournament name change and clear errors
@@ -778,64 +949,6 @@ export default function OnlineTournament() {
       setTournamentNameError(null);
     }
   };
-
-  // Monitor participants and ensure they're still in the lobby
-  useEffect(() => {
-    if (!tournamentId || !socket || tournamentState !== 'lobby') return;
-
-    // Set up a periodic check to ensure participants are still active
-    const participantCheckInterval = setInterval(() => {
-      if (socket && tournamentId) {
-        socket.emit('CheckTournamentParticipants', { tournamentId });
-      }
-    }, 10000); // Check every 10 seconds
-
-    return () => {
-      if (participantCheckInterval) {
-        clearInterval(participantCheckInterval);
-      }
-    };
-  }, [tournamentId, socket, tournamentState]);
-
-  // Handle visibility changes and tab switching
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && tournamentState === 'lobby' && tournamentId && user?.email && socket) {
-        // Check if user is not the host
-        const isHost = participants.some(p => 
-          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
-        );
-        
-        if (!isHost) {
-          // Emit a presence check when participant tab becomes hidden
-          socket.emit('ParticipantPresenceCheck', {
-            tournamentId,
-            playerEmail: user.email,
-            isActive: false
-          });
-        }
-      } else if (!document.hidden && tournamentState === 'lobby' && tournamentId && user?.email && socket) {
-        // Tab becomes visible again
-        const isHost = participants.some(p => 
-          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
-        );
-        
-        if (!isHost) {
-          socket.emit('ParticipantPresenceCheck', {
-            tournamentId,
-            playerEmail: user.email,
-            isActive: true
-          });
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [tournamentState, tournamentId, user?.email, socket, participants]);
 
   return (
     <div className="h-full w-full text-white">
@@ -950,6 +1063,12 @@ export default function OnlineTournament() {
                       You need to invite {tournamentSize - participants.length} more players
                     </div>
                   )}
+                  
+                  <div className="text-gray-400 text-xs mb-4">
+                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) 
+                      ? 'As the host, you must stay on tournament pages. Leaving will cancel the tournament.'
+                      : 'You can freely navigate anywhere! You\'ll remain in the tournament and get notified when matches start. Only click "Leave Tournament" if you want to quit completely.'}
+                  </div>
                 </div>
                 
                 <div className="flex gap-3">
@@ -957,7 +1076,9 @@ export default function OnlineTournament() {
                     onClick={leaveTournament}
                     className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
                   >
-                    Cancel Tournament
+                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) 
+                      ? 'Cancel Tournament' 
+                      : 'Leave Tournament'}
                   </button>
                   <button
                     onClick={startTournament}
@@ -1065,7 +1186,7 @@ export default function OnlineTournament() {
           {/* Tournament Complete Section */}
           {tournamentComplete && (
             <div className="text-center space-y-6">
-              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]">
+              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]"> 
                 <h2 className="text-3xl font-bold text-white mb-4">Tournament Complete!</h2>
                 {champion && (
                   <div className="mb-6">

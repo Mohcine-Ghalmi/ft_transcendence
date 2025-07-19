@@ -20,7 +20,6 @@ interface PingPongGameProps {
   player2: any;
   onExit: (winner?: any) => void;
   isTournamentMode?: boolean;
-  // Remote game props
   gameId?: string;
   socket?: any;
   isHost?: boolean;
@@ -51,7 +50,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   });
   const {user} = useAuthStore();
 
-  // Remote game state
   const [isRemoteGame, setIsRemoteGame] = useState(false);
   const [remoteGameState, setRemoteGameState] = useState<any>(null);
   const [isPlayer1, setIsPlayer1] = useState(true);
@@ -69,14 +67,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   useEffect(() => {
     setIsRemoteGame(!!gameId && !!socket);
     if (gameId && socket) {
-      // For ALL remote games (tournament and matchmaking), maintain consistent positioning
-      // Host is always Player 1 (left), Guest is always Player 2 (right)
       setIsPlayer1(isHost);
       setIsGameHost(isHost);
     }
   }, [gameId, socket, isHost]);
 
-  // Listen for game start event from server
   useEffect(() => {
     if (!isRemoteGame || !socket) return;
 
@@ -97,7 +92,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           currentScores.current = data.gameState.scores;
           setScores(data.gameState.scores);
         } else {
-          // Initialize with default values
           ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
           ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
           ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
@@ -108,11 +102,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           setScores({ p1: 0, p2: 0 });
         }
         
-        // Tournament games should be ready immediately with no delay
         if (isTournamentMode) {
           setGameReady(true);
         } else {
-          // Add small delay for regular games
           setTimeout(() => {
             setGameReady(true);
           }, 500);
@@ -127,15 +119,12 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
   }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost, isTournamentMode]);
 
-  // Auto-start for tournament games immediately when component mounts
   useEffect(() => {
     if (isTournamentMode && !gameStarted) {
-      // For all tournament games (both remote and local), start immediately without waiting for events
       setGameStarted(true);
       setPaused(false);
       gameStartTime.current = Date.now();
       
-      // Initialize with default values for tournament
       ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
       ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
       ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
@@ -148,20 +137,18 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     }
   }, [isTournamentMode, gameStarted]);
 
-  // Regular game auto-start logic (only for non-tournament games)
   useEffect(() => {
     if (isRemoteGame && socket && gameId && !gameStarted && !isTournamentMode) {
       const autoStartTimer = setTimeout(() => {
         if (!gameStarted && socket && gameId) {
           socket.emit('StartGame', { gameId });
         }
-      }, 1000); // 1 second delay for regular games
+      }, 1000);
 
       return () => clearTimeout(autoStartTimer);
     }
   }, [isRemoteGame, socket, gameId, gameStarted, isTournamentMode]);
 
-  // Validate players have required properties - Fix for consistent positioning
   const safePlayer1 = {
     id: isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id) || crypto.randomUUID(),
     name: isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username),
@@ -178,7 +165,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     email: isRemoteGame && !isHost ? user?.email : (isRemoteGame ? opponent?.email : player2?.email)
   };
 
-  // Paddle positions: player1 left, player2 right
+
   const paddle1Y = useRef<number>(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
   const paddle2Y = useRef<number>(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
   const ball = useRef({

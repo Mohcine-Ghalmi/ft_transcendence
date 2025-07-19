@@ -1,8 +1,48 @@
 import { create } from 'zustand'
-import { axiosInstance, useAuthStore } from './useAuthStore'
+import { useAuthStore } from './useAuthStore'
 import { io, type Socket } from 'socket.io-client'
 import { toast } from 'react-toastify'
 import CryptoJs from 'crypto-js'
+import axios from 'axios'
+
+const FRON_END = process.env.NEXT_PUBLIC_FRONEND
+const BACK_END = 'http://localhost:5006'
+
+export const axiosChatInstance = axios.create({
+  baseURL: BACK_END,
+  withCredentials: true,
+})
+
+axiosChatInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+axiosChatInstance.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (
+      (error.response?.status === 401 ||
+        error.status === 401 ||
+        error.status === 403) &&
+      window.location.href !== `${FRON_END}/`
+    ) {
+      const disconnectSocket = useAuthStore.getState().disconnectSocket
+      disconnectSocket()
+      localStorage.removeItem('accessToken')
+      window.location.href = `${FRON_END}/`
+    }
+    return Promise.reject(error)
+  }
+)
 
 interface ChatStoreType {
   conversations: any[]
@@ -27,7 +67,6 @@ interface ChatStoreType {
 }
 
 export let chatSocket: Socket | null = null
-const BACK_END = process.env.NEXT_PUBLIC_BACKEND
 
 export const useChatStore = create<ChatStoreType>()((set, get) => ({
   conversations: [],
@@ -60,7 +99,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   getConversations: async () => {
     set({ isLoading: true })
     try {
-      const res = await axiosInstance.get('/api/chat/getFriends')
+      const res = await axiosChatInstance.get('/api/chat/getFriends')
 
       set({ conversations: res.data })
 
@@ -74,7 +113,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   getMessage: async (id: number, offset: number) => {
     set({ isLoading: true })
     try {
-      const res = await axiosInstance.get(`/api/chat/${id}/${offset}`)
+      const res = await axiosChatInstance.get(`/api/chat/${id}/${offset}`)
       const user = useAuthStore.getState().user
       set({
         selectedConversation:

@@ -1,8 +1,9 @@
-"use client"
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { useAuthStore, getSocketInstance } from "@/(zustand)/useAuthStore";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
+'use client'
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { useAuthStore } from '@/(zustand)/useAuthStore'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { getGameSocketInstance } from '@/(zustand)/useGameStore'
 
 const TournamentInviteContext = createContext(null);
 
@@ -12,7 +13,7 @@ export function useTournamentInvite() {
 
 export function TournamentInviteProvider({ children }) {
   const { user } = useAuthStore();
-  const socket = getSocketInstance();
+  const socket = getGameSocketInstance();
   const [receivedInvite, setReceivedInvite] = useState(null);
   const router = useRouter();
 

@@ -1,6 +1,8 @@
 node_modules
 .env
-src/uploads/*.png
-src/uploads/*.jpg
-src/uploads/*.jpeg
-src/uploads/*.webp
+uploads/*.jpg
+uploads/*.png
+uploads/*.jpeg
+uploads/*.gif
+uploads/*.webp
+uploads/*.svg

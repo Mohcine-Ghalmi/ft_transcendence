@@ -123,15 +123,19 @@ export const notifications = [
   {
     id: 1,
     type: 'friend_request',
+    avatar: '/mghalmi.jpg',
     message: 'Liam Parker sent you a friend request',
     time: '2 minutes ago',
+    status: 'pending',
     unread: true,
   },
   {
     id: 2,
-    type: 'match_invite',
+    type: 'game_invitation',
+    avatar: '/mghalmi.jpg',
     message: 'Sophia Evans invited you to a match',
     time: '15 minutes ago',
+    status: 'pending',
     unread: true,
   },
   {
@@ -142,6 +146,14 @@ export const notifications = [
     unread: false,
   },
   {
+    id: 5,
+    type: 'message',
+    avatar: '/mghalmi.jpg',
+    message: 'Hey There! How are you doing?',
+    time: '2 hours ago',
+    unread: false,
+  },
+  {
     id: 4,
     type: 'tournament',
     message: 'Tournament starting in 30 minutes',
@@ -149,7 +161,6 @@ export const notifications = [
     unread: false,
   },
 ]
-
 export const chartData = [
   { label: 'Week 1', value: 12 },
   { label: 'Week 2', value: 18 },
