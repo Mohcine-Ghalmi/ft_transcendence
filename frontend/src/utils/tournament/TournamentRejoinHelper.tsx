@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore, getSocketInstance } from '@/(zustand)/useAuthStore';
+import { useAuthStore } from '@/(zustand)/useAuthStore';
 import { getGameSocketInstance } from '@/(zustand)/useGameStore';
 import { useTournamentNotifications } from './TournamentNotificationProvider';
 
@@ -22,6 +22,7 @@ export const TournamentRejoinHelper = () => {
   const { addNotification } = useTournamentNotifications();
   const [activeTournaments, setActiveTournaments] = useState<ActiveTournament[]>([]);
   const [socket, setSocket] = useState<any>(null);
+  const [showRejoin, setShowRejoin] = useState("false");
   const router = useRouter();
   const pathname = usePathname();
 
@@ -132,7 +133,6 @@ export const TournamentRejoinHelper = () => {
         playerEmail: user.email
       });
 
-      // Show loading notification
       addNotification({
         type: 'tournament_info',
         title: 'Rejoining Tournament',
@@ -142,10 +142,7 @@ export const TournamentRejoinHelper = () => {
       });
     }
   };
-
-  const isOnTournamentPage = pathname?.includes('/tournament');
   
-  // Always show tournament access - don't hide it on tournament pages
   if (activeTournaments.length === 0) {
     return null;
   }

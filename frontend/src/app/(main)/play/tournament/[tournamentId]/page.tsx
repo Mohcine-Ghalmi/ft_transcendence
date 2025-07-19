@@ -47,7 +47,6 @@ export default function TournamentGamePage() {
     }
   }, [socket, tournamentId, user?.email, authorizationChecked, router])
 
-  // Add socket connection monitoring
   useEffect(() => {
     if (!socket) return;
 
@@ -102,7 +101,6 @@ export default function TournamentGamePage() {
       }
     }
 
-    // Handle tournament data response (for completed tournaments)
     const handleTournamentDataResponse = (data: any) => {
       setAuthorizationChecked(true)
       if (data.status === 'success' && data.tournament) {
@@ -472,7 +470,6 @@ export default function TournamentGamePage() {
       setTimeout(() => setNotification(null), 2000);
     };
 
-    // Register all event listeners
     socket.on('TournamentJoinResponse', handleTournamentJoinResponse)
     socket.on('TournamentDataResponse', handleTournamentDataResponse)
     socket.on('TournamentPlayerJoined', handleTournamentPlayerJoined)
@@ -528,7 +525,6 @@ export default function TournamentGamePage() {
     const startData = { tournamentId, hostEmail: user.email };
     socket.emit('StartTournament', startData);
     
-    // Add a timeout fallback in case the response doesn't come back
     setTimeout(() => {
       if (isStartingGame) {
         setIsStartingGame(false);
@@ -574,8 +570,6 @@ export default function TournamentGamePage() {
       round: currentRound 
     });
   };
-
-  // Add after main hooks
   useEffect(() => {
     if (!socket || !tournamentId || !user?.email || !tournamentData) return;
 
@@ -585,42 +579,30 @@ export default function TournamentGamePage() {
       const newPath = window.location.pathname;
       if (currentPath && newPath !== currentPath) {
         
-        // Only emit leave/cancel events if leaving to non-game/non-tournament pages
         const isLeavingToGame = newPath.includes('/play/game/');
         const isStayingInTournament = newPath.includes(`/play/tournament/${tournamentId}`);
         const isGoingToPlay = newPath === '/play';
         const isInternalRoute = newPath.startsWith('/play/') || newPath.startsWith('/another-internal-route/'); // Add your internal routes here
         
-        // Only consider it "leaving" if going to non-tournament, non-game pages
         if (!isLeavingToGame && !isStayingInTournament && !isGoingToPlay && !isInternalRoute) {
-          // Only cancel tournament if host leaves during LOBBY state
-          // During active matches (in_progress), host can navigate freely
           if (isHost && tournamentData?.status === 'lobby') {
             socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
           }
-          // During active matches or for participants: NO tracking, NO removal
-          // They stay in the tournament and get global notifications
         }
       }
       setTimeout(() => { currentPath = newPath; }, 0);
     };
 
     const handleBeforeUnload = () => {
-      // Only cancel tournament on page close/refresh if host and in lobby state
       if (isHost && tournamentData?.status === 'lobby') {
         socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
       }
-      // During active matches or for participants: they remain in tournament
-      // NO socket events are sent
     };
 
-    // Only add event listeners for hosts during lobby state to prevent tournament cancellation
-    // During active matches, even hosts can navigate freely
     if (isHost && tournamentData?.status === 'lobby') {
       window.addEventListener('popstate', handleRouteChange);
       window.addEventListener('beforeunload', handleBeforeUnload);
 
-      // Listen for pushState and replaceState
       const originalPushState = history.pushState;
       const originalReplaceState = history.replaceState;
 
@@ -640,17 +622,16 @@ export default function TournamentGamePage() {
         history.replaceState = originalReplaceState;
       };
     }
-    // NO event listeners during active matches or for participants
-    // Everyone can navigate completely freely during matches
   }, [socket, tournamentId, user?.email, isHost, tournamentData]);
 
-  // Add Cancel Tournament button for host in the lobby
   const handleCancelTournament = () => {
     if (!socket || !tournamentId || !isHost) return;
     
     socket.emit('CancelTournament', { tournamentId, hostEmail: user?.email });
     setNotification({ message: 'Canceling tournament...', type: 'info' });
   }
+
+  
 
   // Loading state
   if (!authorizationChecked) {
