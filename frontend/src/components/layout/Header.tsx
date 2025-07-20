@@ -180,7 +180,7 @@ export const Header = () => {
               height={32}
               className="w-7 h-7 sm:w-8 sm:h-8"
             />
-            <h1 className="text-white font-semibold text-base sm:text-lg">
+            <h1 className="text-white font-semibold text-base hidden xl:text-lg">
               PingPong
             </h1>
           </Link>
