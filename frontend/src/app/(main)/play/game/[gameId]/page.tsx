@@ -112,7 +112,7 @@ export default function GamePage() {
           setOpponent({
             email: data.opponent.email,
             username: data.opponent.username || data.opponent.login || data.opponent.email,
-            avatar: data.opponent.avatar || '/avatar/Default.svg',
+            avatar: data.opponent.avatar,
             login: data.opponent.login || data.opponent.nickname || data.opponent.username || data.opponent.email
           });
         }
@@ -202,7 +202,7 @@ export default function GamePage() {
           setOpponent({
             email: opponentData.email,
             username: opponentData.username || opponentData.login || opponentData.email,
-            avatar: opponentData.avatar || '/avatar/Default.svg',
+            avatar: opponentData.avatar ,
             login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
           })
         }
@@ -236,7 +236,7 @@ export default function GamePage() {
           setOpponent({
             email: opponentData.email,
             username: opponentData.username || opponentData.login || opponentData.email,
-            avatar: opponentData.avatar || '/avatar/Default.svg',
+            avatar: opponentData.avatar,
             login: opponentData.login || opponentData.nickname || opponentData.username || opponentData.email
           })
           
@@ -249,7 +249,7 @@ export default function GamePage() {
           setOpponent({
             email: opponentEmail,
             username: opponentEmail, // This should be fetched from user data
-            avatar: '/avatar/Default.svg',
+            avatar: user?.avatar,
             login: opponentEmail
           })
           
@@ -278,19 +278,13 @@ export default function GamePage() {
       }
     }
 
-    // Handle when a player leaves the game - FIXED
     const handlePlayerLeft = (data: any) => {
       if (data.gameId === gameId) {
         
-        // Only show alert and redirect if we're not the one leaving
         if (!isLeavingGameRef.current) {
-          // For tournament matches, redirect back to tournament
           if (data.isTournament || data.isTournamentMatch || isTournamentMatch) {
-            // Show different message for tournament
-            // Winner goes back to tournament
             router.push(`/play/tournament/${data.tournamentId}`);
           } else {
-            // Regular match - navigate to winner page
             const winnerName = user?.username || user?.login || 'You';
             const loserName = data.playerWhoLeft || 'Opponent';
             router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
@@ -305,25 +299,15 @@ export default function GamePage() {
         
         // For tournament matches, handle differently
         if (data.isTournament || data.isTournamentMatch || isTournamentMatch) {
-          const isWinner = data.winner === user?.email;
-          const isTournamentHost = data.tournamentHostEmail === user?.email;
-          
-          // Tournament host ALWAYS goes back to tournament
-          // Winner ALWAYS goes back to tournament 
-          // Loser ALSO goes back to tournament (changed from going to /play)
-          
-          // Always redirect to tournament for tournament matches
           setTimeout(() => {
             router.push(`/play/tournament/${data.tournamentId}`);
           }, 1000); // Small delay to allow any final state updates
           
         } else {
-          // Regular match logic
           const isWinner = data.winner === user?.email;
           const winnerName = isWinner ? (user?.username || user?.login || 'You') : (data.winner || 'Opponent');
           const loserName = isWinner ? (data.loser || 'Opponent') : (user?.username || user?.login || 'You');
           
-          // Navigate to appropriate result page
           if (isWinner) {
             router.push(`/play/result/win?winner=${encodeURIComponent(winnerName)}&loser=${encodeURIComponent(loserName)}`);
           } else {
@@ -385,7 +369,7 @@ export default function GamePage() {
           setOpponent({
             email: opponentEmail,
             username: opponentData.username || opponentData.login || opponentEmail.split('@')[0],
-            avatar: opponentData.avatar || '/avatar/Default.svg',
+            avatar: opponentData.avatar,
             login: opponentData.login || opponentData.username || opponentEmail.split('@')[0]
           });
           
@@ -404,13 +388,13 @@ export default function GamePage() {
               hostData: {
                 email: data.gameRoom.hostEmail,
                 username: data.gameRoom.hostEmail.split('@')[0],
-                avatar: '/avatar/Default.svg',
+                avatar: user?.avatar,
                 login: data.gameRoom.hostEmail.split('@')[0]
               },
               guestData: {
                 email: data.gameRoom.guestEmail,
                 username: data.gameRoom.guestEmail.split('@')[0],
-                avatar: '/avatar/Default.svg',
+                avatar: user?.avatar,
                 login: data.gameRoom.guestEmail.split('@')[0]
               }
             });
@@ -482,19 +466,16 @@ export default function GamePage() {
         clearTimeout(startGameTimeout)
       }
     }
-  }, [socket, gameId, user?.email]) // Removed opponent from dependencies to avoid re-registering handlers
+  }, [socket, gameId, user?.email])
 
-  // Handle page refresh and disconnection - IMPROVED
   useEffect(() => {
     let hasUnloaded = false
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Only emit LeaveGame if we're actually in a game and haven't already left
       if (socket && gameId && user?.email && !isLeavingGameRef.current && !hasUnloaded) {
         hasUnloaded = true
         setIsLeavingGame(true)
         
-        // For tournament matches, include tournament information
         const leaveData = {
           gameId, 
           playerEmail: user.email,
@@ -508,7 +489,6 @@ export default function GamePage() {
         
         socket.emit('LeaveGame', leaveData)
         
-        // Show confirmation dialog if game is in progress
         if (gameStartedRef.current) {
           e.preventDefault()
           const message = isTournamentMatch 
@@ -521,7 +501,6 @@ export default function GamePage() {
     }
 
     const handleVisibilityChange = () => {
-      // Only leave if the page is being unloaded, not just hidden
       if (document.visibilityState === 'hidden' && hasUnloaded) {
         if (socket && gameId && user?.email && !isLeavingGameRef.current) {
           setIsLeavingGame(true)
@@ -604,21 +583,15 @@ export default function GamePage() {
   }
 
   const handleGameEnd = () => {
-    // Set leaving flag to prevent duplicate events
     setIsLeavingGame(true)
-    // Navigate back to play page
-    // setTimeout(() => {router.push("/play")}, 0);
   }
 
-  // Track current pathname to detect route changes
   useEffect(() => {
-    // Set initial path
     if (typeof window !== 'undefined') {
       setCurrentPath(window.location.pathname);
     }
   }, []);
 
-  // Handle route changes and page navigation
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
