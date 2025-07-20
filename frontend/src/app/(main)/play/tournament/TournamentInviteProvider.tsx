@@ -24,21 +24,21 @@ export function TournamentInviteProvider({ children }) {
     const handleTournamentInviteReceived = (data) => {
       console.log('Tournament invite received from:', data.hostData?.username, 'Tournament ID:', data.tournamentId);
       
-      // Check if invitation from this host already exists (same host, but any tournament)
+      // Check if invitation from this exact host and tournament already exists
       setReceivedInvites(prev => {
         const existingIndex = prev.findIndex(invite => 
-          invite.hostData?.email === data.hostData?.email
+          invite.hostData?.email === data.hostData?.email && invite.tournamentId === data.tournamentId
         );
         
         if (existingIndex !== -1) {
-          // Update existing invitation from same host
-          console.log('Updating existing tournament invite from same host');
+          // Update existing invitation from same host and tournament
+          console.log('Updating existing tournament invite from same host and tournament');
           const updated = [...prev];
           updated[existingIndex] = { ...data, timestamp: Date.now() };
           return updated;
         } else {
-          // Add new invitation from different host
-          console.log('Adding new tournament invite from different host');
+          // Add new invitation (allows multiple from different hosts/tournaments)
+          console.log('Adding new tournament invite - multiple invitations allowed');
           return [...prev, { ...data, timestamp: Date.now() }];
         }
       });
@@ -180,9 +180,18 @@ export function TournamentInviteProvider({ children }) {
       return newSliding;
     });
   };
+  
+  // Helper functions for compatibility with OnlineTournament component
+  const hasPendingInviteWith = (email) => {
+    return receivedInvites.some(invite => invite.hostData?.email === email);
+  };
+  
+  const getPendingInvites = () => {
+    return receivedInvites;
+  };
 
   return (
-    <TournamentInviteContext.Provider value={{ socket, receivedInvites, acceptInvite, declineInvite, clearInvite }}>
+    <TournamentInviteContext.Provider value={{ socket, receivedInvites, acceptInvite, declineInvite, clearInvite, hasPendingInviteWith, getPendingInvites }}>
       {children}
       {receivedInvites.map((invite, index) => (
         <div 

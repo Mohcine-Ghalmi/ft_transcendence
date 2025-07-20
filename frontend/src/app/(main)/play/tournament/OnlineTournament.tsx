@@ -26,7 +26,7 @@ interface OnlinePlayModeProps {
   sentInvites: Map<string, any>;
 }
 
-const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends }: OnlinePlayModeProps & { friends: Player[] }) => {
+const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, invitingPlayers }: OnlinePlayModeProps & { friends: Player[], invitingPlayers: Set<string> }) => {
   const [searchQuery, setSearchQuery] = useState('');
   // Use the same filtering logic as OneVsOne
   const filteredPlayers = friends.filter(player =>
@@ -58,7 +58,7 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends }
               key={`${player.email}-${player.nickname}-${index}`}
               player={player}
               onInvite={onInvitePlayer}
-              isInviting={false} // You can enhance this to match invite state
+              isInviting={invitingPlayers.has(player.email)}
             />
           ))
         ) : (
@@ -167,7 +167,7 @@ export default function OnlineTournament() {
   const [champion, setChampion] = useState(null);
   const [tournaments, setTournaments] = useState([]);
   const [friends, setFriends] = useState<Player[]>([]);
-  const [isInviting, setIsInviting] = useState(false);
+  const [invitingPlayers, setInvitingPlayers] = useState(new Set<string>()); // Track multiple inviting players
   const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null);
   const [inviteId, setInviteId] = useState<string | null>(null);
   const [waitTime, setWaitTime] = useState(30);
@@ -388,41 +388,32 @@ export default function OnlineTournament() {
     if (participants.length >= tournamentSize || !tournamentId || !socket) {
       return;
     }
-    setIsInviting(true);
-    setInvitedPlayer(player);
-    setWaitingForResponse(true);
-    setWaitTime(30);
-    setInviteId(null);
+    
+    // Add this player to the inviting set
+    setInvitingPlayers(prev => new Set([...prev, player.email]));
+    
     if (!process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
-      setIsInviting(false);
-      setWaitingForResponse(false);
+      // Remove from inviting set if failed
+      setInvitingPlayers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(player.email);
+        return newSet;
+      });
       return;
     }
+    
     const inviteData = {
       tournamentId: tournamentId,
       hostEmail: user.email,
       inviteeEmail: player.email
     };
+    
     const encrypted = CryptoJS.AES.encrypt(
       JSON.stringify(inviteData),
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY
     ).toString();
+    
     socket.emit('InviteToTournament', encrypted);
-    // Start countdown
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    countdownIntervalRef.current = setInterval(() => {
-      setWaitTime(prev => {
-        if (prev <= 1) {
-          clearInterval(countdownIntervalRef.current!);
-          setWaitingForResponse(false);
-          setIsInviting(false);
-          setInvitedPlayer(null);
-          setInviteId(null);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
   };
 
   // Socket event listeners for tournament invite
@@ -430,47 +421,64 @@ export default function OnlineTournament() {
     if (!socket) return;
     const handleInviteResponse = (data: any) => {
       if (data.status === 'success' && data.type === 'invite_sent') {
-        setInviteId(data.inviteId);
+        console.log('Tournament invitation sent successfully to:', data.guestData?.email);
       } else if (data.status === 'error') {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+        // Remove player from inviting set on error
+        // For errors, we need to identify which player failed by the current inviting set
+        // Since the backend doesn't always provide guestData on error, we'll remove all current inviting players
+        console.error('Tournament invitation error:', data.message);
+        
+        // Show error notification
+        if (typeof showNotification === 'function') {
+          showNotification(data.message || 'Failed to send invitation', 'error');
+        }
+        
+        // For now, we can't specifically identify which player failed, so we don't remove from inviting set here
+        // The timeout or success will handle the removal
       }
     };
     const handleInviteAccepted = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
-        if (data.newParticipant) {
-          setParticipants(prev => [...prev, data.newParticipant]);
-        }
+      // Remove player from inviting set
+      if (data.guestData?.email) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestData.email);
+          return newSet;
+        });
+      }
+      
+      if (data.newParticipant) {
+        setParticipants(prev => [...prev, data.newParticipant]);
       }
     };
     const handleInviteDeclined = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+      // Remove player from inviting set
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
       }
     };
     const handleInviteTimeout = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+      // Remove player from inviting set
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
       }
     };
     const handleInviteCanceled = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+      // Remove player from inviting set
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
       }
     };
     socket.on('InviteToTournamentResponse', handleInviteResponse);
@@ -493,7 +501,8 @@ export default function OnlineTournament() {
     if (socket && inviteId && user?.email) {
       socket.emit('CancelTournamentInvite', { inviteId, hostEmail: user.email });
     }
-    setIsInviting(false);
+    // Clear all inviting players
+    setInvitingPlayers(new Set());
     setWaitingForResponse(false);
     setInvitedPlayer(null);
     setInviteId(null);
@@ -529,6 +538,7 @@ export default function OnlineTournament() {
         setTournamentState('setup');
         setSentInvites(new Map());
         setPendingInvites(new Map());
+        setInvitingPlayers(new Set()); // Clear inviting players
         setTournamentComplete(false);
         setChampion(null);
         return;
@@ -549,6 +559,7 @@ export default function OnlineTournament() {
     setTournamentState('setup');
     setSentInvites(new Map());
     setPendingInvites(new Map());
+    setInvitingPlayers(new Set()); // Clear inviting players
     setTournamentComplete(false);
     setChampion(null);
   };
@@ -1062,13 +1073,16 @@ export default function OnlineTournament() {
                 </div>
               </div>
               
-              {/* Online Player Search and Invite */}
-              <OnlinePlayMode 
-                onInvitePlayer={handleInvitePlayer} 
-                pendingInvites={pendingInvites}
-                sentInvites={sentInvites}
-                friends={friends}
-              />
+              {/* Online Player Search and Invite - Only for Tournament Host */}
+              {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) && (
+                <OnlinePlayMode 
+                  onInvitePlayer={handleInvitePlayer} 
+                  pendingInvites={pendingInvites}
+                  sentInvites={sentInvites}
+                  friends={friends}
+                  invitingPlayers={invitingPlayers}
+                />
+              )}
             </div>
           )}
           

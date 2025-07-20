@@ -50,7 +50,7 @@ export const handleGameAcceptance: GameSocketHandler = (
         // Clean up invitation
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${guestEmail}`),
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), // Host-specific key
         ])
 
         // Get user data
@@ -98,11 +98,15 @@ export const handleGameAcceptance: GameSocketHandler = (
 
         io.to(hostSocketIds).emit('GameInviteAccepted', {
           ...acceptedData,
+          hostEmail: host.email,
+          guestEmail: guest.email,
           guestData: getPlayerData(guest),
         })
 
         io.to(guestSocketIds).emit('GameInviteAccepted', {
           ...acceptedData,
+          hostEmail: host.email,
+          guestEmail: guest.email,
           hostData: getPlayerData(host),
         })
       } catch (error) {
@@ -148,7 +152,7 @@ export const handleGameAcceptance: GameSocketHandler = (
         // Clean up invitation
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${guestEmail}`),
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), // Host-specific key
         ])
 
         const guestUser = await getUserByEmail(invite.guestEmail)

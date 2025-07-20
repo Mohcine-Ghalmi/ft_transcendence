@@ -30,26 +30,26 @@ export function GameInviteProvider({ children }) {
       console.log('Current user email:', user.email);
       console.log('Host email:', data.hostData?.email);
       
-      // Check if there's already an active invitation from this specific host
+      // Check if there's already an invitation from this exact host and game combination
       setReceivedInvites(prev => {
-        const existingFromSameHost = prev.findIndex(invite => 
-          invite.hostData?.email === data.hostData?.email
+        const existingFromSameHostAndGame = prev.findIndex(invite => 
+          invite.hostData?.email === data.hostData?.email && invite.gameId === data.gameId
         );
         
-        if (existingFromSameHost !== -1) {
-          // Replace existing invitation from same host with new one
-          console.log('Replacing existing invite from same host');
+        if (existingFromSameHostAndGame !== -1) {
+          // Replace existing invitation from same host and game
+          console.log('Replacing existing invite from same host and game');
           const updated = [...prev];
-          updated[existingFromSameHost] = { ...data, timestamp: Date.now() };
+          updated[existingFromSameHostAndGame] = { ...data, timestamp: Date.now() };
           return updated;
         } else {
-          // Add new invitation from different host
-          console.log('Adding new invite from different host');
+          // Add new invitation (allows multiple from different hosts)
+          console.log('Adding new invite - multiple invitations allowed');
           return [...prev, { ...data, timestamp: Date.now() }];
         }
       });
       
-      // Auto-hide after 5 seconds using unique gameId
+      // Auto-hide after 30 seconds using unique gameId (consistent with tournaments)
       setTimeout(() => {
         setIsSliding(prev => ({ ...prev, [data.gameId]: true }));
         setTimeout(() => {
@@ -60,7 +60,7 @@ export function GameInviteProvider({ children }) {
             return newSliding;
           });
         }, 300);
-      }, 5000);
+      }, 30000);
     }
     const handleGameInviteCanceled = (data) => {
       setReceivedInvites(prev => prev.filter(invite => invite.gameId !== data.gameId));
@@ -124,12 +124,10 @@ export function GameInviteProvider({ children }) {
     });
   }
 
-  // Helper function to check if there's already a pending invitation with a specific player
   const hasPendingInviteWith = (playerEmail) => {
     return receivedInvites.some(invite => invite.hostData?.email === playerEmail);
   }
 
-  // Helper function to get all currently pending invitations
   const getPendingInvites = () => {
     return receivedInvites.map(invite => ({
       gameId: invite.gameId,
