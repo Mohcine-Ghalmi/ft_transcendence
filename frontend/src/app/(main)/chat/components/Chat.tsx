@@ -301,7 +301,6 @@ const Chat = () => {
     chatHeader,
     handleNewMessage,
     tmp,
-    connectChatSocket,
     selectedConversation,
     isChatSocketConnected,
   } = useChatStore()
@@ -422,7 +421,11 @@ const Chat = () => {
   }, [selectedConversationId])
 
   return (
-    <div className="w-full rounded-2xl  relative">
+    <div
+      className={`w-full ${
+        !selectedConversationId ? 'max-xl:hidden' : 'flex'
+      } xl:flex rounded-2xl  relative`}
+    >
       {selectedConversationId === undefined ? (
         <EmptyChat
           text="Select a chat from the list to start exploring your messages or begin a

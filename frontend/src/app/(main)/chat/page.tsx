@@ -14,39 +14,6 @@ interface GameInviteDeclinedInterface {
   guestName: string
 }
 
-// gameId
-// :
-// "8d91781b-8f11-456c-acc8-76789bbe16c9"
-// guestData
-// :
-// avatar
-// :
-// "1752664334848-f50ca54bbcde8aa3.png"
-// id
-// :
-// 1
-// login
-// :
-// "harlequin_overwhelming_sturgeon"
-// username
-// :
-// "zabi"
-// [[Prototype]]
-// :
-// Object
-// guestEmail
-// :
-// "cbamiixsimo@gmail.com"
-// message
-// :
-// "Invitation sent to zabi"
-// status
-// :
-// "success"
-// type
-// :
-// "invite_sent"
-
 interface InviteToGameResponseInterface {
   gameId: string
   guestData: {
@@ -62,14 +29,11 @@ interface InviteToGameResponseInterface {
 
 const page = () => {
   const {
-    isChatSocketConnected,
     connectChatSocket,
     disconnectChatSocket,
     handleChangeConversations,
     selectedConversationId,
-    setIsChatSocketConnected,
     selectedConversation,
-    tmp,
   } = useChatStore()
   const [isConnected, setIsSocketConnected] = useState(false)
 

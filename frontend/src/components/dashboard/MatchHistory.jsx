@@ -16,7 +16,7 @@ export const MatchHistory = ({ matchHistory }) => {
       <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-white mb-3 sm:mb-4 lg:mb-5 xl:mb-6 p-2 flex-shrink-0">
         Match History
       </h3>
-      <div className="border border-gray-700 rounded-2xl overflow-hidden flex-1 min-h-0">
+      <div className="border border-gray-700 rounded-2xl overflow-hidden flex-1 min-h-[350px]">
         <div className="h-full overflow-y-auto">
           <table className="w-full">
             <thead className="bg-gray-800/80 border-b border-red-700 sticky top-0">
