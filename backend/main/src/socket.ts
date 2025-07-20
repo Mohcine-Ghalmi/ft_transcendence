@@ -62,6 +62,55 @@ export async function cleanupStaleSocketsOnStartup() {
 
 import { createAdapter } from '@socket.io/redis-adapter'
 
+async function checkSocketConnection(socket: any) {
+  if (!socket || !socket.handshake || !socket.handshake.query) {
+    return null
+  }
+  const key = process.env.ENCRYPTION_KEY || ''
+  if (!key) {
+    socket.emit('error-in-connection', {
+      status: 'error',
+      message: 'ENCRYPTION_KEY is not set in environment variables',
+    })
+    socket.disconnect(true)
+    return null
+  }
+  let userEmail: string = ''
+  try {
+    const cryptedMail = socket.handshake.query.cryptedMail
+
+    userEmail = CryptoJS.AES.decrypt(cryptedMail as string, key).toString(
+      CryptoJS.enc.Utf8
+    )
+    if (!userEmail) {
+      socket.emit('error-in-connection', {
+        status: 'error',
+        message: 'Invalid email format',
+      })
+      socket.disconnect(true)
+      return null
+    }
+    const me = await getUserByEmail(userEmail)
+
+    if (!me) {
+      socket.emit('error-in-connection', {
+        status: 'error',
+        message: 'User not found',
+      })
+      socket.disconnect(true)
+      return null
+    }
+    return me
+  } catch (err) {
+    socket.emit('error-in-connection', {
+      status: 'error',
+      message: 'Invalid email format',
+    })
+    socket.disconnect(true)
+    return null
+  }
+}
+
 export async function setupSocketIO(server: FastifyInstance) {
   // the main server running on :5005
   const subClient = redis.duplicate()
@@ -80,53 +129,25 @@ export async function setupSocketIO(server: FastifyInstance) {
   io.adapter(createAdapter(redis, subClient))
 
   io.on('connection', async (socket) => {
-    const key = process.env.ENCRYPTION_KEY || ''
     try {
-      const cryptedMail = socket.handshake.query.cryptedMail
+      const me: any | null = await checkSocketConnection(socket)
 
-      const userEmail = CryptoJS.AES.decrypt(
-        cryptedMail as string,
-        key
-      ).toString(CryptoJS.enc.Utf8)
+      if (!me) return
 
-      if (userEmail) {
-        const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
-        const me: typeof createUserResponseSchema = await getUserByEmail(email)
-        if (!me) {
-          console.log('User not found for email:', email)
-          return socket.emit('error-in-connection', {
-            status: 'error',
-            message: 'User not found',
-          })
-        }
+      addSocketId(me.email, socket.id, 'sockets')
 
-        console.log('User authenticated:', {
-          email,
-          username: (me as any).username,
-        })
-        addSocketId(email, socket.id, 'sockets')
+      const redisKeys = await redis.keys('sockets:*')
 
-        // Store user email on socket for later use
-        ;(socket as any).userEmail = email
-        socket.data = { userEmail: email }
-
-        const redisKeys = await redis.keys('sockets:*')
-
-        const onlineUsers = redisKeys.map((key) => key.split(':')[1])
-        console.log('Online users:', onlineUsers)
-        io.emit('getOnlineUsers', onlineUsers)
-        socket.emit('BlockedList', getIsBlocked(userEmail))
-      }
+      const onlineUsers = redisKeys.map((key) => key.split(':')[1])
+      io.emit('getOnlineUsers', onlineUsers)
+      socket.emit('BlockedList', getIsBlocked(me.email))
 
       setupUserSocket(socket, io)
       setupFriendsSocket(socket, io)
-      // handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {
-        console.log('Socket disconnected:', { socketId: socket.id, userEmail })
-        if (userEmail) {
-          const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
-          removeSocketId(email, socket.id, 'sockets')
+        if (me.email) {
+          removeSocketId(me.email, socket.id, 'sockets')
           const redisKeys = await redis.keys('sockets:*')
           const onlineUsers = redisKeys.map((key) => key.split(':')[1])
 
@@ -134,8 +155,6 @@ export async function setupSocketIO(server: FastifyInstance) {
         }
       })
     } catch (error) {
-      console.log('Socket connection error:', error)
-
       return socket.emit('error-in-connection', {
         status: 'error',
         message: 'An error occurred during connection',
