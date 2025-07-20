@@ -15,26 +15,36 @@ export function TournamentInviteProvider({ children }) {
   const { user } = useAuthStore();
   const socket = getGameSocketInstance();
   const [receivedInvite, setReceivedInvite] = useState(null);
+  const [showToast, setShowToast] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     if (!socket || !user?.email) return;
 
-    // Socket event listeners for tournament invites
     const handleTournamentInviteReceived = (data) => {
       setReceivedInvite(data);
+      setShowToast(true);
+      
+      // Auto-hide after 30 seconds
+      setTimeout(() => {
+        setShowToast(false);
+        setReceivedInvite(null);
+      }, 30000);
     };
     
     const handleTournamentInviteCanceled = (data) => {
       setReceivedInvite(null);
+      setShowToast(false);
     };
 
     const handleTournamentInviteTimeout = (data) => {
       setReceivedInvite(null);
+      setShowToast(false);
     };
 
     const handleTournamentInviteAccepted = (data) => {
       setReceivedInvite(null);
+      setShowToast(false);
       // Only navigate if this is the invited player (not the host)
       if (data.inviteeEmail === user.email) {
         router.push(`/play/tournament/${data.tournamentId}`);
@@ -43,24 +53,28 @@ export function TournamentInviteProvider({ children }) {
 
     const handleTournamentInviteDeclined = (data) => {
       setReceivedInvite(null);
+      setShowToast(false);
     };
 
     const handleTournamentInviteResponse = (data) => {
       // This handles the response when the current user accepts an invite
       if (data.status === 'success' && data.tournamentId) {
         setReceivedInvite(null);
+        setShowToast(false);
         // Redirect to tournament lobby immediately with shorter timeout for better UX
         setTimeout(() => {
           router.push(`/play/tournament/${data.tournamentId}`);
         }, 300);
       } else if (data.status === 'error') {
         setReceivedInvite(null);
+        setShowToast(false);
       }
     };
 
     const handleTournamentCancelled = (data) => {
       // Clear any pending invites if the tournament was cancelled
       setReceivedInvite(null);
+      setShowToast(false);
     };
 
     // Add event listeners
@@ -90,7 +104,6 @@ export function TournamentInviteProvider({ children }) {
         inviteId: receivedInvite.inviteId,
         inviteeEmail: user.email,
       });
-      // Don't clear invite here - let the response handler deal with it
     }
   };
 
@@ -101,44 +114,53 @@ export function TournamentInviteProvider({ children }) {
         inviteeEmail: user.email,
       });
       setReceivedInvite(null);
+      setShowToast(false);
     }
   };
 
   const clearInvite = () => {
     setReceivedInvite(null);
+    setShowToast(false);
   };
 
   return (
     <TournamentInviteContext.Provider value={{ socket, receivedInvite, acceptInvite, declineInvite, clearInvite }}>
       {children}
-      {receivedInvite && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-[#2a2f3a] p-6 rounded-lg max-w-md w-full mx-4">
-            <h3 className="text-white text-xl font-semibold mb-4">Tournament Invitation</h3>
-            <div className="flex items-center space-x-4 mb-4">
+      {receivedInvite && showToast && (
+        <div className="fixed top-4 right-4 z-[9999] animate-in slide-in-from-right duration-300">
+          <div className="bg-[#2a2f3a] border border-[#404654] rounded-lg shadow-2xl p-4 max-w-sm w-80">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white text-lg font-semibold">🏆 Tournament Invite</h3>
+              <button
+                onClick={clearInvite}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex items-center space-x-3 mb-3">
               <Image
                 src={`/images/${receivedInvite.hostData?.avatar}` || "/avatar/Default.svg"}
                 alt={receivedInvite.hostData?.username || "Host"}
-                width={48}
-                height={48}
-                className="w-12 h-12 rounded-full object-cover"
+                width={40}
+                height={40}
+                className="w-10 h-10 rounded-full object-cover border-2 border-[#404654]"
               />
               <div>
-                <p className="text-white font-medium">{receivedInvite.hostData?.username || "Host"}</p>
-                <p className="text-gray-400 text-sm">Level {receivedInvite.hostData?.level || "Unknown"}</p>
+                <p className="text-white font-medium text-sm">{receivedInvite.hostData?.username || "Host"}</p>
               </div>
             </div>
-            <p className="text-gray-300 mb-6">{receivedInvite.message}</p>
-            <div className="flex space-x-4">
+            <p className="text-gray-300 text-sm mb-4">{receivedInvite.message}</p>
+            <div className="flex space-x-2">
               <button
                 onClick={acceptInvite}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded transition-colors"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded text-sm font-medium transition-colors"
               >
                 Accept
               </button>
               <button
                 onClick={declineInvite}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded transition-colors"
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded text-sm font-medium transition-colors"
               >
                 Decline
               </button>
