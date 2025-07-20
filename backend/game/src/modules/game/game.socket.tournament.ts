@@ -95,6 +95,32 @@ async function getAllActiveTournaments(): Promise<Tournament[]> {
   }
 }
 
+// Helper function to check if a user is already participating in any active tournament
+async function isUserInActiveTournament(userEmail: string): Promise<{ isParticipating: boolean; tournamentName?: string }> {
+  try {
+    const keys = await redis.keys(`${TOURNAMENT_PREFIX}*`);
+    for (const key of keys) {
+      const t = await redis.get(key);
+      if (t) {
+        const parsed: Tournament = JSON.parse(t);
+        if (parsed.status === 'lobby' || parsed.status === 'in_progress') {
+          // Check if user is in participants list
+          const isParticipant = parsed.participants.some(participant => 
+            participant.email === userEmail && participant.status === 'accepted'
+          );
+          if (isParticipant) {
+            return { isParticipating: true, tournamentName: parsed.name };
+          }
+        }
+      }
+    }
+    return { isParticipating: false };
+  } catch (err) {
+    console.error('Error checking user tournament participation:', err);
+    return { isParticipating: false };
+  }
+}
+
 export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) => {
   // Create a new tournament
   socket.on('CreateTournament', async (data: {
@@ -110,6 +136,14 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       if (!data.name || !data.hostEmail || !data.hostNickname || !data.size) {
         console.log('Missing required tournament data');
         return socket.emit('TournamentError', { message: 'Missing required tournament information.' });
+      }
+      
+      // Check if the user is already participating in any active tournament
+      const participationCheck = await isUserInActiveTournament(data.hostEmail);
+      if (participationCheck.isParticipating) {
+        return socket.emit('TournamentError', { 
+          message: `You are already participating in the tournament "${participationCheck.tournamentName}". Please complete or leave that tournament before creating a new one.` 
+        });
       }
       
       // Check for duplicate tournament names
@@ -347,6 +381,16 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const { inviteId, inviteeEmail } = data;
       
       if (!inviteId || !inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Missing info.' });
+      
+      // Check if the user is already participating in any active tournament
+      const participationCheck = await isUserInActiveTournament(inviteeEmail);
+      if (participationCheck.isParticipating) {
+        return socket.emit('TournamentInviteResponse', { 
+          status: 'error', 
+          message: `You are already participating in the tournament "${participationCheck.tournamentName}". Please complete or leave that tournament before joining a new one.` 
+        });
+      }
+      
       const inviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`);
       if (!inviteData) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invite expired.' });
       const invite = JSON.parse(inviteData);
@@ -1091,6 +1135,15 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       if (!tournamentId || !playerEmail) {
         console.error('Missing join data:', { tournamentId, playerEmail });
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Missing info.' });
+      }
+      
+      // Check if the user is already participating in any active tournament
+      const participationCheck = await isUserInActiveTournament(playerEmail);
+      if (participationCheck.isParticipating) {
+        return socket.emit('TournamentJoinResponse', { 
+          status: 'error', 
+          message: `You are already participating in the tournament "${participationCheck.tournamentName}". Please complete or leave that tournament before joining a new one.` 
+        });
       }
       
       // Get tournament data

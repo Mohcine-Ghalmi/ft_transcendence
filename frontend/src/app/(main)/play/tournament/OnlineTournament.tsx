@@ -94,7 +94,9 @@ const ParticipantItem = ({ player, isHost }: {
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
         <Image 
-          src={`/images/${player.avatar}`} 
+          src={player.avatar?.startsWith('data:') ? player.avatar : 
+               (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
+               player.avatar?.startsWith('/') ? player.avatar : `/avatar/Default.avif`} 
           alt={player.login || "zahay"} 
           width={40}  
           height={40}
@@ -423,9 +425,6 @@ export default function OnlineTournament() {
       if (data.status === 'success' && data.type === 'invite_sent') {
         console.log('Tournament invitation sent successfully to:', data.guestData?.email);
       } else if (data.status === 'error') {
-        // Remove player from inviting set on error
-        // For errors, we need to identify which player failed by the current inviting set
-        // Since the backend doesn't always provide guestData on error, we'll remove all current inviting players
         console.error('Tournament invitation error:', data.message);
         
         // Show error notification
@@ -1148,7 +1147,9 @@ export default function OnlineTournament() {
                     <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                         <Image 
-                          src={`/images/${player.avatar}`} 
+                          src={player.avatar?.startsWith('data:') ? player.avatar : 
+                               (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
+                               player.avatar?.startsWith('/') ? player.avatar : `/avatar/Default.avif`} 
                           alt={player.login} 
                           width={48} 
                           height={48}
