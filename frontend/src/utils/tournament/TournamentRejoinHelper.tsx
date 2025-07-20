@@ -149,7 +149,7 @@ export const TournamentRejoinHelper = () => {
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-[#1a1d23] rounded-lg p-4 border border-[#2a2f3a] shadow-lg max-w-sm">
+      {/* <div className="bg-[#1a1d23] rounded-lg p-4 border border-[#2a2f3a] shadow-lg max-w-sm">
         <h3 className="text-white font-semibold mb-3">🏆 Active Tournaments</h3>
         <div className="space-y-2">
           {activeTournaments.map((tournament) => (
@@ -171,7 +171,7 @@ export const TournamentRejoinHelper = () => {
             </div>
           ))}
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

@@ -20,6 +20,7 @@ interface PingPongGameProps {
   player2: any;
   onExit: (winner?: any) => void;
   isTournamentMode?: boolean;
+  // Remote game props
   gameId?: string;
   socket?: any;
   isHost?: boolean;
@@ -50,6 +51,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   });
   const {user} = useAuthStore();
 
+  // Remote game state
   const [isRemoteGame, setIsRemoteGame] = useState(false);
   const [remoteGameState, setRemoteGameState] = useState<any>(null);
   const [isPlayer1, setIsPlayer1] = useState(true);
@@ -59,19 +61,78 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const animationRef = useRef<number | null>(null);
   const router = useRouter();
 
+  // Tournament participant data
+  const [tournamentPlayer1Data, setTournamentPlayer1Data] = useState<any>(null);
+  const [tournamentPlayer2Data, setTournamentPlayer2Data] = useState<any>(null);
+
   // Mobile paddle state
   const [paddle1Move, setPaddle1Move] = useState<'' | 'up' | 'down'>('');
   const [paddle2Move, setPaddle2Move] = useState<'' | 'up' | 'down'>('');
+
+  // Function to fetch tournament participant data
+  const fetchTournamentParticipant = async (email: string) => {
+    try {
+      const response = await fetch(`http://localhost:5007/api/game/tournament-participant?email=${encodeURIComponent(email)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const result = await response.json();
+      return result.success ? result.data : null;
+    } catch (error) {
+      console.error('Error fetching tournament participant data:', error);
+      return null;
+    }
+  };
 
   // Determine if this is a remote game
   useEffect(() => {
     setIsRemoteGame(!!gameId && !!socket);
     if (gameId && socket) {
+      // For ALL remote games (tournament and matchmaking), maintain consistent positioning
+      // Host is always Player 1 (left), Guest is always Player 2 (right)
       setIsPlayer1(isHost);
       setIsGameHost(isHost);
     }
   }, [gameId, socket, isHost]);
 
+  // Fetch tournament participant data
+  useEffect(() => {
+    if (isTournamentMode && isRemoteGame) {
+      const fetchParticipantData = async () => {
+        try {
+          // Fetch current user data
+          if (user?.email) {
+            const userData = await fetchTournamentParticipant(user.email);
+            if (userData) {
+              if (isHost) {
+                setTournamentPlayer1Data(userData);
+              } else {
+                setTournamentPlayer2Data(userData);
+              }
+            }
+          }
+
+          // Fetch opponent data
+          if (opponent?.email) {
+            const opponentData = await fetchTournamentParticipant(opponent.email);
+            if (opponentData) {
+              if (isHost) {
+                setTournamentPlayer2Data(opponentData);
+              } else {
+                setTournamentPlayer1Data(opponentData);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching tournament participant data:', error);
+        }
+      };
+
+      fetchParticipantData();
+    }
+  }, [isTournamentMode, isRemoteGame, user?.email, opponent?.email, isHost]);
+
+  // Listen for game start event from server
   useEffect(() => {
     if (!isRemoteGame || !socket) return;
 
@@ -81,7 +142,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         setPaused(false);
         gameStartTime.current = Date.now();
         
-        // Initialize game state from server if available
         if (data.gameState) {
           ball.current.x = data.gameState.ballX;
           ball.current.y = data.gameState.ballY;
@@ -92,6 +152,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           currentScores.current = data.gameState.scores;
           setScores(data.gameState.scores);
         } else {
+          // Initialize with default values
           ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
           ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
           ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
@@ -105,6 +166,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         if (isTournamentMode) {
           setGameReady(true);
         } else {
+          // Add small delay for regular games
           setTimeout(() => {
             setGameReady(true);
           }, 500);
@@ -119,8 +181,10 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
   }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost, isTournamentMode]);
 
+  // Auto-start for tournament games immediately when component mounts
   useEffect(() => {
     if (isTournamentMode && !gameStarted) {
+      // For all tournament games (both remote and local), start immediately without waiting for events
       setGameStarted(true);
       setPaused(false);
       gameStartTime.current = Date.now();
@@ -143,29 +207,39 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         if (!gameStarted && socket && gameId) {
           socket.emit('StartGame', { gameId });
         }
-      }, 1000);
+      }, 1000); // 1 second delay for regular games
 
       return () => clearTimeout(autoStartTimer);
     }
   }, [isRemoteGame, socket, gameId, gameStarted, isTournamentMode]);
 
   const safePlayer1 = {
-    id: isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id) || crypto.randomUUID(),
-    name: isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username),
-    avatar: isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar),
-    nickname: isRemoteGame && isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : user?.login) || 'Player 1',
-    email: isRemoteGame && isHost ? user?.email : (isRemoteGame ? opponent?.email : user?.email)
+    id: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.id : 
+        (isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id)) || crypto.randomUUID(),
+    name: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.name : 
+          (isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username)),
+    avatar: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.avatar : 
+            (isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar)),
+    nickname: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.nickname : 
+              (isRemoteGame && isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : user?.login)) || 'Player 1',
+    email: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.email : 
+           (isRemoteGame && isHost ? user?.email : (isRemoteGame ? opponent?.email : user?.email))
   };
 
   const safePlayer2 = {
-    id: isRemoteGame && !isHost ? user?.id : (isRemoteGame ? opponent?.id : player2?.id) || crypto.randomUUID(),
-    name: isRemoteGame && !isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : player2?.username || player2?.name),
-    avatar: isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar),
-    nickname: isRemoteGame && !isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : player2?.login || player2?.nickname) || 'Player 2',
-    email: isRemoteGame && !isHost ? user?.email : (isRemoteGame ? opponent?.email : player2?.email)
+    id: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.id : 
+        (isRemoteGame && !isHost ? user?.id : (isRemoteGame ? opponent?.id : player2?.id)) || crypto.randomUUID(),
+    name: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.name : 
+          (isRemoteGame && !isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : player2?.username || player2?.name)),
+    avatar: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.avatar : 
+            (isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar)),
+    nickname: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.nickname : 
+              (isRemoteGame && !isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : player2?.login || player2?.nickname)) || 'Player 2',
+    email: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.email : 
+           (isRemoteGame && !isHost ? user?.email : (isRemoteGame ? opponent?.email : player2?.email))
   };
 
-
+  // Paddle positions: player1 left, player2 right
   const paddle1Y = useRef<number>(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
   const paddle2Y = useRef<number>(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
   const ball = useRef({

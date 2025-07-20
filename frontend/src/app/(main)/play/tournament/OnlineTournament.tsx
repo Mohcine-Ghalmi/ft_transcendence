@@ -176,10 +176,8 @@ export default function OnlineTournament() {
 
   const totalRounds = Math.log2(tournamentSize);
 
-  // Use getSocketInstance at runtime
   const [socket, setSocket] = useState<any>(null);
 
-  // Initialize socket connection
   useEffect(() => {
     const socketInstance = getGameSocketInstance();
     if (socketInstance) {
@@ -187,18 +185,15 @@ export default function OnlineTournament() {
     }
   }, []);
 
-  // Check for active tournament participation on component mount
   useEffect(() => {
     if (!socket || !user?.email) return;
 
-    // Check if user is part of any active tournament
     const checkActiveTournaments = () => {
       socket.emit('CheckUserTournamentStatus', { userEmail: user.email });
     };
 
     const handleUserTournamentStatus = (data: any) => {
       if (data.activeTournament && tournamentState === 'setup') {
-        // User is part of an active tournament, rejoin it
         setTournamentId(data.activeTournament.tournamentId);
         setTournamentName(data.activeTournament.name);
         setTournamentState(data.activeTournament.status);
@@ -216,7 +211,6 @@ export default function OnlineTournament() {
           setParticipants(formattedParticipants);
         }
 
-        // Show notification that user has been rejoined
         addNotification({
           type: 'tournament_info',
           title: 'Rejoined Tournament',
@@ -237,7 +231,6 @@ export default function OnlineTournament() {
     };
   }, [socket, user?.email, tournamentState, addNotification]);
 
-  // Fetch tournaments from backend
   useEffect(() => {
     if (!socket) return;
     
@@ -288,12 +281,10 @@ export default function OnlineTournament() {
     fetchFriends();
   }, [user]);
 
-  // Helper function to get display name
   const getDisplayName = (player: any) => {
     return player?.nickname?.trim() || player?.login || 'Unknown Player';
   };
 
-  // Handle match updates
   const handleMatchUpdate = (roundIndex: number, matchIndex: number, newState: string) => {
     setMatches(prevMatches => {
       const updatedMatches = [...prevMatches];
@@ -307,16 +298,13 @@ export default function OnlineTournament() {
       matchToUpdate.state = newState;
       updatedMatches[matchToUpdateIndex] = matchToUpdate;
       
-      // If we have a winner, update next round's match
       if (newState === MATCH_STATES.PLAYER1_WIN || newState === MATCH_STATES.PLAYER2_WIN) {
         const winner = newState === MATCH_STATES.PLAYER1_WIN ? matchToUpdate.player1 : matchToUpdate.player2;
         
-        // Check if this is the final match
         if (roundIndex === totalRounds - 1) {
           setChampion(winner);
           setTournamentComplete(true);
         }
-        // Calculate position in next round
         else if (roundIndex < totalRounds - 1) {
           const nextRound = roundIndex + 1;
           const nextMatchIndex = Math.floor(matchIndex / 2);
@@ -329,7 +317,6 @@ export default function OnlineTournament() {
           if (nextMatchIndex2 !== -1) {
             const nextMatch = { ...updatedMatches[nextMatchIndex2] };
             
-            // Update player1 or player2 based on which match this was
             if (isFirstMatchOfPair) {
               nextMatch.player1 = winner;
             } else {
@@ -345,7 +332,6 @@ export default function OnlineTournament() {
     });
   };
 
-  // Check if all matches in current round are completed
   const canAdvanceRound = () => {
     const currentRoundMatches = matches.filter(m => m.round === currentRound);
     return currentRoundMatches.length > 0 && currentRoundMatches.every(m => 
@@ -353,12 +339,10 @@ export default function OnlineTournament() {
     );
   };
 
-  // Advance to next round
   const advanceRound = () => {
     if (currentRound < totalRounds - 1) {
       setCurrentRound(prevRound => prevRound + 1);
     } else {
-      // Tournament is completed
       const finalMatch = matches.find(m => m.round === totalRounds - 1 && m.matchIndex === 0);
       if (finalMatch) {
         const winner = finalMatch.state === MATCH_STATES.PLAYER1_WIN ? 
@@ -369,7 +353,6 @@ export default function OnlineTournament() {
     }
   };
 
-  // Start tournament logic - only creates bracket and redirects players
   const startTournament = () => {
     if (!tournamentId || !socket) {
       return;
@@ -377,7 +360,6 @@ export default function OnlineTournament() {
     socket.emit('StartTournament', { tournamentId, hostEmail: user.email });
   };
 
-  // Start matches for current round with global notifications
   const startCurrentRoundMatches = () => {
     if (!tournamentId || !socket) {
       console.error('❌ Cannot start matches - missing tournamentId or socket:', {
@@ -526,18 +508,14 @@ export default function OnlineTournament() {
       );
       
       if (isHost) {
-        // Host cancels the entire tournament
         handleCancelTournament();
       } else {
-        // Participants explicitly leave tournament (button click only)
-        // This is different from navigation - this actually removes them
         socket.emit('ExplicitLeaveTournament', {
           tournamentId,
           playerEmail: user.email,
           reason: 'explicit_leave_button'
         });
         
-        // Reset local state for participants after explicit leave
         setTournamentId(null);
         setParticipants([{
           id: user.id || user.nickname || 'host',
@@ -626,11 +604,9 @@ export default function OnlineTournament() {
     const handleTournamentCreated = (tournament: any) => {
       setTournamentId(tournament.tournamentId);
       setTournamentState('lobby');
-      // Clear any name errors on successful creation
       setTournamentNameError(null);
     };
     const handleTournamentError = (error: any) => {
-      // Check if it's a duplicate name error
       if (error.message && error.message.toLowerCase().includes('name') && error.message.toLowerCase().includes('exists')) {
         setTournamentNameError(error.message);
       }
@@ -647,7 +623,6 @@ export default function OnlineTournament() {
         }));
         setParticipants(updatedParticipants);
         
-        // Also update other tournament properties if they've changed
         if (data.tournament.status !== tournamentState)
           setTournamentState(data.tournament.status);
       }
@@ -661,7 +636,6 @@ export default function OnlineTournament() {
       if (data.tournamentId === tournamentId) {
         setTournamentState('in_progress');
         
-        // Check if user is the host
         const isHost = participants.some(p => 
           (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
         );
@@ -877,8 +851,6 @@ export default function OnlineTournament() {
             hostEmail: user.email
           });
         }
-        // Participants can close browser/tab freely - they remain in tournament
-        // NO socket events are sent for participants
       }
     };
 
@@ -900,8 +872,6 @@ export default function OnlineTournament() {
             hostEmail: user.email
           });
         }
-        // Participants can navigate anywhere freely - NO tracking, NO removal
-        // They will stay in the tournament and get global notifications
       }
     };
 
@@ -937,8 +907,6 @@ export default function OnlineTournament() {
         history.replaceState = originalReplaceState;
       };
     }
-    // ZERO event listeners for participants - they can navigate completely freely
-    // They remain in tournament and get notifications wherever they are
   }, [tournamentState, tournamentId, user?.email, socket, participants]);
 
   // Handle tournament name change and clear errors
