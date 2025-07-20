@@ -27,18 +27,20 @@ export function GameInviteProvider({ children }) {
     // Socket event listeners for game invites
     const handleGameInviteReceived = (data) => {
       console.log('Game invite received from:', data.hostData?.username, 'GameID:', data.gameId);
+      console.log('Current user email:', user.email);
+      console.log('Host email:', data.hostData?.email);
       
-      // Check if invitation from this host already exists (same host, but any game)
+      // Check if there's already an active invitation from this specific host
       setReceivedInvites(prev => {
-        const existingIndex = prev.findIndex(invite => 
+        const existingFromSameHost = prev.findIndex(invite => 
           invite.hostData?.email === data.hostData?.email
         );
         
-        if (existingIndex !== -1) {
-          // Update existing invitation from same host
-          console.log('Updating existing invite from same host');
+        if (existingFromSameHost !== -1) {
+          // Replace existing invitation from same host with new one
+          console.log('Replacing existing invite from same host');
           const updated = [...prev];
-          updated[existingIndex] = { ...data, timestamp: Date.now() };
+          updated[existingFromSameHost] = { ...data, timestamp: Date.now() };
           return updated;
         } else {
           // Add new invitation from different host
@@ -122,6 +124,22 @@ export function GameInviteProvider({ children }) {
     });
   }
 
+  // Helper function to check if there's already a pending invitation with a specific player
+  const hasPendingInviteWith = (playerEmail) => {
+    return receivedInvites.some(invite => invite.hostData?.email === playerEmail);
+  }
+
+  // Helper function to get all currently pending invitations
+  const getPendingInvites = () => {
+    return receivedInvites.map(invite => ({
+      gameId: invite.gameId,
+      hostEmail: invite.hostData?.email,
+      hostUsername: invite.hostData?.username || invite.hostData?.login,
+      message: invite.message,
+      timestamp: invite.timestamp
+    }));
+  }
+
   return (
     <GameInviteContext.Provider
       value={{
@@ -130,6 +148,8 @@ export function GameInviteProvider({ children }) {
         acceptInvite,
         declineInvite,
         clearInvite,
+        hasPendingInviteWith,
+        getPendingInvites,
       }}
     >
       {children}
