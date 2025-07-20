@@ -75,7 +75,7 @@ const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
       </div>
       {/* Avatar Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg md:rounded-xl xl:rounded-2xl p-20 md:p-12 xl:p-16 transition-colors cursor-pointer ${
+        className={`border-2 border-dashed rounded-lg md:rounded-xl xl:rounded-2xl p-6 xl:p-16 transition-colors cursor-pointer ${
           isDragOver
             ? 'border-blue-500 bg-blue-500/10'
             : errors.avatar
