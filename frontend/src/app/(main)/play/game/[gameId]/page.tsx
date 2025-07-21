@@ -317,10 +317,8 @@ export default function GamePage() {
       }
     }
 
-    // Handle game canceled - FIXED
     const handleGameCanceled = (data: any) => {
       if (data.gameId === gameId) {
-        // Only redirect if we're not the one canceling
         if (!isLeavingGameRef.current) {
           setIsLeavingGame(true)
           setTimeout(() => {router.push("/play")}, 0);
@@ -328,7 +326,6 @@ export default function GamePage() {
       }
     }
 
-    // Handle game authorization response
     const handleGameAuthorizationResponse = (data: any) => {
       setAuthorizationChecked(true)
       
