@@ -94,9 +94,7 @@ const ParticipantItem = ({ player, isHost }: {
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
         <Image 
-          src={player.avatar?.startsWith('data:') ? player.avatar : 
-               (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
-               player.avatar?.startsWith('/') ? player.avatar : `/avatar/Default.avif`} 
+          src={`/images/${player.avatar}`}
           alt={player.login || "zahay"} 
           width={40}  
           height={40}
@@ -1147,10 +1145,8 @@ export default function OnlineTournament() {
                     <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                         <Image 
-                          src={player.avatar?.startsWith('data:') ? player.avatar : 
-                               (player.avatar === 'Default.avif' || player.avatar === 'Default.svg') ? `/avatar/${player.avatar}` : 
-                               player.avatar?.startsWith('/') ? player.avatar : `/avatar/Default.avif`} 
-                          alt={player.login} 
+                          src={`/images/${player.avatar}`} 
+                          alt={player.login || player.nickname || "Player Avatar"}
                           width={48} 
                           height={48}
                           className="w-full h-full object-cover"
