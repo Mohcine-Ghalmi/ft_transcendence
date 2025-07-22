@@ -16,11 +16,11 @@ import { useAuthStore } from '@/(zustand)/useAuthStore'
 
 export default function PingPongDashboard() {
   const { getRandomFriendsSuggestions } = useSearchStore()
-  const { getUserDetails, userDetails } = useAuthStore()
+  const { getUserDetails, userDetails, user } = useAuthStore()
   const total = userDetails?.wins + userDetails?.losses
   const winRate = total ? ((userDetails?.wins / total) * 100).toFixed(1) : 0
   useEffect(() => {
-    getUserDetails()
+    getUserDetails(user.email)
     getRandomFriendsSuggestions()
   }, [])
   return (
@@ -32,13 +32,15 @@ export default function PingPongDashboard() {
           <div className="xl:col-span-2 space-y-4 sm:space-y-6">
             <ProfileSection />
             <GameModeCards />
-            <MatchHistory matchHistory={matchHistory} />
+            <div className="flex xl:flex-row flex-col w-full gap-4">
+              <MatchHistory matchHistory={matchHistory} />
+              <FriendSuggestions />
+            </div>
             <FriendsSection />
           </div>
 
           {/* Right Sidebar */}
           <div className="space-y-4 sm:space-y-6">
-            <FriendSuggestions />
             <StatisticsChart
               title="Win/Loss Rate"
               value={`${winRate}%`}

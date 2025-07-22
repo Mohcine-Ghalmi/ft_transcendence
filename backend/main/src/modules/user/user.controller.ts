@@ -412,10 +412,18 @@ export async function getUser(
 
     if (!login)
       return rep.code(400).send({ status: false, message: 'User Not Found' })
+
     const sql = db.prepare(
-      'SELECT id, login, username, email, xp, avatar, type, level FROM User WHERE login = ?'
+      `SELECT User.id, User.login, User.username, User.email, User.xp, User.avatar, User.type, User.level,
+        FriendRequest.status, FriendRequest.fromEmail, FriendRequest.toEmail
+      FROM User
+      LEFT JOIN FriendRequest
+        ON ( (FriendRequest.toEmail = User.email AND FriendRequest.fromEmail = ?)
+          OR (FriendRequest.fromEmail = User.email AND FriendRequest.toEmail = ?) )
+      WHERE User.login = ?`
     )
-    const user: any = await sql.get(login)
+
+    const user: any = await sql.get(email, email, login)
 
     const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(email, user.email)
 

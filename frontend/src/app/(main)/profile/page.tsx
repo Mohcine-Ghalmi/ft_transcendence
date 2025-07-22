@@ -4,6 +4,7 @@ import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { useChatStore } from '@/(zustand)/useChatStore'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { StatisticsChart } from '@/components/dashboard/StatisticsChart'
+import { useFriend } from '@/utils/useFriend'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -44,6 +45,13 @@ const TopProfile = ({ user }) => {
     })
   }
 
+  const {
+    handleFriendAction,
+    getButtonText,
+    isButtonDisabled,
+    handleChatWithUser,
+  } = useFriend(user)
+
   // useEffect(() => {}, [user.isBlockedByMe])
 
   return (
@@ -65,6 +73,24 @@ const TopProfile = ({ user }) => {
         >
           Edit Profile
         </Link>
+      ) : !user.status || user.status !== 'ACCEPTED' ? (
+        <>
+          <button
+            onClick={handleFriendAction}
+            disabled={isButtonDisabled()}
+            className={`text-center mt-4 w-[300px] cursor-pointer rounded-2xl py-2 text-white duration-300 hover:scale-99 ${
+              isButtonDisabled()
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-[#2B3036] cursor-pointer hover:bg-[#2a3d52]'
+            }`}
+          >
+            {getButtonText() === 'Friends' ? (
+              <div onClick={handleChatWithUser}>Chat</div>
+            ) : (
+              getButtonText()
+            )}
+          </button>
+        </>
       ) : (
         <div className="flex gap-4">
           <button

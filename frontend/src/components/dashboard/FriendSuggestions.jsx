@@ -1,123 +1,67 @@
-// Friend Suggestions Component
+// Friend Suggestions Component (Refactored)
 'use client'
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { useSearchStore } from '../../(zustand)/useSearchStore'
-import { socketInstance, useAuthStore } from '../../(zustand)/useAuthStore'
+import { useAuthStore } from '../../(zustand)/useAuthStore'
 import { useRouter } from 'next/navigation'
-import { useChatStore } from '../../(zustand)/useChatStore'
+import { useFriend } from '../../utils/useFriend'
 
 const Friend = ({ user }) => {
-  const [status, setStatus] = useState()
-  const { user: me, onlineUsers } = useAuthStore()
-  const { setSelectedConversationId } = useChatStore()
+  const { onlineUsers } = useAuthStore()
   const router = useRouter()
+
+  const {
+    handleFriendAction,
+    getButtonText,
+    isButtonDisabled,
+    handleChatWithUser,
+  } = useFriend(user)
 
   if (!user) return null
 
-  const handleClick = () => {
-    if (!socketInstance) return
-
-    switch (status) {
-      case '':
-        setStatus('PENDING')
-        socketInstance.emit('addFriend', user.email)
-        break
-
-      case 'PENDING':
-        if (!user.fromEmail) return
-        if (user.fromEmail !== me.email) {
-          setStatus('ACCEPTED')
-          socketInstance.emit('acceptFriend', user.email)
-        }
-        break
-
-      case 'REJECTED':
-        if (!user.fromEmail) return
-        setStatus('PENDING')
-        socketInstance.emit('rejectFriend', user.email)
-        break
-
-      case 'ACCEPTED':
-        // socketInstance.emit('removeFriend', user.email)
-        // setStatus('')
-        break
-
-      default:
-        break
-    }
-  }
-
-  const getButtonText = () => {
-    switch (status) {
-      case 'PENDING':
-        if (!user.fromEmail) return 'Invite Sent'
-        return user.fromEmail === me.email ? 'Invite Sent' : 'Accept'
-      case 'ACCEPTED':
-        return 'Friends'
-      case 'REJECTED':
-        return 'rejected'
-      default:
-        return 'Add Friend'
-    }
-  }
-
-  const isButtonDisabled = () => {
-    return status === 'PENDING' && user.fromEmail === me.email
-  }
-
-  const handleChatWithuser = () => {
-    setSelectedConversationId(user.id)
-    router.push('/chat')
-  }
-
-  useEffect(() => {
-    setStatus(user.status || '')
-  }, [user.status])
-
   return (
-    <>
-      <div
-        key={user.id}
-        className="flex items-center gap-2 sm:gap-3 lg:gap-4 flex-shrink-0"
-      >
-        <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 xl:w-18 xl:h-18 rounded-full overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600">
-          <img
-            src={`/images/${user.avatar}`}
-            alt={user.username}
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl text-white font-medium truncate">
-            {user.username}
-          </p>
-          <p
-            className={`text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl ${
-              onlineUsers.includes(user.email)
-                ? 'text-green-400'
-                : 'text-gray-400'
-            }`}
-          >
-            {onlineUsers.includes(user.email) ? 'Online' : 'Offline'}
-          </p>
-        </div>
-        <button
-          onClick={handleClick}
-          disabled={isButtonDisabled()}
-          className={`py-1 px-2 text-xs rounded-2xl ${
-            isButtonDisabled()
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-[#334D66] cursor-pointer hover:bg-[#2a3d52]'
+    <div
+      key={user.id}
+      onClick={() => router.push(`/profile/${user.login}`)}
+      className="flex items-center gap-2 flex-shrink-0 hover:bg-gray-900 cursor-pointer duration-500 p-2 rounded-2xl"
+    >
+      <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600">
+        <img
+          src={`/images/${user.avatar}`}
+          alt={user.username}
+          className="w-full h-full object-cover"
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm sm:text-base md:text-md text-white font-medium truncate">
+          {user.username}
+        </p>
+        <p
+          className={`sm:text-[8px] ${
+            onlineUsers.includes(user.email)
+              ? 'text-green-400'
+              : 'text-gray-400'
           }`}
         >
-          {getButtonText() === 'Friends' ? (
-            <div onClick={() => handleChatWithuser()}>Chat</div>
-          ) : (
-            getButtonText()
-          )}
-        </button>
+          {onlineUsers.includes(user.email) ? 'Online' : 'Offline'}
+        </p>
       </div>
-    </>
+      <button
+        onClick={handleFriendAction}
+        disabled={isButtonDisabled()}
+        className={`py-1 px-2 text-xs rounded-2xl ${
+          isButtonDisabled()
+            ? 'bg-gray-400 cursor-not-allowed'
+            : 'bg-[#334D66] cursor-pointer hover:bg-[#2a3d52]'
+        }`}
+      >
+        {getButtonText() === 'Friends' ? (
+          <div onClick={handleChatWithUser}>Chat</div>
+        ) : (
+          getButtonText()
+        )}
+      </button>
+    </div>
   )
 }
 
@@ -125,11 +69,11 @@ export const FriendSuggestions = () => {
   const { randomFriendsSuggestions } = useSearchStore()
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl p-3 sm:p-4 lg:p-5 xl:p-6">
-      <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-white mb-3 sm:mb-4 lg:mb-5 xl:mb-6 flex-shrink-0">
+    <div className="flex flex-col justify-between overflow-hidden rounded-2xl xl:w-[30%] w-full">
+      <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3 sm:mb-4 lg:mb-5 xl:mb-6 flex-shrink-0">
         Friend Suggestions
       </h3>
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-2 sm:space-y-3 lg:space-y-4">
+      <div className="h-[390px] space-y-2 sm:space-y-3 lg:space-y-4 bg-[#121417] border border-gray-500 p-4 rounded-2xl">
         {randomFriendsSuggestions.length > 0 ? (
           randomFriendsSuggestions.map((friend, index) => (
             <Friend user={friend} key={index} />
@@ -140,6 +84,68 @@ export const FriendSuggestions = () => {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Example: Another component that uses the same friend logic
+export const UserCard = ({ user, showAvatar = true }) => {
+  const {
+    handleFriendAction,
+    getButtonText,
+    isButtonDisabled,
+    handleChatWithUser,
+  } = useFriend(user)
+
+  return (
+    <div className="p-4 border border-gray-600 rounded-lg">
+      {showAvatar && (
+        <img
+          src={`/images/${user.avatar}`}
+          alt={user.username}
+          className="w-16 h-16 rounded-full mx-auto mb-2"
+        />
+      )}
+      <h3 className="text-white text-center mb-2">{user.username}</h3>
+      <button
+        onClick={
+          getButtonText() === 'Friends'
+            ? handleChatWithUser
+            : handleFriendAction
+        }
+        disabled={isButtonDisabled()}
+        className={`w-full py-2 px-4 text-sm rounded-lg ${
+          isButtonDisabled()
+            ? 'bg-gray-400 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-700 text-white'
+        }`}
+      >
+        {getButtonText() === 'Friends' ? 'Chat' : getButtonText()}
+      </button>
+    </div>
+  )
+}
+
+// Example: Friend list item component
+export const FriendListItem = ({ user }) => {
+  const { handleChatWithUser } = useFriend(user)
+
+  return (
+    <div className="flex items-center justify-between p-3 hover:bg-gray-800 rounded-lg">
+      <div className="flex items-center gap-3">
+        <img
+          src={`/images/${user.avatar}`}
+          alt={user.username}
+          className="w-8 h-8 rounded-full"
+        />
+        <span className="text-white">{user.username}</span>
+      </div>
+      <button
+        onClick={handleChatWithUser}
+        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm"
+      >
+        Chat
+      </button>
     </div>
   )
 }

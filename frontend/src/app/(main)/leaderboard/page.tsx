@@ -65,7 +65,7 @@ export default function LeaderboardPage() {
           {data.length > 0 ? (
             <div className="space-y-4">
               {data.length >= 3 && (
-                <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="hidden md:grid grid-cols-3 gap-4 mb-8">
                   <div
                     className="order-1 flex flex-col items-center cursor-pointer hover:scale-105 duration-500"
                     onClick={() => handlVisitProfile(data[1].login)}
@@ -157,7 +157,7 @@ export default function LeaderboardPage() {
                 </div>
               )}
 
-              <div className="bg-slate-800/30 backdrop-blur h-[60vh] overflow-y-auto rounded-xl border border-gray-700 shadow-xl">
+              <div className="bg-slate-800/30 backdrop-blur h-[85vh]  md:h-[60vh] overflow-y-auto rounded-xl border border-gray-700 shadow-xl">
                 <div className="bg-gradient-to-r from-slate-900 via-stale-400 to-slate-900 px-6 py-4">
                   <div className="grid grid-cols-5 gap-4 font-bold text-white xl:text-md text-xs">
                     <span className="text-center">Rank</span>
