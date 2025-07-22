@@ -85,10 +85,9 @@ export const handleGameAcceptance: GameSocketHandler = (
         )
         gameRooms.set(gameId, gameRoomData)
 
-        // Notify both players
+        // Get ALL socket IDs for both players to ensure all sessions are notified
         const hostSocketIds = (await getSocketIds(host.email, 'sockets')) || []
-        const guestSocketIds =
-          (await getSocketIds(guest.email, 'sockets')) || []
+        const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
 
         const acceptedData = {
           gameId,
@@ -96,6 +95,7 @@ export const handleGameAcceptance: GameSocketHandler = (
           acceptedBy: guest.email,
         }
 
+        // Notify ALL host sessions
         io.to(hostSocketIds).emit('GameInviteAccepted', {
           ...acceptedData,
           hostEmail: host.email,
@@ -103,11 +103,19 @@ export const handleGameAcceptance: GameSocketHandler = (
           guestData: getPlayerData(guest),
         })
 
+        // Notify ALL guest sessions
         io.to(guestSocketIds).emit('GameInviteAccepted', {
           ...acceptedData,
           hostEmail: host.email,
           guestEmail: guest.email,
           hostData: getPlayerData(host),
+        })
+
+        // IMPORTANT: Clean up the invite from ALL guest sessions
+        io.to(guestSocketIds).emit('GameInviteCleanup', {
+          gameId,
+          action: 'accepted',
+          message: 'Invite accepted in another session'
         })
       } catch (error) {
         socket.emit('GameInviteResponse', {
@@ -159,18 +167,27 @@ export const handleGameAcceptance: GameSocketHandler = (
         const guest = guestUser as unknown as User
 
         if (guest) {
+          // Get ALL socket IDs for both players
+          const hostSocketIds = (await getSocketIds(invite.hostEmail, 'sockets')) || []
+          const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
+
           // Notify host of decline
-          const hostSocketIds =
-            (await getSocketIds(invite.hostEmail, 'sockets')) || []
           io.to(hostSocketIds).emit('GameInviteDeclined', {
             gameId,
             declinedBy: guest.email,
             guestName: guest.username,
             guestLogin: guest.login,
           })
+
+          // IMPORTANT: Clean up the invite from ALL guest sessions
+          io.to(guestSocketIds).emit('GameInviteCleanup', {
+            gameId,
+            action: 'declined',
+            message: 'Invite declined in another session'
+          })
         }
 
-        // Confirm to guest
+        // Confirm to the declining session
         socket.emit('GameInviteResponse', {
           status: 'success',
           message: 'Invitation declined.',

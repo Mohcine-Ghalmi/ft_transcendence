@@ -168,10 +168,6 @@ export default function OnlineTournament() {
   const [tournaments, setTournaments] = useState([]);
   const [friends, setFriends] = useState<Player[]>([]);
   const [invitingPlayers, setInvitingPlayers] = useState(new Set<string>()); // Track multiple inviting players
-  const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null);
-  const [inviteId, setInviteId] = useState<string | null>(null);
-  const [waitTime, setWaitTime] = useState(30);
-  const [waitingForResponse, setWaitingForResponse] = useState(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const totalRounds = Math.log2(tournamentSize);
@@ -480,7 +476,7 @@ export default function OnlineTournament() {
       socket.off('TournamentInviteCanceled', handleInviteCanceled);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
-  }, [socket, inviteId, user?.email]);
+  }, [socket, user?.email]);
 
   const leaveTournament = () => {
     if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {

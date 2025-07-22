@@ -147,12 +147,19 @@ export const handleGameInvitation: GameSocketHandler = (
               redis.del(`game_invite:${host.email}:${guest.email}`), // Host-specific key
             ])
 
-            await emitToUsers(
-              io,
-              [host.email, guest.email],
-              'GameInviteTimeout',
-              { gameId }
-            )
+            // Get current socket IDs (they may have changed)
+            const currentHostSocketIds = (await getSocketIds(host.email, 'sockets')) || []
+            const currentGuestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
+
+            // Notify host of timeout
+            io.to(currentHostSocketIds).emit('GameInviteTimeout', { gameId })
+
+            // Clean up invite from ALL guest sessions
+            io.to(currentGuestSocketIds).emit('GameInviteCleanup', {
+              gameId,
+              action: 'timeout',
+              message: 'Invite expired'
+            })
           }
         } catch (error) {
           // Error handling for invitation timeout
@@ -203,12 +210,20 @@ export const handleGameInvitation: GameSocketHandler = (
           redis.del(`game_invite:${invite.hostEmail}:${invite.guestEmail}`), // Host-specific key
         ])
 
-        // Notify guest
-        const guestSocketIds =
-          (await getSocketIds(invite.guestEmail, 'sockets')) || []
+        // Get ALL socket IDs for guest to clean up all sessions
+        const guestSocketIds = (await getSocketIds(invite.guestEmail, 'sockets')) || []
+        
+        // Notify guest of cancellation
         io.to(guestSocketIds).emit('GameInviteCanceled', {
           gameId,
           canceledBy: hostEmail,
+        })
+
+        // Clean up invite from ALL guest sessions
+        io.to(guestSocketIds).emit('GameInviteCleanup', {
+          gameId,
+          action: 'canceled',
+          message: 'Invite was canceled by host'
         })
 
         // Confirm to host

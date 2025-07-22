@@ -854,7 +854,6 @@ export default function OnlineMatch() {
     if (socket && gameId) {
       socket.emit('StartGame', { gameId })
     }
-    // If no socket or gameId, the button should be disabled anyway
   }
 
   const handleCancelGame = () => {
