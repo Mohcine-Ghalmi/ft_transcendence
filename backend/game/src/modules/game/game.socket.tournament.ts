@@ -396,7 +396,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const invite = JSON.parse(inviteData);
       if (invite.inviteeEmail !== inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invalid invite.' });
       
-      // Clean up invite
+      // Clean up invite FIRST
       await Promise.all([
         redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
         redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${inviteeEmail}`) // Tournament-specific key
@@ -446,7 +446,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Update tournament in Redis
       await redis.setex(`${TOURNAMENT_PREFIX}${invite.tournamentId}`, 3600, JSON.stringify(tournament));
       
-      // Get all socket IDs for all participants (including the new one)
+      // Get ALL socket IDs for all participants (including the new one)
       const allParticipantEmails = tournament.participants.map(p => p.email);
       const allSocketIds = [];
       
@@ -455,13 +455,28 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         allSocketIds.push(...socketIds);
       }
       
+      // Get host socket IDs specifically
+      const hostSocketIds = await getSocketIds(invite.hostEmail, 'sockets') || [];
+      
+      // Get ALL guest socket IDs to clean up invite from ALL sessions
+      const guestSocketIds = await getSocketIds(inviteeEmail, 'sockets') || [];
+      
       // Emit to ALL participants (including host and new participant)
       io.to(allSocketIds).emit('TournamentInviteAccepted', { 
         inviteId, 
         inviteeEmail,
+        guestEmail: inviteeEmail, // Add this for compatibility
+        guestData: userData, // Add this for compatibility
         tournamentId: invite.tournamentId,
         newParticipant,
         tournament
+      });
+      
+      // IMPORTANT: Clean up the invite from ALL guest sessions
+      io.to(guestSocketIds).emit('TournamentInviteCleanup', {
+        inviteId,
+        action: 'accepted',
+        message: 'Invite accepted in another session'
       });
       
       // Check if tournament is ready to start
@@ -488,6 +503,94 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
     } catch (error) {
       console.error('[Tournament] Error accepting tournament invite:', error);
       socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to accept tournament invite.' });
+    }
+  });
+  
+  // Decline tournament invite - UPDATED VERSION
+  socket.on('DeclineTournamentInvite', async (data: { inviteId: string; inviteeEmail: string }) => {
+    try {
+      const { inviteId, inviteeEmail } = data;
+      if (!inviteId || !inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Missing info.' });
+      
+      const inviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`);
+      if (!inviteData) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invite expired.' });
+      const invite = JSON.parse(inviteData);
+      if (invite.inviteeEmail !== inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invalid invite.' });
+      
+      // Clean up invite FIRST
+      await Promise.all([
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${inviteeEmail}`) // Tournament-specific key
+      ]);
+      
+      // Get host and guest socket IDs
+      const hostSocketIds = await getSocketIds(invite.hostEmail, 'sockets') || [];
+      const guestSocketIds = await getSocketIds(inviteeEmail, 'sockets') || [];
+      
+      // Get user data for notification
+      const guestUser = await getUserByEmail(inviteeEmail);
+      const guestData = guestUser ? ((guestUser as any).toJSON ? (guestUser as any).toJSON() : guestUser) : null;
+      
+      // Notify host of decline
+      io.to(hostSocketIds).emit('TournamentInviteDeclined', { 
+        inviteId, 
+        tournamentId: invite.tournamentId,
+        inviteeEmail,
+        guestEmail: inviteeEmail, // Add for compatibility
+        declinedBy: inviteeEmail,
+        message: 'Tournament invite was declined.' 
+      });
+      
+      // IMPORTANT: Clean up the invite from ALL guest sessions
+      io.to(guestSocketIds).emit('TournamentInviteCleanup', {
+        inviteId,
+        action: 'declined',
+        message: 'Invite declined in another session'
+      });
+      
+      socket.emit('TournamentInviteResponse', { status: 'success', message: 'Tournament invite declined.' });
+    } catch (error) {
+      socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to decline tournament invite.' });
+    }
+  });
+  
+  // Cancel tournament invite - UPDATED VERSION
+  socket.on('CancelTournamentInvite', async (data: { inviteId: string; hostEmail: string }) => {
+    try {
+      const { inviteId, hostEmail } = data;
+      if (!inviteId || !hostEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Missing info.' });
+      
+      const inviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`);
+      if (!inviteData) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invite not found or expired.' });
+      const invite = JSON.parse(inviteData);
+      if (invite.hostEmail !== hostEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'You can only cancel your own invites.' });
+      
+      // Clean up invite
+      await Promise.all([
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${invite.inviteeEmail}`) // Tournament-specific key
+      ]);
+      
+      // Get ALL socket IDs for guest to clean up all sessions
+      const guestSocketIds = await getSocketIds(invite.inviteeEmail, 'sockets') || [];
+      
+      // Notify guest of cancellation
+      io.to(guestSocketIds).emit('TournamentInviteCanceled', { 
+        inviteId, 
+        tournamentId: invite.tournamentId,
+        canceledBy: hostEmail 
+      });
+      
+      // IMPORTANT: Clean up invite from ALL guest sessions
+      io.to(guestSocketIds).emit('TournamentInviteCleanup', {
+        inviteId,
+        action: 'canceled',
+        message: 'Invite was canceled by host'
+      });
+      
+      socket.emit('TournamentInviteResponse', { status: 'success', message: 'Invitation canceled.' });
+    } catch (error) {
+      socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to cancel tournament invite.' });
     }
   });
 

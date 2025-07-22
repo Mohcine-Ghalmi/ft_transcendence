@@ -58,6 +58,7 @@ export function TournamentInviteProvider({ children }) {
     };
     
     const handleTournamentInviteCanceled = (data) => {
+      console.log('Tournament invite canceled:', data.inviteId);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -67,6 +68,7 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentInviteTimeout = (data) => {
+      console.log('Tournament invite timeout:', data.inviteId);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -76,19 +78,23 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentInviteAccepted = (data) => {
+      console.log('Tournament invite accepted:', data.inviteId, 'by:', data.inviteeEmail);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
         delete newSliding[data.inviteId];
         return newSliding;
       });
+      
       // Only navigate if this is the invited player (not the host)
-      if (data.inviteeEmail === user.email) {
+      if (data.inviteeEmail === user.email || data.guestEmail === user.email) {
+        console.log('Navigating to tournament:', data.tournamentId);
         router.push(`/play/tournament/${data.tournamentId}`);
       }
     };
 
     const handleTournamentInviteDeclined = (data) => {
+      console.log('Tournament invite declined:', data.inviteId, 'by:', data.inviteeEmail || data.guestEmail);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -98,6 +104,7 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentInviteResponse = (data) => {
+      console.log('Tournament invite response:', data);
       // This handles the response when the current user accepts an invite
       if (data.status === 'success' && data.tournamentId) {
         setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
@@ -121,8 +128,33 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentCancelled = (data) => {
+      console.log('Tournament cancelled:', data.tournamentId);
       // Clear any pending invites if the tournament was cancelled
       setReceivedInvites(prev => prev.filter(invite => invite.tournamentId !== data.tournamentId));
+    };
+
+    // NEW: Handle cleanup from other sessions
+    const handleTournamentInviteCleanup = (data) => {
+      console.log('Cleaning up tournament invite in inactive session:', data.inviteId, data.action);
+      
+      setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
+      setIsSliding(prev => {
+        const newSliding = { ...prev };
+        delete newSliding[data.inviteId];
+        return newSliding;
+      });
+
+      // Optional: Show a brief notification that the invite was handled elsewhere
+      if (data.action === 'accepted') {
+        console.log('Tournament invite was accepted in another session');
+        // You could show a toast notification here
+      } else if (data.action === 'declined') {
+        console.log('Tournament invite was declined in another session');
+      } else if (data.action === 'canceled') {
+        console.log('Tournament invite was canceled by host');
+      } else if (data.action === 'timeout') {
+        console.log('Tournament invite expired');
+      }
     };
 
     // Add event listeners
@@ -133,6 +165,7 @@ export function TournamentInviteProvider({ children }) {
     socket.on("TournamentInviteDeclined", handleTournamentInviteDeclined);
     socket.on("TournamentInviteResponse", handleTournamentInviteResponse);
     socket.on("TournamentCancelled", handleTournamentCancelled);
+    socket.on("TournamentInviteCleanup", handleTournamentInviteCleanup); // NEW listener
 
     // Cleanup event listeners on unmount
     return () => {
@@ -143,6 +176,7 @@ export function TournamentInviteProvider({ children }) {
       socket.off("TournamentInviteDeclined", handleTournamentInviteDeclined);
       socket.off("TournamentInviteResponse", handleTournamentInviteResponse);
       socket.off("TournamentCancelled", handleTournamentCancelled);
+      socket.off("TournamentInviteCleanup", handleTournamentInviteCleanup); // NEW cleanup
     };
   }, [socket, user?.email, router]);
 
@@ -152,6 +186,14 @@ export function TournamentInviteProvider({ children }) {
       socket.emit("AcceptTournamentInvite", {
         inviteId: invite.inviteId,
         inviteeEmail: user.email,
+      });
+      
+      // Remove from current session immediately
+      setReceivedInvites(prev => prev.filter(inv => inv.inviteId !== inviteId));
+      setIsSliding(prev => {
+        const newSliding = { ...prev };
+        delete newSliding[inviteId];
+        return newSliding;
       });
     }
   };
@@ -163,6 +205,8 @@ export function TournamentInviteProvider({ children }) {
         inviteId: invite.inviteId,
         inviteeEmail: user.email,
       });
+      
+      // Remove from current session immediately
       setReceivedInvites(prev => prev.filter(inv => inv.inviteId !== inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -256,4 +300,4 @@ export function TournamentInviteProvider({ children }) {
       ))}
     </TournamentInviteContext.Provider>
   );
-} 
+}

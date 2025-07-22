@@ -454,6 +454,7 @@ export default function OnlineTournament() {
         });
       }
     };
+
     const handleInviteCanceled = (data: any) => {
       if (data.guestEmail) {
         setInvitingPlayers(prev => {
@@ -463,17 +464,31 @@ export default function OnlineTournament() {
         });
       }
     };
+
+    const handleInviteCleanup = (data: any) => {
+      console.log('Cleaning up invite in OnlineTournament:', data.guestEmail, data.action);
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
+      }
+    };  
+
     socket.on('InviteToTournamentResponse', handleInviteResponse);
     socket.on('TournamentInviteAccepted', handleInviteAccepted);
     socket.on('TournamentInviteDeclined', handleInviteDeclined);
     socket.on('TournamentInviteTimeout', handleInviteTimeout);
     socket.on('TournamentInviteCanceled', handleInviteCanceled);
+    socket.on('TournamentInviteCleanup', handleInviteCleanup);
     return () => {
       socket.off('InviteToTournamentResponse', handleInviteResponse);
       socket.off('TournamentInviteAccepted', handleInviteAccepted);
       socket.off('TournamentInviteDeclined', handleInviteDeclined);
       socket.off('TournamentInviteTimeout', handleInviteTimeout);
       socket.off('TournamentInviteCanceled', handleInviteCanceled);
+      socket.on('TournamentInviteCleanup', handleInviteCleanup);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
   }, [socket, user?.email]);
