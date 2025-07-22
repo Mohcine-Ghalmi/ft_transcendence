@@ -209,7 +209,7 @@ export default function OnlineMatch() {
     type: 'info',
   })
 
-  const { user } = useAuthStore()
+  const { user, onlineUsers } = useAuthStore()
   const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } =
     useGameInvite()
   const router = useRouter()
@@ -487,6 +487,8 @@ export default function OnlineMatch() {
     }
 
     const handleGameInviteDeclined = (data) => {
+      if (data.gameId !== gameId) return;
+
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -505,6 +507,8 @@ export default function OnlineMatch() {
     }
 
     const handleGameInviteTimeout = (data) => {
+
+      if (data.gameId !== gameId) return;
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -512,15 +516,14 @@ export default function OnlineMatch() {
       clearCountdown()
 
       showNotification('Game invitation expired.', 'error')
-
-      // Reset game state and redirect host back to play page
       resetGameState()
 
-      // Navigate back to the main play page using React router
       // router.push('/play');
     }
 
     const handleGameInviteCanceled = (data) => {
+      if (data.gameId !== gameId) return;
+
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -529,14 +532,14 @@ export default function OnlineMatch() {
 
       showNotification('Game invitation was canceled by host.', 'error')
 
-      // Reset game state and redirect host back to play page
       resetGameState()
 
-      // Navigate back to the main play page using React router
       // router.push('/play');
     }
 
     const handlePlayerLeft = (data) => {
+      if (data.gameId !== gameId) return;
+
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -613,43 +616,30 @@ export default function OnlineMatch() {
       clearCountdown()
 
       showNotification('Game was canceled.', 'error')
-
-      // Reset game state and redirect back to play page
       resetGameState()
 
-      // Navigate back to the main play page using React router
       router.push('/play')
     }
 
-    // FIXED: Handle game start response - navigate both players to game
     const handleGameStartResponse = (data) => {
       if (data.status === 'success') {
-        // Only the guest should navigate to the game page
-        // The host should stay on the current page and the game will start there
         if (!isHost) {
           const targetPath = `/play/game/${gameId}`
           window.location.href = targetPath
         } else {
-          // The host should stay on this page and the game component will be rendered here
-          // We need to transition to the game state
           setShowGame(true)
         }
       } else {
-        // Game start failed - could add user feedback here if needed
       }
     }
 
     // Handle game started event
     const handleGameStarted = (data) => {
       if (data.gameId === gameId) {
-        // Update game state to indicate the game is now active
         setGameState('in_game')
-        // The game component will handle the actual game start
-        // This event confirms that the server has started the game
       }
     }
 
-    // Handler for guest leaving before game starts
     const handleGameEndedByOpponentLeave = (data) => {
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -753,32 +743,33 @@ export default function OnlineMatch() {
       if (!user?.email) return
 
       try {
-        const res = await fetch(
-          `http://localhost:5005/api/users/friends?email=${user.email}`
-        )
+      const res = await fetch(
+        `http://localhost:5005/api/users/friends?email=${user.email}`
+      )
 
-        if (!res.ok) {
-          setFriends([])
-          return
-        }
-
-        const data = await res.json()
-
-        if (data.friends && Array.isArray(data.friends)) {
-          const formatted = data.friends.map((f) => ({
-            name: f.username,
-            avatar: f.avatar,
-            nickname: f.login,
-            GameStatus: 'Available',
-            ...f,
-          }))
-          setFriends(formatted)
-        } else {
-          setFriends([])
-        }
-      } catch (err) {
+      if (!res.ok) {
         setFriends([])
-        // Don't show alert to user, just log the error
+        return
+      }
+
+      const data = await res.json()
+
+      if (data.friends && Array.isArray(data.friends)) {
+        const formatted = data.friends
+        .filter((f) => onlineUsers.includes(f.email)) // Check if user is in onlineUsers
+        .map((f) => ({
+          name: f.username,
+          avatar: f.avatar,
+          nickname: f.login,
+          GameStatus: 'Available',
+          ...f,
+        }))
+        setFriends(formatted)
+      } else {
+        setFriends([])
+      }
+      } catch (err) {
+      setFriends([])
       }
     }
     fetchFriends()
