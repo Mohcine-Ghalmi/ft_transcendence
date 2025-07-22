@@ -25,7 +25,6 @@ async function getAllActiveTournaments(): Promise<any[]> {
     }
     return tournaments
   } catch (err) {
-    console.error('Error getting active tournaments:', err)
     return []
   }
 }
@@ -47,7 +46,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       }
       socket.emit('TournamentList', tournaments)
     } catch (err) {
-      console.error('[Tournament] Error listing tournaments:', err)
       socket.emit('TournamentError', { message: 'Failed to list tournaments.' })
     }
   })
@@ -458,7 +456,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           })
         }
       } catch (error) {
-        console.error('[Tournament] Error leaving tournament:', error)
         socket.emit('TournamentLeaveResponse', {
           status: 'error',
           message: 'Failed to leave tournament.',
@@ -546,7 +543,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           message: 'Tournament canceled successfully.',
         })
       } catch (error) {
-        console.error('[Tournament] Error canceling tournament:', error)
         socket.emit('TournamentCancelResponse', {
           status: 'error',
           message: 'Failed to cancel tournament.',

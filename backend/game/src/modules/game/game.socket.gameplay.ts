@@ -129,7 +129,6 @@ export const handleGameplay: GameSocketHandler = (
         message: 'Game started successfully.',
       })
     } catch (error) {
-      console.error('Error starting game:', error)
       socket.emit('GameStartResponse', {
         status: 'error',
         message: 'Failed to start game.',

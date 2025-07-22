@@ -201,7 +201,6 @@ export const handleMatchmaking: GameSocketHandler = (
       // Try to find a match
       await tryMatchPlayers(io)
     } catch (error) {
-      console.error('Error joining matchmaking:', error)
       socket.emit('MatchmakingResponse', {
         status: 'error',
         message: 'Failed to join matchmaking queue.',
@@ -244,7 +243,6 @@ export const handleMatchmaking: GameSocketHandler = (
         message: 'Left matchmaking queue.',
       })
     } catch (error) {
-      console.error('Error leaving matchmaking:', error)
       socket.emit('MatchmakingResponse', {
         status: 'error',
         message: 'Failed to leave matchmaking queue.',
@@ -277,7 +275,6 @@ export const handleMatchmaking: GameSocketHandler = (
         totalInQueue,
       })
     } catch (error) {
-      console.error('Error getting queue status:', error)
       socket.emit('QueueStatusResponse', {
         status: 'error',
         message: 'Failed to get queue status.',
@@ -306,7 +303,6 @@ export const handleMatchmaking: GameSocketHandler = (
         details,
       })
     } catch (error) {
-      console.error('Error cleaning up game data:', error)
       socket.emit('CleanupResponse', {
         status: 'error',
         message: 'Failed to clean up game data.',

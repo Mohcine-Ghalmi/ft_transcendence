@@ -48,7 +48,6 @@ export const handleGameManagement: GameSocketHandler = (
           const existingSessions = activeGameSessions.get(gameId) || new Set()
           const otherSessions = new Set([...existingSessions].filter(sid => sid !== socket.id))
           if (otherSessions.size > 0) {
-            console.log(`[Session Check] User ${playerEmail} trying to join game ${gameId} but it's already being played from socket ${[...otherSessions][0]}`)
             return socket.emit('GameSessionResponse', {
               status: 'error',
               message: 'This game is already being played from another session.',
@@ -61,7 +60,6 @@ export const handleGameManagement: GameSocketHandler = (
         if (currentGameId && currentGameId !== gameId) {
           const existingSessions = activeGameSessions.get(currentGameId) || new Set()
           if (existingSessions.size > 0) {
-            console.log(`[Session Check] User ${playerEmail} trying to join game ${gameId} but already playing game ${currentGameId}`)
             return socket.emit('GameSessionResponse', {
               status: 'error',
               message: 'You are already playing another game.',
@@ -71,14 +69,12 @@ export const handleGameManagement: GameSocketHandler = (
           }
         }
   
-        console.log(`[Session Check] User ${playerEmail} can join game ${gameId} from socket ${socket.id}`)
         socket.emit('GameSessionResponse', {
           status: 'success',
           message: 'Session available.',
           canPlay: true,
         })
       } catch (error) {
-        console.error('Error checking game session:', error)
         socket.emit('GameSessionResponse', {
           status: 'error',
           message: 'Failed to check game session.',
@@ -203,8 +199,6 @@ export const handleGameManagement: GameSocketHandler = (
           processingGames.delete(gameId)
         }, 5000)
       } catch (error) {
-        console.error('Error in GameEnd handler:', error)
-        // Remove from processing set on error
         processingGames.delete(data.gameId)
       }
     }
@@ -342,7 +336,6 @@ export const handleGameManagement: GameSocketHandler = (
               })
             }
           } catch (error) {
-            console.error('Error handling tournament forfeit:', error)
           }
         }
 
@@ -399,7 +392,6 @@ export const handleGameManagement: GameSocketHandler = (
           processingGames.delete(gameId)
         }, 5000)
       } catch (error) {
-        console.error('Error in LeaveGame handler:', error)
         socket.emit('GameResponse', {
           status: 'error',
           message: 'Failed to leave game.',
@@ -507,7 +499,6 @@ export const handleGameManagement: GameSocketHandler = (
           // Only block if there are OTHER sessions (not this one)
           const otherSessions = new Set([...existingSessions].filter(sid => sid !== socket.id))
           if (otherSessions.size > 0) {
-            console.log(`[Authorization] User ${playerEmail} blocked - game ${gameId} already being played from socket ${[...otherSessions][0]}`)
             return socket.emit('GameAuthorizationResponse', {
               status: 'error',
               message: 'This game is already being played from another session.',
@@ -521,7 +512,6 @@ export const handleGameManagement: GameSocketHandler = (
         if (currentGameId && currentGameId !== gameId) {
           const existingSessions = activeGameSessions.get(currentGameId) || new Set()
           if (existingSessions.size > 0) {
-            console.log(`[Authorization] User ${playerEmail} blocked - already playing game ${currentGameId}`)
             return socket.emit('GameAuthorizationResponse', {
               status: 'error',
               message: 'You are already playing another game.',
@@ -547,7 +537,6 @@ export const handleGameManagement: GameSocketHandler = (
           if (gameRoom.tournamentId) {
             const gameState = activeGames.get(gameId)
             if (!gameState) {
-              console.error(`No game state found for tournament game ${gameId}`)
               return socket.emit('GameAuthorizationResponse', {
                 status: 'error',
                 message: 'Game state not found.',
@@ -557,7 +546,6 @@ export const handleGameManagement: GameSocketHandler = (
   
             // ADD USER TO GAME SESSION
             addUserToGameSession(playerEmail, gameId, socket.id)
-            console.log(`[Authorization] Added user ${playerEmail} to tournament game ${gameId} from socket ${socket.id}`)
   
             socket.emit('GameAuthorizationResponse', {
               status: 'success',
@@ -580,7 +568,6 @@ export const handleGameManagement: GameSocketHandler = (
             gameRoom.hostEmail !== playerEmail &&
             gameRoom.guestEmail !== playerEmail
           ) {
-            console.error(`User ${playerEmail} not authorized for game ${gameId}`)
             return socket.emit('GameAuthorizationResponse', {
               status: 'error',
               message: 'You are not authorized for this game.',
@@ -590,7 +577,6 @@ export const handleGameManagement: GameSocketHandler = (
   
           const gameState = activeGames.get(gameId)
           if (!gameState) {
-            console.error(`No game state found for game ${gameId}`)
             return socket.emit('GameAuthorizationResponse', {
               status: 'error',
               message: 'Game state not found.',
@@ -600,7 +586,6 @@ export const handleGameManagement: GameSocketHandler = (
   
           // ADD USER TO GAME SESSION
           addUserToGameSession(playerEmail, gameId, socket.id)
-          console.log(`[Authorization] Added user ${playerEmail} to regular game ${gameId} from socket ${socket.id}`)
   
           socket.emit('GameAuthorizationResponse', {
             status: 'success',
@@ -645,7 +630,6 @@ export const handleGameManagement: GameSocketHandler = (
           
           // ADD USER TO GAME SESSION
           addUserToGameSession(playerEmail, gameId, socket.id)
-          console.log(`[Authorization] Added authorized user ${playerEmail} to game ${gameId} from socket ${socket.id}`)
         }
   
         socket.emit('GameAuthorizationResponse', {
@@ -659,7 +643,6 @@ export const handleGameManagement: GameSocketHandler = (
           gameRoom: gameRoom,
         })
       } catch (error) {
-        console.error('Error checking game authorization:', error)
         socket.emit('GameAuthorizationResponse', {
           status: 'error',
           message: 'Failed to check game authorization.',

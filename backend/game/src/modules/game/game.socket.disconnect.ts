@@ -28,7 +28,6 @@ async function getAllActiveTournaments(): Promise<any[]> {
     }
     return tournaments;
   } catch (err) {
-    console.error('Error getting active tournaments:', err);
     return [];
   }
 }
@@ -285,7 +284,6 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
           
           // Only forfeit if the player is actually in an active match
           if (activeMatch) {
-            console.log(`Player ${userEmail} disconnected from active match ${activeMatch.id}, processing forfeit`);
             
             // Handle disconnect as tournament forfeit ONLY for players in active matches
             const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
@@ -329,7 +327,6 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
             }
           } else {
             // Player is in tournament but not in active match - they can disconnect freely
-            console.log(`Player ${userEmail} disconnected from tournament ${tournament.id} but not in active match - no forfeit`);
           }
         }
         // If participant is in lobby state or not in active match, they can disconnect freely

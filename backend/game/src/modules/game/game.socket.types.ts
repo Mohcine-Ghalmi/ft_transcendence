@@ -4,51 +4,40 @@ export const activeGameSessions = new Map<string, Set<string>>() // gameId -> Se
 export const userGameSessions = new Map<string, string>()
 
 export function addUserToGameSession(userEmail: string, gameId: string, socketId: string) {
-  console.log(`[Session] Adding user ${userEmail} to game ${gameId} with socket ${socketId}`)
   
-  // Get current game for this user
   const currentGameId = userGameSessions.get(userEmail)
   
-  // If user is already in THIS game, just update the socket ID
   if (currentGameId === gameId) {
     const existingSessions = activeGameSessions.get(gameId) || new Set()
-    // Remove old socket IDs for this user and add the new one
     existingSessions.add(socketId)
     activeGameSessions.set(gameId, existingSessions)
-    console.log(`[Session] Updated socket for user ${userEmail} in game ${gameId}`)
     return
   }
   
   // If user is in a different game, clean up the old one first
   if (currentGameId && currentGameId !== gameId) {
     cleanupUserSession(userEmail, socketId)
-    console.log(`[Session] Cleaned up user ${userEmail} from previous game ${currentGameId}`)
   }
   
-  // Add to new game session
   userGameSessions.set(userEmail, gameId)
   if (!activeGameSessions.has(gameId)) {
     activeGameSessions.set(gameId, new Set())
   }
   activeGameSessions.get(gameId)!.add(socketId)
   
-  console.log(`[Session] User ${userEmail} added to game ${gameId}. Active sessions:`, activeGameSessions.get(gameId)?.size)
 }
 
 export function cleanupUserSession(userEmail: string, socketId: string) {
-  console.log(`[Session] Cleaning up user ${userEmail} with socket ${socketId}`)
   
   const gameId = userGameSessions.get(userEmail)
   if (gameId) {
     const gameSessions = activeGameSessions.get(gameId)
     if (gameSessions) {
       gameSessions.delete(socketId)
-      console.log(`[Session] Removed socket ${socketId} from game ${gameId}. Remaining sessions:`, gameSessions.size)
       
       if (gameSessions.size === 0) {
         activeGameSessions.delete(gameId)
         userGameSessions.delete(userEmail)
-        console.log(`[Session] No more sessions for game ${gameId}, cleaned up completely`)
       }
     }
   }

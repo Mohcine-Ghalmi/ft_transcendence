@@ -35,7 +35,6 @@ export async function processTournamentMatchResult(
       `${TOURNAMENT_PREFIX}${tournamentId}`
     )
     if (!tournamentData) {
-      console.error('[Tournament] Tournament not found:', tournamentId)
       return
     }
 
@@ -43,7 +42,6 @@ export async function processTournamentMatchResult(
     const match = tournament.matches.find((m) => m.id === matchId)
 
     if (!match) {
-      console.error('[Tournament] Match not found:', matchId)
       return
     }
 
@@ -55,7 +53,6 @@ export async function processTournamentMatchResult(
       match.state = 'player2_win'
       match.winner = match.player2
     } else {
-      console.error('[Tournament] Winner email does not match either player')
       return
     }
 
