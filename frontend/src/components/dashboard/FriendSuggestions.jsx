@@ -1,4 +1,3 @@
-// Friend Suggestions Component (Refactored)
 'use client'
 import React from 'react'
 import { useSearchStore } from '../../(zustand)/useSearchStore'
@@ -73,7 +72,7 @@ export const FriendSuggestions = () => {
       <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3 sm:mb-4 lg:mb-5 xl:mb-6 flex-shrink-0">
         Friend Suggestions
       </h3>
-      <div className="h-[390px] space-y-2 sm:space-y-3 lg:space-y-4 bg-[#121417] border border-gray-500 p-4 rounded-2xl">
+      <div className="h-[390px] space-y-2 sm:space-y-3 lg:space-y-4 bg-[#121417] border border-gray-800 p-4 rounded-2xl">
         {randomFriendsSuggestions.length > 0 ? (
           randomFriendsSuggestions.map((friend, index) => (
             <Friend user={friend} key={index} />
@@ -88,7 +87,6 @@ export const FriendSuggestions = () => {
   )
 }
 
-// Example: Another component that uses the same friend logic
 export const UserCard = ({ user, showAvatar = true }) => {
   const {
     handleFriendAction,
@@ -126,7 +124,6 @@ export const UserCard = ({ user, showAvatar = true }) => {
   )
 }
 
-// Example: Friend list item component
 export const FriendListItem = ({ user }) => {
   const { handleChatWithUser } = useFriend(user)
 

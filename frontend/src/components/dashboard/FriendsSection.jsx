@@ -33,11 +33,11 @@ export const FriendsSection = () => {
 
   return (
     <div className="rounded-2xl p-3 sm:p-4 lg:p-5 xl:p-6">
-      <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-white mb-3 sm:mb-4 lg:mb-5 xl:mb-6">
+      <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3 sm:mb-4 lg:mb-5 xl:mb-6">
         Friends
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
-        {friends.lentgh > 0 ? (
+        {friends ? (
           friends.map((friend, index) => (
             <div
               key={index}
