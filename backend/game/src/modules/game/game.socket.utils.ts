@@ -1,6 +1,7 @@
 import redis, { getSocketIds } from '../../database/redis'
 import { GameRoomData, activeGames, gameRooms } from './game.socket.types'
 import { createMatchHistory } from './game.service'
+import { activeGameSessions, userGameSessions } from './game.socket.types'
 
 // Helper function to clean up game resources
 export async function cleanupGame(
@@ -10,7 +11,23 @@ export async function cleanupGame(
   const gameRoom = gameRooms.get(gameId)
   if (!gameRoom) return
 
-  // Update game status
+  // CLEAN UP SESSION TRACKING FIRST
+  const gameSessions = activeGameSessions.get(gameId)
+  if (gameSessions) {
+    gameSessions.clear()
+    activeGameSessions.delete(gameId)
+  }
+
+  // Clean up user game sessions for both players
+  const playersToCleanup = [gameRoom.hostEmail, gameRoom.guestEmail]
+  for (const playerEmail of playersToCleanup) {
+    const userGameId = userGameSessions.get(playerEmail)
+    if (userGameId === gameId) {
+      userGameSessions.delete(playerEmail)
+    }
+  }
+
+  // Continue with existing cleanup logic
   gameRoom.status = 'completed'
   gameRoom.endedAt = Date.now()
 

@@ -1,22 +1,94 @@
 import { Socket, Server } from 'socket.io'
 import redis, { getSocketIds } from '../../database/redis'
 import {
-  GameRoomData,
   activeGames,
   gameRooms,
   GameSocketHandler,
 } from './game.socket.types'
 import { cleanupGame, saveMatchHistory, emitToUsers } from './game.socket.utils'
 import { getTournamentHostEmail } from './game.socket.tournament'
+import { 
+  activeGameSessions, 
+  userGameSessions, 
+  cleanupUserSession, 
+  addUserToGameSession 
+} from './game.socket.types'
 
-// Track games that are currently being processed to prevent duplicate GameEnd events
 const processingGames = new Set<string>()
 
 export const handleGameManagement: GameSocketHandler = (
   socket: Socket,
   io: Server
 ) => {
-  // Handle game end
+  socket.on(
+    'CheckGameSession',
+    async (data: { gameId: string; playerEmail: string }) => {
+      try {
+        const { gameId, playerEmail } = data
+  
+        if (!gameId || !playerEmail) {
+          return socket.emit('GameSessionResponse', {
+            status: 'error',
+            message: 'Missing required information.',
+            canPlay: false,
+          })
+        }
+        const socketUserEmail = (socket as any).userEmail
+  
+        if (!socketUserEmail || socketUserEmail !== playerEmail) {
+          return socket.emit('GameSessionResponse', {
+            status: 'error',
+            message: 'User not authenticated.',
+            canPlay: false,
+          })
+        }
+  
+        const currentGameId = userGameSessions.get(playerEmail)
+        if (currentGameId && currentGameId === gameId) {
+          const existingSessions = activeGameSessions.get(gameId) || new Set()
+          const otherSessions = new Set([...existingSessions].filter(sid => sid !== socket.id))
+          if (otherSessions.size > 0) {
+            console.log(`[Session Check] User ${playerEmail} trying to join game ${gameId} but it's already being played from socket ${[...otherSessions][0]}`)
+            return socket.emit('GameSessionResponse', {
+              status: 'error',
+              message: 'This game is already being played from another session.',
+              canPlay: false,
+              sessionConflict: true
+            })
+          }
+        }
+  
+        if (currentGameId && currentGameId !== gameId) {
+          const existingSessions = activeGameSessions.get(currentGameId) || new Set()
+          if (existingSessions.size > 0) {
+            console.log(`[Session Check] User ${playerEmail} trying to join game ${gameId} but already playing game ${currentGameId}`)
+            return socket.emit('GameSessionResponse', {
+              status: 'error',
+              message: 'You are already playing another game.',
+              canPlay: false,
+              sessionConflict: true
+            })
+          }
+        }
+  
+        console.log(`[Session Check] User ${playerEmail} can join game ${gameId} from socket ${socket.id}`)
+        socket.emit('GameSessionResponse', {
+          status: 'success',
+          message: 'Session available.',
+          canPlay: true,
+        })
+      } catch (error) {
+        console.error('Error checking game session:', error)
+        socket.emit('GameSessionResponse', {
+          status: 'error',
+          message: 'Failed to check game session.',
+          canPlay: false,
+        })
+      }
+    }
+  )
+  
+
   socket.on(
     'GameEnd',
     async (data: {
@@ -408,7 +480,7 @@ export const handleGameManagement: GameSocketHandler = (
     async (data: { gameId: string; playerEmail: string }) => {
       try {
         const { gameId, playerEmail } = data
-
+  
         if (!gameId || !playerEmail) {
           return socket.emit('GameAuthorizationResponse', {
             status: 'error',
@@ -416,10 +488,10 @@ export const handleGameManagement: GameSocketHandler = (
             authorized: false,
           })
         }
-
+  
         // Get user email from socket data to verify
         const socketUserEmail = (socket as any).userEmail
-
+  
         if (!socketUserEmail || socketUserEmail !== playerEmail) {
           return socket.emit('GameAuthorizationResponse', {
             status: 'error',
@@ -427,8 +499,39 @@ export const handleGameManagement: GameSocketHandler = (
             authorized: false,
           })
         }
-
-        // Check if game room exists
+  
+        // FIXED: Check for existing sessions more carefully
+        const currentGameId = userGameSessions.get(playerEmail)
+        if (currentGameId && currentGameId === gameId) {
+          const existingSessions = activeGameSessions.get(gameId) || new Set()
+          // Only block if there are OTHER sessions (not this one)
+          const otherSessions = new Set([...existingSessions].filter(sid => sid !== socket.id))
+          if (otherSessions.size > 0) {
+            console.log(`[Authorization] User ${playerEmail} blocked - game ${gameId} already being played from socket ${[...otherSessions][0]}`)
+            return socket.emit('GameAuthorizationResponse', {
+              status: 'error',
+              message: 'This game is already being played from another session.',
+              authorized: false,
+              sessionConflict: true,
+            })
+          }
+        }
+  
+        // Check if user is already in a DIFFERENT active game
+        if (currentGameId && currentGameId !== gameId) {
+          const existingSessions = activeGameSessions.get(currentGameId) || new Set()
+          if (existingSessions.size > 0) {
+            console.log(`[Authorization] User ${playerEmail} blocked - already playing game ${currentGameId}`)
+            return socket.emit('GameAuthorizationResponse', {
+              status: 'error',
+              message: 'You are already playing another game.',
+              authorized: false,
+              sessionConflict: true,
+            })
+          }
+        }
+  
+        // Continue with rest of authorization logic...
         const gameRoom = gameRooms.get(gameId)
         if (!gameRoom) {
           return socket.emit('GameAuthorizationResponse', {
@@ -437,12 +540,11 @@ export const handleGameManagement: GameSocketHandler = (
             authorized: false,
           })
         }
-
+  
         // Check if game is already in progress
         if (gameRoom.status === 'in_progress') {
           // For tournament games, automatically accept if in progress
           if (gameRoom.tournamentId) {
-            // Get game state
             const gameState = activeGames.get(gameId)
             if (!gameState) {
               console.error(`No game state found for tournament game ${gameId}`)
@@ -452,8 +554,11 @@ export const handleGameManagement: GameSocketHandler = (
                 authorized: false,
               })
             }
-
-            // Send authorization success with game state
+  
+            // ADD USER TO GAME SESSION
+            addUserToGameSession(playerEmail, gameId, socket.id)
+            console.log(`[Authorization] Added user ${playerEmail} to tournament game ${gameId} from socket ${socket.id}`)
+  
             socket.emit('GameAuthorizationResponse', {
               status: 'success',
               authorized: true,
@@ -465,29 +570,24 @@ export const handleGameManagement: GameSocketHandler = (
               tournamentId: gameRoom.tournamentId,
               matchId: gameRoom.matchId,
             })
-
-            // Join the game room
+  
             socket.join(`game:${gameId}`)
-
             return
           }
-
+  
           // For regular games, check if user is part of the game
           if (
             gameRoom.hostEmail !== playerEmail &&
             gameRoom.guestEmail !== playerEmail
           ) {
-            console.error(
-              `User ${playerEmail} not authorized for game ${gameId}`
-            )
+            console.error(`User ${playerEmail} not authorized for game ${gameId}`)
             return socket.emit('GameAuthorizationResponse', {
               status: 'error',
               message: 'You are not authorized for this game.',
               authorized: false,
             })
           }
-
-          // Get game state
+  
           const gameState = activeGames.get(gameId)
           if (!gameState) {
             console.error(`No game state found for game ${gameId}`)
@@ -497,8 +597,11 @@ export const handleGameManagement: GameSocketHandler = (
               authorized: false,
             })
           }
-
-          // Send authorization success with game state
+  
+          // ADD USER TO GAME SESSION
+          addUserToGameSession(playerEmail, gameId, socket.id)
+          console.log(`[Authorization] Added user ${playerEmail} to regular game ${gameId} from socket ${socket.id}`)
+  
           socket.emit('GameAuthorizationResponse', {
             status: 'success',
             authorized: true,
@@ -507,13 +610,11 @@ export const handleGameManagement: GameSocketHandler = (
             gameStatus: gameState.gameStatus,
             gameState: gameState,
           })
-
-          // Join the game room
+  
           socket.join(`game:${gameId}`)
-
           return
         }
-
+  
         // Check if game room is in a valid state
         if (gameRoom.status === 'canceled' || gameRoom.status === 'completed') {
           return socket.emit('GameAuthorizationResponse', {
@@ -522,26 +623,31 @@ export const handleGameManagement: GameSocketHandler = (
             authorized: false,
           })
         }
-
+  
         // Check if user is part of this game (host or guest)
         const isAuthorized =
           gameRoom.hostEmail === playerEmail ||
           gameRoom.guestEmail === playerEmail
-
-        // For tournament games, automatically accept and start the game
-        if (gameRoom.tournamentId && isAuthorized) {
-          // Tournament games should be automatically accepted and ready to start
-          if (gameRoom.status === 'waiting') {
-            gameRoom.status = 'accepted'
-            await redis.setex(
-              `game_room:${gameId}`,
-              3600,
-              JSON.stringify(gameRoom)
-            )
-            gameRooms.set(gameId, gameRoom)
+  
+        if (isAuthorized) {
+          // For tournament games, automatically accept and start the game
+          if (gameRoom.tournamentId) {
+            if (gameRoom.status === 'waiting') {
+              gameRoom.status = 'accepted'
+              await redis.setex(
+                `game_room:${gameId}`,
+                3600,
+                JSON.stringify(gameRoom)
+              )
+              gameRooms.set(gameId, gameRoom)
+            }
           }
+          
+          // ADD USER TO GAME SESSION
+          addUserToGameSession(playerEmail, gameId, socket.id)
+          console.log(`[Authorization] Added authorized user ${playerEmail} to game ${gameId} from socket ${socket.id}`)
         }
-
+  
         socket.emit('GameAuthorizationResponse', {
           status: 'success',
           message: isAuthorized
@@ -550,9 +656,10 @@ export const handleGameManagement: GameSocketHandler = (
           authorized: isAuthorized,
           gameStatus: gameRoom.status,
           isHost: gameRoom.hostEmail === playerEmail,
-          gameRoom: gameRoom, // Include game room data for tournament handling
+          gameRoom: gameRoom,
         })
       } catch (error) {
+        console.error('Error checking game authorization:', error)
         socket.emit('GameAuthorizationResponse', {
           status: 'error',
           message: 'Failed to check game authorization.',
@@ -560,5 +667,5 @@ export const handleGameManagement: GameSocketHandler = (
         })
       }
     }
-  )
+  ) 
 }

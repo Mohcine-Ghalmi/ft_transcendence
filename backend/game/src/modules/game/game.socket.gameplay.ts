@@ -11,44 +11,45 @@ import { emitToUsers } from './game.socket.utils'
 import { getUserByEmail } from '../user/user.service'
 import { getPlayerData } from './game.socket.types'
 import redis, { getSocketIds } from '../../database/redis'
+import { activeGameSessions, userGameSessions, addUserToGameSession } from './game.socket.types'
+
 
 export const handleGameplay: GameSocketHandler = (
   socket: Socket,
   io: Server
 ) => {
-  // Handle starting the game
   socket.on('StartGame', async (data: { gameId: string }) => {
     try {
       const { gameId } = data
-
+  
       if (!gameId) {
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Missing game ID.',
         })
       }
-
+  
       const gameRoomData = await redis.get(`game_room:${gameId}`)
-
+  
       if (!gameRoomData) {
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Game room not found.',
         })
       }
-
+  
       const gameRoom: GameRoomData = JSON.parse(gameRoomData)
-
+  
       // Get user email from socket data to verify authorization
       const userEmail = (socket as any).userEmail
-
+  
       if (!userEmail) {
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'User not authenticated.',
         })
       }
-
+  
       // Verify that the user trying to start the game is the host
       if (userEmail !== gameRoom.hostEmail) {
         return socket.emit('GameStartResponse', {
@@ -56,13 +57,25 @@ export const handleGameplay: GameSocketHandler = (
           message: 'Only the host can start the game.',
         })
       }
-
+  
+      // CHECK SESSION BEFORE STARTING
+      const currentGameId = userGameSessions.get(userEmail)
+      if (currentGameId && currentGameId === gameId) {
+        const existingSessions = activeGameSessions.get(gameId) || new Set()
+        if (existingSessions.size > 1) {
+          return socket.emit('GameStartResponse', {
+            status: 'error',
+            message: 'Game is being played from another session.',
+          })
+        }
+      }
+  
       // Update game status
       gameRoom.status = 'in_progress'
       gameRoom.startedAt = Date.now()
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
       gameRooms.set(gameId, gameRoom)
-
+  
       // Initialize game state
       const gameState: GameState = {
         gameId,
@@ -76,15 +89,15 @@ export const handleGameplay: GameSocketHandler = (
         gameStatus: 'playing',
         lastUpdate: Date.now(),
       }
-
+  
       activeGames.set(gameId, gameState)
-
+  
       // Notify both players
       const hostSocketIds =
         (await getSocketIds(gameRoom.hostEmail, 'sockets')) || []
       const guestSocketIds =
         (await getSocketIds(gameRoom.guestEmail, 'sockets')) || []
-
+  
       // Fetch user data for both players
       const [hostUser, guestUser] = await Promise.all([
         getUserByEmail(gameRoom.hostEmail),
@@ -92,7 +105,7 @@ export const handleGameplay: GameSocketHandler = (
       ])
       const hostData = getPlayerData(hostUser)
       const guestData = getPlayerData(guestUser)
-
+  
       const gameStartData = {
         gameId,
         status: 'game_started',
@@ -105,17 +118,18 @@ export const handleGameplay: GameSocketHandler = (
         startedAt: gameRoom.startedAt,
         gameState,
       }
-
+  
       io.to([...hostSocketIds, ...guestSocketIds]).emit(
         'GameStarted',
         gameStartData
       )
-
+  
       socket.emit('GameStartResponse', {
         status: 'success',
         message: 'Game started successfully.',
       })
     } catch (error) {
+      console.error('Error starting game:', error)
       socket.emit('GameStartResponse', {
         status: 'error',
         message: 'Failed to start game.',

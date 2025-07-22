@@ -9,6 +9,7 @@ import {
 } from './game.socket.types'
 import { cleanupGame, saveMatchHistory, emitToUsers } from './game.socket.utils'
 import { advanceTournamentRound } from './game.socket.tournament.events'
+import { cleanupUserSession } from './game.socket.types'
 
 const TOURNAMENT_PREFIX = 'tournament:'
 
@@ -39,8 +40,10 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
     const userEmail = socket.data?.userEmail || (socket as any).userEmail
     if (!userEmail) return
 
+    // CLEAN UP SESSION TRACKING FIRST
+    cleanupUserSession(userEmail, socket.id)
 
-
+    // Continue with existing disconnect logic...
     const userGames = Array.from(activeGames.entries()).filter(([gameId, gameState]) => {
       // Check if user is in this game by looking at game room
       const gameRoom = gameRooms.get(gameId)
