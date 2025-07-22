@@ -26,7 +26,7 @@ interface OnlinePlayModeProps {
   sentInvites: Map<string, any>;
 }
 
-const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends }: OnlinePlayModeProps & { friends: Player[] }) => {
+const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends, invitingPlayers }: OnlinePlayModeProps & { friends: Player[], invitingPlayers: Set<string> }) => {
   const [searchQuery, setSearchQuery] = useState('');
   // Use the same filtering logic as OneVsOne
   const filteredPlayers = friends.filter(player =>
@@ -58,7 +58,7 @@ const OnlinePlayMode = ({ onInvitePlayer, pendingInvites, sentInvites, friends }
               key={`${player.email}-${player.nickname}-${index}`}
               player={player}
               onInvite={onInvitePlayer}
-              isInviting={false} // You can enhance this to match invite state
+              isInviting={invitingPlayers.has(player.email)}
             />
           ))
         ) : (
@@ -94,7 +94,7 @@ const ParticipantItem = ({ player, isHost }: {
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
         <Image 
-          src={`/images/${player.avatar}`} 
+          src={`/images/${player.avatar}`}
           alt={player.login || "zahay"} 
           width={40}  
           height={40}
@@ -167,7 +167,7 @@ export default function OnlineTournament() {
   const [champion, setChampion] = useState(null);
   const [tournaments, setTournaments] = useState([]);
   const [friends, setFriends] = useState<Player[]>([]);
-  const [isInviting, setIsInviting] = useState(false);
+  const [invitingPlayers, setInvitingPlayers] = useState(new Set<string>()); // Track multiple inviting players
   const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null);
   const [inviteId, setInviteId] = useState<string | null>(null);
   const [waitTime, setWaitTime] = useState(30);
@@ -176,10 +176,8 @@ export default function OnlineTournament() {
 
   const totalRounds = Math.log2(tournamentSize);
 
-  // Use getSocketInstance at runtime
   const [socket, setSocket] = useState<any>(null);
 
-  // Initialize socket connection
   useEffect(() => {
     const socketInstance = getGameSocketInstance();
     if (socketInstance) {
@@ -187,18 +185,15 @@ export default function OnlineTournament() {
     }
   }, []);
 
-  // Check for active tournament participation on component mount
   useEffect(() => {
     if (!socket || !user?.email) return;
 
-    // Check if user is part of any active tournament
     const checkActiveTournaments = () => {
       socket.emit('CheckUserTournamentStatus', { userEmail: user.email });
     };
 
     const handleUserTournamentStatus = (data: any) => {
       if (data.activeTournament && tournamentState === 'setup') {
-        // User is part of an active tournament, rejoin it
         setTournamentId(data.activeTournament.tournamentId);
         setTournamentName(data.activeTournament.name);
         setTournamentState(data.activeTournament.status);
@@ -216,7 +211,6 @@ export default function OnlineTournament() {
           setParticipants(formattedParticipants);
         }
 
-        // Show notification that user has been rejoined
         addNotification({
           type: 'tournament_info',
           title: 'Rejoined Tournament',
@@ -237,7 +231,6 @@ export default function OnlineTournament() {
     };
   }, [socket, user?.email, tournamentState, addNotification]);
 
-  // Fetch tournaments from backend
   useEffect(() => {
     if (!socket) return;
     
@@ -288,12 +281,10 @@ export default function OnlineTournament() {
     fetchFriends();
   }, [user]);
 
-  // Helper function to get display name
   const getDisplayName = (player: any) => {
     return player?.nickname?.trim() || player?.login || 'Unknown Player';
   };
 
-  // Handle match updates
   const handleMatchUpdate = (roundIndex: number, matchIndex: number, newState: string) => {
     setMatches(prevMatches => {
       const updatedMatches = [...prevMatches];
@@ -307,16 +298,13 @@ export default function OnlineTournament() {
       matchToUpdate.state = newState;
       updatedMatches[matchToUpdateIndex] = matchToUpdate;
       
-      // If we have a winner, update next round's match
       if (newState === MATCH_STATES.PLAYER1_WIN || newState === MATCH_STATES.PLAYER2_WIN) {
         const winner = newState === MATCH_STATES.PLAYER1_WIN ? matchToUpdate.player1 : matchToUpdate.player2;
         
-        // Check if this is the final match
         if (roundIndex === totalRounds - 1) {
           setChampion(winner);
           setTournamentComplete(true);
         }
-        // Calculate position in next round
         else if (roundIndex < totalRounds - 1) {
           const nextRound = roundIndex + 1;
           const nextMatchIndex = Math.floor(matchIndex / 2);
@@ -329,7 +317,6 @@ export default function OnlineTournament() {
           if (nextMatchIndex2 !== -1) {
             const nextMatch = { ...updatedMatches[nextMatchIndex2] };
             
-            // Update player1 or player2 based on which match this was
             if (isFirstMatchOfPair) {
               nextMatch.player1 = winner;
             } else {
@@ -345,7 +332,6 @@ export default function OnlineTournament() {
     });
   };
 
-  // Check if all matches in current round are completed
   const canAdvanceRound = () => {
     const currentRoundMatches = matches.filter(m => m.round === currentRound);
     return currentRoundMatches.length > 0 && currentRoundMatches.every(m => 
@@ -353,12 +339,10 @@ export default function OnlineTournament() {
     );
   };
 
-  // Advance to next round
   const advanceRound = () => {
     if (currentRound < totalRounds - 1) {
       setCurrentRound(prevRound => prevRound + 1);
     } else {
-      // Tournament is completed
       const finalMatch = matches.find(m => m.round === totalRounds - 1 && m.matchIndex === 0);
       if (finalMatch) {
         const winner = finalMatch.state === MATCH_STATES.PLAYER1_WIN ? 
@@ -369,7 +353,6 @@ export default function OnlineTournament() {
     }
   };
 
-  // Start tournament logic - only creates bracket and redirects players
   const startTournament = () => {
     if (!tournamentId || !socket) {
       return;
@@ -377,7 +360,6 @@ export default function OnlineTournament() {
     socket.emit('StartTournament', { tournamentId, hostEmail: user.email });
   };
 
-  // Start matches for current round with global notifications
   const startCurrentRoundMatches = () => {
     if (!tournamentId || !socket) {
       console.error('❌ Cannot start matches - missing tournamentId or socket:', {
@@ -406,41 +388,32 @@ export default function OnlineTournament() {
     if (participants.length >= tournamentSize || !tournamentId || !socket) {
       return;
     }
-    setIsInviting(true);
-    setInvitedPlayer(player);
-    setWaitingForResponse(true);
-    setWaitTime(30);
-    setInviteId(null);
+    
+    // Add this player to the inviting set
+    setInvitingPlayers(prev => new Set([...prev, player.email]));
+    
     if (!process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
-      setIsInviting(false);
-      setWaitingForResponse(false);
+      // Remove from inviting set if failed
+      setInvitingPlayers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(player.email);
+        return newSet;
+      });
       return;
     }
+    
     const inviteData = {
       tournamentId: tournamentId,
       hostEmail: user.email,
       inviteeEmail: player.email
     };
+    
     const encrypted = CryptoJS.AES.encrypt(
       JSON.stringify(inviteData),
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY
     ).toString();
+    
     socket.emit('InviteToTournament', encrypted);
-    // Start countdown
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    countdownIntervalRef.current = setInterval(() => {
-      setWaitTime(prev => {
-        if (prev <= 1) {
-          clearInterval(countdownIntervalRef.current!);
-          setWaitingForResponse(false);
-          setIsInviting(false);
-          setInvitedPlayer(null);
-          setInviteId(null);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
   };
 
   // Socket event listeners for tournament invite
@@ -448,47 +421,61 @@ export default function OnlineTournament() {
     if (!socket) return;
     const handleInviteResponse = (data: any) => {
       if (data.status === 'success' && data.type === 'invite_sent') {
-        setInviteId(data.inviteId);
+        console.log('Tournament invitation sent successfully to:', data.guestData?.email);
       } else if (data.status === 'error') {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+        console.error('Tournament invitation error:', data.message);
+        
+        // Show error notification
+        if (typeof showNotification === 'function') {
+          showNotification(data.message || 'Failed to send invitation', 'error');
+        }
+        
+        // For now, we can't specifically identify which player failed, so we don't remove from inviting set here
+        // The timeout or success will handle the removal
       }
     };
     const handleInviteAccepted = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
-        if (data.newParticipant) {
-          setParticipants(prev => [...prev, data.newParticipant]);
-        }
+      // Remove player from inviting set
+      if (data.guestData?.email) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestData.email);
+          return newSet;
+        });
+      }
+      
+      if (data.newParticipant) {
+        setParticipants(prev => [...prev, data.newParticipant]);
       }
     };
     const handleInviteDeclined = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+      // Remove player from inviting set
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
       }
     };
     const handleInviteTimeout = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+      // Remove player from inviting set
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
       }
     };
     const handleInviteCanceled = (data: any) => {
-      if (data.inviteId === inviteId) {
-        setIsInviting(false);
-        setWaitingForResponse(false);
-        setInvitedPlayer(null);
-        setInviteId(null);
+      // Remove player from inviting set
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
       }
     };
     socket.on('InviteToTournamentResponse', handleInviteResponse);
@@ -511,7 +498,8 @@ export default function OnlineTournament() {
     if (socket && inviteId && user?.email) {
       socket.emit('CancelTournamentInvite', { inviteId, hostEmail: user.email });
     }
-    setIsInviting(false);
+    // Clear all inviting players
+    setInvitingPlayers(new Set());
     setWaitingForResponse(false);
     setInvitedPlayer(null);
     setInviteId(null);
@@ -526,18 +514,14 @@ export default function OnlineTournament() {
       );
       
       if (isHost) {
-        // Host cancels the entire tournament
         handleCancelTournament();
       } else {
-        // Participants explicitly leave tournament (button click only)
-        // This is different from navigation - this actually removes them
         socket.emit('ExplicitLeaveTournament', {
           tournamentId,
           playerEmail: user.email,
           reason: 'explicit_leave_button'
         });
         
-        // Reset local state for participants after explicit leave
         setTournamentId(null);
         setParticipants([{
           id: user.id || user.nickname || 'host',
@@ -551,6 +535,7 @@ export default function OnlineTournament() {
         setTournamentState('setup');
         setSentInvites(new Map());
         setPendingInvites(new Map());
+        setInvitingPlayers(new Set()); // Clear inviting players
         setTournamentComplete(false);
         setChampion(null);
         return;
@@ -571,6 +556,7 @@ export default function OnlineTournament() {
     setTournamentState('setup');
     setSentInvites(new Map());
     setPendingInvites(new Map());
+    setInvitingPlayers(new Set()); // Clear inviting players
     setTournamentComplete(false);
     setChampion(null);
   };
@@ -626,11 +612,9 @@ export default function OnlineTournament() {
     const handleTournamentCreated = (tournament: any) => {
       setTournamentId(tournament.tournamentId);
       setTournamentState('lobby');
-      // Clear any name errors on successful creation
       setTournamentNameError(null);
     };
     const handleTournamentError = (error: any) => {
-      // Check if it's a duplicate name error
       if (error.message && error.message.toLowerCase().includes('name') && error.message.toLowerCase().includes('exists')) {
         setTournamentNameError(error.message);
       }
@@ -647,7 +631,6 @@ export default function OnlineTournament() {
         }));
         setParticipants(updatedParticipants);
         
-        // Also update other tournament properties if they've changed
         if (data.tournament.status !== tournamentState)
           setTournamentState(data.tournament.status);
       }
@@ -661,7 +644,6 @@ export default function OnlineTournament() {
       if (data.tournamentId === tournamentId) {
         setTournamentState('in_progress');
         
-        // Check if user is the host
         const isHost = participants.some(p => 
           (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
         );
@@ -877,8 +859,6 @@ export default function OnlineTournament() {
             hostEmail: user.email
           });
         }
-        // Participants can close browser/tab freely - they remain in tournament
-        // NO socket events are sent for participants
       }
     };
 
@@ -900,8 +880,6 @@ export default function OnlineTournament() {
             hostEmail: user.email
           });
         }
-        // Participants can navigate anywhere freely - NO tracking, NO removal
-        // They will stay in the tournament and get global notifications
       }
     };
 
@@ -937,8 +915,6 @@ export default function OnlineTournament() {
         history.replaceState = originalReplaceState;
       };
     }
-    // ZERO event listeners for participants - they can navigate completely freely
-    // They remain in tournament and get notifications wherever they are
   }, [tournamentState, tournamentId, user?.email, socket, participants]);
 
   // Handle tournament name change and clear errors
@@ -1094,13 +1070,16 @@ export default function OnlineTournament() {
                 </div>
               </div>
               
-              {/* Online Player Search and Invite */}
-              <OnlinePlayMode 
-                onInvitePlayer={handleInvitePlayer} 
-                pendingInvites={pendingInvites}
-                sentInvites={sentInvites}
-                friends={friends}
-              />
+              {/* Online Player Search and Invite - Only for Tournament Host */}
+              {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) && (
+                <OnlinePlayMode 
+                  onInvitePlayer={handleInvitePlayer} 
+                  pendingInvites={pendingInvites}
+                  sentInvites={sentInvites}
+                  friends={friends}
+                  invitingPlayers={invitingPlayers}
+                />
+              )}
             </div>
           )}
           
@@ -1167,7 +1146,7 @@ export default function OnlineTournament() {
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
                         <Image 
                           src={`/images/${player.avatar}`} 
-                          alt={player.login} 
+                          alt={player.login || player.nickname || "Player Avatar"}
                           width={48} 
                           height={48}
                           className="w-full h-full object-cover"

@@ -192,24 +192,6 @@ const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
   )
 }
 
-function handleHostLeaveBeforeStart({
-  isHost,
-  gameId,
-  gameState,
-  socket,
-  user,
-}) {
-  if (
-    isHost &&
-    gameId &&
-    gameState === 'waiting_to_start' &&
-    socket &&
-    user?.email
-  ) {
-    socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email })
-  }
-}
-
 export default function OnlineMatch() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
@@ -235,8 +217,29 @@ export default function OnlineMatch() {
   const countdownIntervalRef = useRef(null)
   const [currentPath, setCurrentPath] = useState('')
 
+  // Helper function to handle host leaving before game starts
+  const handleHostLeaveBeforeStart = () => {
+    if (
+      isHost &&
+      gameId &&
+      gameState === 'waiting_to_start' &&
+      socket &&
+      user?.email
+    ) {
+      socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email })
+      socket.emit('LeaveGame', { gameId, playerEmail: user.email })
+    } else if (
+      !isHost &&
+      gameId &&
+      gameState === 'waiting_to_start' &&
+      socket &&
+      user?.email
+    ) {
+      socket.emit('LeaveGame', { gameId, playerEmail: user.email })
+    }
+  }
+
   useEffect(() => {
-    // Set initial path
     if (typeof window !== 'undefined') {
       setCurrentPath(window.location.pathname)
     }
@@ -281,16 +284,7 @@ export default function OnlineMatch() {
           socket &&
           user?.email
         ) {
-          if (isHost) {
-            // Host leaving - emit both events to ensure guest gets notified
-            socket.emit('PlayerLeftBeforeGameStart', {
-              gameId,
-              leaver: user.email,
-            })
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
-          } else {
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
-          }
+          handleHostLeaveBeforeStart()
         } else if (gameState === 'in_game' && gameId && socket && user?.email) {
           // Player left during active game - mark as lost
           socket.emit('LeaveGame', {
@@ -318,17 +312,7 @@ export default function OnlineMatch() {
     const handleBeforeUnload = (e) => {
       // Handle page refresh/close for different game states
       if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
-        // Both host and guest should emit appropriate events when leaving waiting room
-        if (isHost) {
-          // Host leaving - emit both events to ensure guest gets notified
-          socket.emit('PlayerLeftBeforeGameStart', {
-            gameId,
-            leaver: user.email,
-          })
-          socket.emit('LeaveGame', { gameId, playerEmail: user.email })
-        } else {
-          socket.emit('LeaveGame', { gameId, playerEmail: user.email })
-        }
+        handleHostLeaveBeforeStart()
       } else if (gameState === 'in_game' && gameId && socket && user?.email) {
         // Show confirmation dialog for active games
         e.preventDefault()
@@ -365,17 +349,7 @@ export default function OnlineMatch() {
           socket &&
           user?.email
         ) {
-          // Both host and guest should emit appropriate events when leaving waiting room
-          if (isHost) {
-            // Host leaving - emit both events to ensure guest gets notified
-            socket.emit('PlayerLeftBeforeGameStart', {
-              gameId,
-              leaver: user.email,
-            })
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
-          } else {
-            socket.emit('LeaveGame', { gameId, playerEmail: user.email })
-          }
+          handleHostLeaveBeforeStart()
         } else if (gameState === 'in_game' && gameId && socket && user?.email) {
           // Player left during active game - mark as lost
           socket.emit('LeaveGame', {
