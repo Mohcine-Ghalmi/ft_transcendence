@@ -105,7 +105,7 @@ interface UserState {
   setHidePopUp: (data: boolean) => void
   userDetails: UserDetails | null
   setUserDetails: (data: UserDetails) => void
-  getUserDetails: () => Promise<void>
+  getUserDetails: (email: string) => Promise<void>
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -123,12 +123,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     set({ userDetails: data })
   },
 
-  getUserDetails: async () => {
-    if (get().userDetails) return
+  getUserDetails: async (email: string) => {
     try {
-      const res = await axiosInstance.get('/api/users/getUserDetails')
-      console.log('User Details:', res.data)
-
+      const res = await axiosInstance.post('/api/users/getUserDetails', {
+        email,
+      })
       const data: UserDetails = res.data
       get().setUserDetails(data)
     } catch (err) {

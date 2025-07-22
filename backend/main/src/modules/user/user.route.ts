@@ -40,7 +40,7 @@ async function userRoutes(server: FastifyInstance) {
     changePassword
   )
 
-  server.get(
+  server.post(
     '/getUserDetails',
     { preHandler: [server.authenticate] },
     getUserDetails

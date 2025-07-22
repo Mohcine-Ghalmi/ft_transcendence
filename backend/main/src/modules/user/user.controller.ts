@@ -186,9 +186,10 @@ export async function logoutUserHandled(
 export async function getLoggedInUser(req: FastifyRequest, rep: FastifyReply) {
   try {
     const user: any = req.user
-    const logedIn = await getUserByEmail(user.email)
+    const logedIn: any = await getUserByEmail(user.email)
     signJWT(logedIn, rep)
-    return rep.code(200).send({ user: logedIn })
+    const { password, salt, ...rest } = logedIn
+    return rep.code(200).send({ user: rest })
   } catch (err) {
     return rep.code(500).send({ error: 'Internal Server Error' })
   }
@@ -421,6 +422,9 @@ export async function getUser(
     rep.code(200).send({ ...user, isBlockedByMe, isBlockedByHim })
   } catch (err) {
     console.log(err)
+    return rep
+      .code(500)
+      .send({ status: false, message: 'Internal Server Error' })
   }
 }
 
@@ -586,8 +590,14 @@ export async function updateUserData(
   }
 }
 
-export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
+export async function getUserDetails(
+  req: FastifyRequest<{
+    Body: { email: string }
+  }>,
+  rep: FastifyReply
+) {
   try {
+    const { email } = req.body
     const user: any = req.user
     const LeaderBoardData = db
       .prepare(
@@ -607,7 +617,7 @@ export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
         LEFT JOIN match_history mh
             ON u.email = mh.player1_email OR u.email = mh.player2_email
         GROUP BY u.id, u.username, u.email
-        ORDER BY win_rate_percentage DESC, total_games DESC;
+        ORDER BY win_rate_percentage DESC, total_games DESC LIMIT 100;
         `
       )
       .all()
@@ -624,14 +634,14 @@ export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
           ORDER BY RANDOM()
           LIMIT 3`
       )
-      .all(user.email, user.email, user.email)
+      .all(email, email, email)
 
     const match_history_sql = db.prepare(
       'SELECT * FROM match_history WHERE winner = ? OR loser = ? ORDER BY created_at DESC LIMIT 5'
     )
-    console.log('user.email : ', user.email)
+    console.log('email : ', email)
 
-    const matchHistory = match_history_sql.all(user.email, user.email)
+    const matchHistory = match_history_sql.all(email, email)
     const sql: any = db.prepare(`
       SELECT
         (SELECT COUNT(*) FROM match_history WHERE winner = ?) as wins,
@@ -651,7 +661,7 @@ export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
         ORDER BY week_of_month
       `
       )
-      .all(user.email, user.email)
+      .all(email, email)
 
     const chartData = Array.from({ length: 4 }, (_, i) => {
       const weekData: any = data.find((d: any) => d.week_of_month === i + 1)
@@ -662,7 +672,7 @@ export async function getUserDetails(req: FastifyRequest, rep: FastifyReply) {
       }
     })
 
-    const { wins, losses } = sql.get(user.email, user.email)
+    const { wins, losses } = sql.get(email, email)
 
     return rep.send({
       wins,

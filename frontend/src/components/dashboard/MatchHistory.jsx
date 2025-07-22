@@ -19,7 +19,7 @@ export const MatchHistory = ({ matchHistory }) => {
       <div className="border border-gray-700 rounded-2xl overflow-hidden flex-1 min-h-[350px]">
         <div className="h-full overflow-y-auto">
           <table className="w-full">
-            <thead className="bg-gray-800/80 border-b border-red-700 sticky top-0">
+            <thead className="bg-gray-800/80 border-b border-gray-500 sticky top-0">
               <tr className="text-gray-200">
                 <th className="text-left py-2 sm:py-3 lg:py-4 xl:py-5 px-2 sm:px-3 lg:px-4 xl:px-5 font-semibold text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl 2xl:text-2xl">
                   Date
