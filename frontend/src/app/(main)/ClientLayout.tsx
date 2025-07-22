@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { ToastContainer } from 'react-toastify'
 import TournamentRejoinHelper from '../../utils/tournament/TournamentRejoinHelper'
 import { TournamentNotificationProvider } from '../../utils/tournament/TournamentNotificationProvider'
-import { ConnectingLoading } from './chat/page'
+import ConnectingLoading from '@/components/layout/ConnectingLoading'
 
 export default function ClientLayout({
   children,

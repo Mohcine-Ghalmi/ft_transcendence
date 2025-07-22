@@ -154,13 +154,13 @@ const Level = ({ user }) => {
   const { userDetails } = useAuthStore()
   useEffect(() => {
     const newProgress = (user.xp / 100) * width
-    setProgress(newProgress)
+    setProgress(newProgress > 100 ? newProgress / 100 : newProgress)
   }, [user.xp, width])
 
   return (
     <div className="w-full flex-col flex items-center justify-center">
       <div className="w-full mt-10">
-        <h3>Next Level</h3>
+        <h3>Your Level : {user.level}</h3>
         {/* progress bar */}
         <div className="w-full bg-gray-700 h-2 rounded-2xl relative mt-5">
           <div
@@ -168,7 +168,9 @@ const Level = ({ user }) => {
             className={`h-2 rounded-2xl absolute left-0 top-0 bg-white`}
           ></div>
         </div>
-        <p className="mt-4 text-gray-400">{user.xp}/100XP</p>
+        <p className="mt-4 text-gray-400">
+          {user.xp}/{(user.level + 1) * 100}XP
+        </p>
       </div>
       <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,_minmax(200px,1fr))] mt-10">
         <Card number={userDetails?.wins | 0} text="Wins" />
