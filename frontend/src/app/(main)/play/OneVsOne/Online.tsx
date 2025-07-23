@@ -34,7 +34,6 @@ export const sendGameInvite = async (playerEmail, socket, user) => {
 
     return true
   } catch (error) {
-    console.error('Failed to send invite:', error)
     return false
   }
 }
@@ -204,6 +203,8 @@ export default function OnlineMatch() {
   const [isInviting, setIsInviting] = useState(false)
   const [gameState, setGameState] = useState('idle') // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
   const [isHost, setIsHost] = useState(false)
+  const [sessionConflict, setSessionConflict] = useState(false)
+  const [currentSessionGameId, setCurrentSessionGameId] = useState(null) // Track this session's game
   const [notification, setNotification] = useState({
     message: '',
     type: 'info',
@@ -216,6 +217,14 @@ export default function OnlineMatch() {
 
   const countdownIntervalRef = useRef(null)
   const [currentPath, setCurrentPath] = useState('')
+
+  // Load game state from memory storage (not localStorage due to artifact restrictions)
+  const [persistentGameState, setPersistentGameState] = useState({
+    gameState: 'idle',
+    gameId: null,
+    opponent: null,
+    isHost: false,
+  })
 
   // Helper function to handle host leaving before game starts
   const handleHostLeaveBeforeStart = () => {
@@ -239,6 +248,11 @@ export default function OnlineMatch() {
     }
   }
 
+  // Helper function to check if this session should handle the event
+  const isThisSessionEvent = (eventGameId) => {
+    return currentSessionGameId === eventGameId || gameId === eventGameId
+  }
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setCurrentPath(window.location.pathname)
@@ -253,6 +267,7 @@ export default function OnlineMatch() {
           const externalGameState = JSON.parse(externalGameStateStr)
 
           setGameId(externalGameState.gameId)
+          setCurrentSessionGameId(externalGameState.gameId)
           setGameState(externalGameState.gameState)
           setGameAccepted(externalGameState.gameAccepted)
           setIsHost(externalGameState.isHost)
@@ -409,14 +424,6 @@ export default function OnlineMatch() {
     setTimeout(() => setNotification({ message: '', type: 'info' }), 5000)
   }
 
-  // Load game state from memory storage (not localStorage due to artifact restrictions)
-  const [persistentGameState, setPersistentGameState] = useState({
-    gameState: 'idle',
-    gameId: null,
-    opponent: null,
-    isHost: false,
-  })
-
   // Socket event listeners
   useEffect(() => {
     if (!socket) return
@@ -426,6 +433,7 @@ export default function OnlineMatch() {
 
       if (data.status === 'success' && data.type === 'invite_sent') {
         setGameId(data.gameId)
+        setCurrentSessionGameId(data.gameId) // Track this session's game
         setInvitedPlayer({
           ...data.guestData,
           name: data.guestData.username || data.guestData.login,
@@ -447,16 +455,24 @@ export default function OnlineMatch() {
       }
     }
 
-    // FIXED: Improved logic for handling game invite acceptance
+    // FIXED: Improved logic for handling game invite acceptance with session checking
     const handleGameInviteAccepted = (data) => {
       if (data.status === 'ready_to_start') {
+        // Check if this is for our session
+        if (!isThisSessionEvent(data.gameId)) {
+          return
+        }
+
         setGameAccepted(true)
         setGameState('waiting_to_start')
         setIsWaitingForResponse(false)
         clearCountdown()
 
-        if (gameState === 'waiting_response') {
-          // We are the host
+        // Check if we're the host (we have isHostNotification flag OR we were in waiting_response state)
+        const isCurrentSessionHost = data.isHostNotification || gameState === 'waiting_response'
+        
+        if (isCurrentSessionHost) {
+          // We are the host - use guest data
           setIsHost(true)
           setInvitedPlayer({
             ...data.guestData,
@@ -466,7 +482,7 @@ export default function OnlineMatch() {
             GameStatus: 'Available',
           })
         } else {
-          // We are the guest
+          // We are the guest - use host data
           setIsHost(false)
           setInvitedPlayer({
             ...data.hostData,
@@ -480,14 +496,14 @@ export default function OnlineMatch() {
         setPersistentGameState({
           gameState: 'waiting_to_start',
           gameId: data.gameId,
-          opponent: isHost ? data.guestData : data.hostData,
-          isHost: gameState === 'waiting_response',
+          opponent: isCurrentSessionHost ? data.guestData : data.hostData,
+          isHost: isCurrentSessionHost,
         })
       }
     }
 
     const handleGameInviteDeclined = (data) => {
-      if (data.gameId !== gameId) return;
+      if (!isThisSessionEvent(data.gameId)) return;
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -500,15 +516,13 @@ export default function OnlineMatch() {
         'error'
       )
 
-      // Reset game state and redirect host back to play page
       resetGameState()
-
       router.push('/play')
     }
 
     const handleGameInviteTimeout = (data) => {
-
-      if (data.gameId !== gameId) return;
+      if (!isThisSessionEvent(data.gameId)) return;
+      
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -517,12 +531,10 @@ export default function OnlineMatch() {
 
       showNotification('Game invitation expired.', 'error')
       resetGameState()
-
-      // router.push('/play');
     }
 
     const handleGameInviteCanceled = (data) => {
-      if (data.gameId !== gameId) return;
+      if (!isThisSessionEvent(data.gameId)) return;
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -531,14 +543,28 @@ export default function OnlineMatch() {
       clearCountdown()
 
       showNotification('Game invitation was canceled by host.', 'error')
-
       resetGameState()
+    }
 
-      // router.push('/play');
+    // FIXED: Add session conflict handlers
+    const handleGameInviteCleanup = (data) => {
+      // This is sent to sessions that didn't accept/decline
+      if (data.gameId === gameId || data.gameId === currentSessionGameId) {
+        // Another session handled this invite
+        setSessionConflict(true)
+        showNotification(data.message || 'Invite handled in another session', 'info')
+        resetGameState()
+      }
+    }
+
+    const handleSessionConflict = (data) => {
+      setSessionConflict(true)
+      showNotification('Another session is handling this game', 'warning')
+      resetGameState()
     }
 
     const handlePlayerLeft = (data) => {
-      if (data.gameId !== gameId) return;
+      if (!isThisSessionEvent(data.gameId)) return;
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -547,16 +573,12 @@ export default function OnlineMatch() {
       clearCountdown()
 
       showNotification('Opponent left the game. You win!', 'success')
-
-      // Reset game state
       resetGameState()
 
-      // Clean up any stale game data
       if (socket && user?.email) {
         socket.emit('CleanupGameData', { email: user.email })
       }
 
-      // Redirect to win page since the current user wins when opponent leaves
       const winnerName = user?.username || user?.login || 'You'
       const loserName = data.playerWhoLeft || 'Opponent'
       router.push(
@@ -567,13 +589,14 @@ export default function OnlineMatch() {
     }
 
     const handleGameEnded = (data) => {
+      if (!isThisSessionEvent(data.gameId)) return;
+
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
       setWaitTime(0)
       clearCountdown()
 
-      // Determine if current user won
       const isWinner = data.winner === user?.email
       const winnerName = isWinner
         ? user?.username || user?.login || 'You'
@@ -583,16 +606,12 @@ export default function OnlineMatch() {
         : user?.username || user?.login || 'You'
 
       showNotification(data.message || 'Game ended.', 'info')
-
-      // Reset game state
       resetGameState()
 
-      // Clean up any stale game data
       if (socket && user?.email) {
         socket.emit('CleanupGameData', { email: user.email })
       }
 
-      // Redirect to appropriate result page based on whether user won or lost
       if (isWinner) {
         router.push(
           `/play/result/win?winner=${encodeURIComponent(
@@ -609,6 +628,8 @@ export default function OnlineMatch() {
     }
 
     const handleGameCanceled = (data) => {
+      if (!isThisSessionEvent(data.gameId)) return;
+
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -617,11 +638,12 @@ export default function OnlineMatch() {
 
       showNotification('Game was canceled.', 'error')
       resetGameState()
-
       router.push('/play')
     }
 
     const handleGameStartResponse = (data) => {
+      if (!isThisSessionEvent(gameId)) return;
+
       if (data.status === 'success') {
         if (!isHost) {
           const targetPath = `/play/game/${gameId}`
@@ -629,18 +651,20 @@ export default function OnlineMatch() {
         } else {
           setShowGame(true)
         }
-      } else {
       }
     }
 
-    // Handle game started event
     const handleGameStarted = (data) => {
+      if (!isThisSessionEvent(data.gameId)) return;
+
       if (data.gameId === gameId) {
         setGameState('in_game')
       }
     }
 
     const handleGameEndedByOpponentLeave = (data) => {
+      if (!isThisSessionEvent(data.gameId)) return;
+
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -657,6 +681,8 @@ export default function OnlineMatch() {
     socket.on('GameInviteDeclined', handleGameInviteDeclined)
     socket.on('GameInviteTimeout', handleGameInviteTimeout)
     socket.on('GameInviteCanceled', handleGameInviteCanceled)
+    socket.on('GameInviteCleanup', handleGameInviteCleanup)
+    socket.on('SessionConflict', handleSessionConflict)
     socket.on('PlayerLeft', handlePlayerLeft)
     socket.on('GameEnded', handleGameEnded)
     socket.on('GameCanceled', handleGameCanceled)
@@ -670,6 +696,8 @@ export default function OnlineMatch() {
       socket.off('GameInviteDeclined', handleGameInviteDeclined)
       socket.off('GameInviteTimeout', handleGameInviteTimeout)
       socket.off('GameInviteCanceled', handleGameInviteCanceled)
+      socket.off('GameInviteCleanup', handleGameInviteCleanup)
+      socket.off('SessionConflict', handleSessionConflict)
       socket.off('PlayerLeft', handlePlayerLeft)
       socket.off('GameEnded', handleGameEnded)
       socket.off('GameCanceled', handleGameCanceled)
@@ -680,6 +708,7 @@ export default function OnlineMatch() {
   }, [
     socket,
     gameId,
+    currentSessionGameId,
     clearInvite,
     user?.email,
     gameState,
@@ -727,6 +756,7 @@ export default function OnlineMatch() {
         GameStatus: 'Available',
       })
       setGameId(receivedInvite.gameId)
+      setCurrentSessionGameId(receivedInvite.gameId) // Track this session's game
       setIsHost(false) // Guest is not host
       setPersistentGameState({
         gameState: 'idle',
@@ -743,33 +773,33 @@ export default function OnlineMatch() {
       if (!user?.email) return
 
       try {
-      const res = await fetch(
-        `http://localhost:5005/api/users/friends?email=${user.email}`
-      )
+        const res = await fetch(
+          `http://localhost:5005/api/users/friends?email=${user.email}`
+        )
 
-      if (!res.ok) {
-        setFriends([])
-        return
-      }
+        if (!res.ok) {
+          setFriends([])
+          return
+        }
 
-      const data = await res.json()
+        const data = await res.json()
 
-      if (data.friends && Array.isArray(data.friends)) {
-        const formatted = data.friends
-        .filter((f) => onlineUsers.includes(f.email)) // Check if user is in onlineUsers
-        .map((f) => ({
-          name: f.username,
-          avatar: f.avatar,
-          nickname: f.login,
-          GameStatus: 'Available',
-          ...f,
-        }))
-        setFriends(formatted)
-      } else {
-        setFriends([])
-      }
+        if (data.friends && Array.isArray(data.friends)) {
+          const formatted = data.friends
+            .filter((f) => onlineUsers.includes(f.email)) // Check if user is in onlineUsers
+            .map((f) => ({
+              name: f.username,
+              avatar: f.avatar,
+              nickname: f.login,
+              GameStatus: 'Available',
+              ...f,
+            }))
+          setFriends(formatted)
+        } else {
+          setFriends([])
+        }
       } catch (err) {
-      setFriends([])
+        setFriends([])
       }
     }
     fetchFriends()
@@ -782,9 +812,11 @@ export default function OnlineMatch() {
     setGameAccepted(false)
     setWaitTime(30)
     setGameId(null)
+    setCurrentSessionGameId(null) // Reset session tracking
     setIsHost(false)
     setShowGame(false)
     setIsInviting(false)
+    setSessionConflict(false)
     setPersistentGameState({
       gameState: 'idle',
       gameId: null,
@@ -883,6 +915,24 @@ export default function OnlineMatch() {
 
   return (
     <div className="h-full w-full text-white">
+      {/* Show session conflict notification */}
+      {sessionConflict && (
+        <div className="fixed top-4 right-4 bg-yellow-600 text-white p-4 rounded-lg shadow-lg z-50">
+          <p>Game is being handled in another session</p>
+        </div>
+      )}
+
+      {/* Show notification */}
+      {notification.message && (
+        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 p-4 rounded-lg shadow-lg z-50 ${
+          notification.type === 'error' ? 'bg-red-600' : 
+          notification.type === 'success' ? 'bg-green-600' : 
+          notification.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+        } text-white`}>
+          <p>{notification.message}</p>
+        </div>
+      )}
+      
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-7xl">
@@ -954,7 +1004,7 @@ export default function OnlineMatch() {
             ) : (
               // Match Queue / Waiting for Response Interface
               <WaitingForResponseModal
-                player={user}
+                player={invitedPlayer}
                 waitTime={waitTime}
                 onCancel={handleCancelInvite}
               />

@@ -50,10 +50,9 @@ export const handleGameAcceptance: GameSocketHandler = (
         // Clean up invitation
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), // Host-specific key
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`),
         ])
 
-        // Get user data
         const [hostUser, guestUser] = await Promise.all([
           getUserByEmail(invite.hostEmail),
           getUserByEmail(invite.guestEmail),
@@ -85,7 +84,7 @@ export const handleGameAcceptance: GameSocketHandler = (
         )
         gameRooms.set(gameId, gameRoomData)
 
-        // Get ALL socket IDs for both players to ensure all sessions are notified
+        // FIXED: Get ALL socket IDs but handle them differently
         const hostSocketIds = (await getSocketIds(host.email, 'sockets')) || []
         const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
 
@@ -95,28 +94,29 @@ export const handleGameAcceptance: GameSocketHandler = (
           acceptedBy: guest.email,
         }
 
-        // Notify ALL host sessions
-        io.to(hostSocketIds).emit('GameInviteAccepted', {
-          ...acceptedData,
-          hostEmail: host.email,
-          guestEmail: guest.email,
-          guestData: getPlayerData(guest),
-        })
-
-        // Notify ALL guest sessions
-        io.to(guestSocketIds).emit('GameInviteAccepted', {
+        socket.emit('GameInviteAccepted', {
           ...acceptedData,
           hostEmail: host.email,
           guestEmail: guest.email,
           hostData: getPlayerData(host),
         })
 
-        // IMPORTANT: Clean up the invite from ALL guest sessions
-        io.to(guestSocketIds).emit('GameInviteCleanup', {
-          gameId,
-          action: 'accepted',
-          message: 'Invite accepted in another session'
+        io.to(hostSocketIds).emit('GameInviteAccepted', {
+          ...acceptedData,
+          hostEmail: host.email,
+          guestEmail: guest.email,
+          guestData: getPlayerData(guest),
+          isHostNotification: true, // Flag to indicate this is for host
         })
+
+        const otherGuestSockets = guestSocketIds.filter(socketId => socketId !== socket.id)
+        if (otherGuestSockets.length > 0) {
+          io.to(otherGuestSockets).emit('GameInviteCleanup', {
+            gameId,
+            action: 'accepted',
+            message: 'Invite accepted in another session'
+          })
+        }
       } catch (error) {
         socket.emit('GameInviteResponse', {
           status: 'error',
@@ -126,7 +126,6 @@ export const handleGameAcceptance: GameSocketHandler = (
     }
   )
 
-  // Handle declining game invitations
   socket.on(
     'DeclineGameInvite',
     async (data: { gameId: string; guestEmail: string }) => {
@@ -167,11 +166,9 @@ export const handleGameAcceptance: GameSocketHandler = (
         const guest = guestUser as unknown as User
 
         if (guest) {
-          // Get ALL socket IDs for both players
           const hostSocketIds = (await getSocketIds(invite.hostEmail, 'sockets')) || []
           const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
 
-          // Notify host of decline
           io.to(hostSocketIds).emit('GameInviteDeclined', {
             gameId,
             declinedBy: guest.email,
@@ -179,7 +176,6 @@ export const handleGameAcceptance: GameSocketHandler = (
             guestLogin: guest.login,
           })
 
-          // IMPORTANT: Clean up the invite from ALL guest sessions
           io.to(guestSocketIds).emit('GameInviteCleanup', {
             gameId,
             action: 'declined',
@@ -187,7 +183,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // Confirm to the declining session
         socket.emit('GameInviteResponse', {
           status: 'success',
           message: 'Invitation declined.',

@@ -32,9 +32,6 @@ const SessionConflictModal = ({
         return 'You have a conflicting session. What would you like to do?'
     }
   }
-
-  const showCleanupOption = conflictType === 'same_game_different_session'
-
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
       <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4">
@@ -122,12 +119,8 @@ const GameResultPopup = ({
 
 const MatchmakingStatus = ({
   status,
-  queuePosition,
-  totalInQueue,
 }: {
   status: string
-  queuePosition?: number
-  totalInQueue?: number
 }) => {
   return (
     <div className="text-center py-8">
@@ -624,21 +617,21 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   }, [socket, user?.email, router])
 
   // Handle page refresh and disconnection
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      // If page becomes hidden (user switches tabs or minimizes), don't leave game immediately
-      // Only leave if the page is being unloaded
-      if (document.visibilityState === 'hidden') {
-        // Don't automatically leave - let the user decide
-      }
-    }
+  // useEffect(() => {
+  //   const handleVisibilityChange = () => {
+  //     // If page becomes hidden (user switches tabs or minimizes), don't leave game immediately
+  //     // Only leave if the page is being unloaded
+  //     if (document.visibilityState === 'hidden') {
+  //       // Don't automatically leave - let the user decide
+  //     }
+  //   }
 
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+  //   document.addEventListener('visibilitychange', handleVisibilityChange)
 
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [])
+  //   return () => {
+  //     document.removeEventListener('visibilitychange', handleVisibilityChange)
+  //   }
+  // }, [])
 
   // Handle automatic retry for matchmaking
   useEffect(() => {
@@ -761,8 +754,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
             <>
               <MatchmakingStatus
                 status={`Preparing room... (${roomPreparationCountdown}s)`}
-                queuePosition={queuePosition}
-                totalInQueue={totalInQueue}
               />
 
               <div className="mt-8 flex justify-center">

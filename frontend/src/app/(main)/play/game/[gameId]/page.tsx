@@ -24,8 +24,8 @@ export default function GamePage() {
   const [isStartingGame, setIsStartingGame] = useState(false)
   const [currentPath, setCurrentPath] = useState('');
   const [isTournamentMatch, setIsTournamentMatch] = useState(false);
+  const [sessionConflict, setSessionConflict] = useState(false);
   
-  // Use refs to track the latest state in event handlers
   const gameStartedRef = useRef(gameStarted)
   const isLeavingGameRef = useRef(isLeavingGame)
   const isStartingGameRef = useRef(isStartingGame)
@@ -55,7 +55,7 @@ export default function GamePage() {
       playerEmail: user.email 
     })
     
-      const authTimeout = setTimeout(() => {
+    const authTimeout = setTimeout(() => {
       if (!authorizationChecked && !isStartingGameRef.current) {
         setIsAuthorized(false)
         setAuthorizationChecked(true)
@@ -73,18 +73,33 @@ export default function GamePage() {
   
     // ADD SESSION RESPONSE HANDLER
     const handleGameSessionResponse = (data: any) => {
-      
       if (data.status !== 'success' || !data.canPlay) {
         // IMPORTANT: Mark this session as unauthorized/blocked
         setIsAuthorized(false)
         setGameAccepted(false) // Also ensure gameAccepted is false
         setAuthorizationChecked(true)
         
+        if (data.sessionConflict) {
+          setSessionConflict(true)
+        }
+        
         setTimeout(() => {
           router.push("/play");
         }, 1000);
         return
       }
+    }
+
+    const handleSessionConflict = (data: any) => {
+      console.log('Session conflict detected:', data)
+      setSessionConflict(true)
+      setIsAuthorized(false)
+      setGameAccepted(false)
+      setAuthorizationChecked(true)
+      
+      setTimeout(() => {
+        router.push("/play");
+      }, 2000);
     }
   
     // MODIFY existing GameAuthorizationResponse handler to handle session conflicts:
@@ -159,6 +174,7 @@ export default function GamePage() {
         
         // Handle session conflicts specifically
         if (data.sessionConflict) {
+          setSessionConflict(true)
           setTimeout(() => {
             router.push("/play");
           }, 1000);
@@ -177,11 +193,12 @@ export default function GamePage() {
 
     socket.on('GameSessionResponse', handleGameSessionResponse)
     socket.on('GameAuthorizationResponse', handleGameAuthorizationResponse)
+    socket.on('SessionConflict', handleSessionConflict)
     
     return () => {
       socket.off('GameSessionResponse', handleGameSessionResponse)
       socket.off('GameAuthorizationResponse', handleGameAuthorizationResponse)
-      // [All other socket cleanup remains the same]
+      socket.off('SessionConflict', handleSessionConflict)
     }
   }, [socket, gameId, user?.email, router])
 
@@ -821,17 +838,21 @@ export default function GamePage() {
   
   }, [currentPath, gameAccepted, gameStarted, gameId, isHost, socket, user, isAuthorized, isTournamentMatch, gameData?.tournamentId]);
   
-
-
-  // Check authorization first - redirect unauthorized users
   if (authorizationChecked && !isAuthorized) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-white mb-8">Access Denied</h1>
-          <p className="text-gray-400 mb-4">You don't have permission to access this game.</p>
+          <h1 className="text-4xl font-bold text-white mb-8">
+            {sessionConflict ? "Session Conflict" : "Access Denied"}
+          </h1>
+          <p className="text-gray-400 mb-4">
+            {sessionConflict 
+              ? "This game is already being played from another session." 
+              : "You don't have permission to access this game."
+            }
+          </p>
           <button 
-            onClick={() => window.location.href = '/play'}
+            onClick={() => router.push('/play')}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
           >
             Back to Play
