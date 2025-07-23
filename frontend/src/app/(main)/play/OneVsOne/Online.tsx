@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { axiosInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { PlayerCard } from './Locale'
 import { useGameInvite } from './GameInviteProvider'
 import { PingPongGame } from '../game/PingPongGame'
@@ -773,16 +773,11 @@ export default function OnlineMatch() {
       if (!user?.email) return
 
       try {
-        const res = await fetch(
-          `http://localhost:5005/api/users/friends?email=${user.email}`
+        const res = await axiosInstance.get(
+          `/api/users/friends?email=${user.email}`
         )
 
-        if (!res.ok) {
-          setFriends([])
-          return
-        }
-
-        const data = await res.json()
+        const data = res.data
 
         if (data.friends && Array.isArray(data.friends)) {
           const formatted = data.friends

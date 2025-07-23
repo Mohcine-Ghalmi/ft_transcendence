@@ -11,6 +11,7 @@ import CryptoJS from 'crypto-js'
 import { PlayerListItem } from '../../play/OneVsOne/Online'
 import { getGameSocketInstance } from '@/(zustand)/useGameStore'
 import { useTournamentNotifications } from '../../../../utils/tournament/TournamentNotificationProvider';
+import {axiosInstance} from '@/(zustand)/useAuthStore'
 
 interface Player {
   name: string;
@@ -248,16 +249,11 @@ export default function OnlineTournament() {
       if (!user?.email) return
 
       try {
-      const res = await fetch(
-        `http://localhost:5005/api/users/friends?email=${user.email}`
+      const res = await axiosInstance.get(
+        `/api/users/friends?email=${user.email}`
       )
-
-      if (!res.ok) {
-        setFriends([])
-        return
-      }
-
-      const data = await res.json()
+      
+      const data = res.data;
 
       if (data.friends && Array.isArray(data.friends)) {
         const formatted = data.friends
