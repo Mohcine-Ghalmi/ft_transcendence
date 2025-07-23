@@ -12,14 +12,13 @@ interface MatchmakingProps {
 // Enhanced Session Conflict Modal Component
 const SessionConflictModal = ({
   isVisible,
-  conflictType,
-  onResolve,
+  conflictType
 }: {
   isVisible: boolean
   conflictType: string
-  onResolve: (action: 'force_takeover' | 'cancel' | 'cleanup_others') => void
 }) => {
   if (!isVisible) return null
+  const router = useRouter();
 
   const getConflictMessage = () => {
     switch (conflictType) {
@@ -45,29 +44,10 @@ const SessionConflictModal = ({
             {getConflictMessage()}
           </p>
         </div>
-
         <div className="flex flex-col space-y-3">
-          <button
-            onClick={() => onResolve('force_takeover')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
-          >
-            {conflictType === 'already_searching' 
-              ? 'Take Over Search' 
-              : 'Take Over Session'
-            }
-          </button>
-          
-          {showCleanupOption && (
-            <button
-              onClick={() => onResolve('cleanup_others')}
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors"
-            >
-              Close Other Sessions
-            </button>
-          )}
           
           <button
-            onClick={() => onResolve('cancel')}
+            onClick={() => {router.push("/play")}}
             className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors"
           >
             Cancel
@@ -78,49 +58,7 @@ const SessionConflictModal = ({
   )
 }
 
-// Matchmaking Session Conflict Modal
-const MatchmakingConflictModal = ({
-  isVisible,
-  message,
-  onResolve,
-}: {
-  isVisible: boolean
-  message: string
-  onResolve: (action: 'force_takeover' | 'cancel') => void
-}) => {
-  if (!isVisible) return null
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-      <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white mb-4">Matchmaking Conflict</h2>
-          <p className="text-gray-300 mb-6">
-            {message}
-          </p>
-        </div>
-
-        <div className="flex flex-col space-y-3">
-          <button
-            onClick={() => onResolve('force_takeover')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
-          >
-            Take Over and Search Here
-          </button>
-          
-          <button
-            onClick={() => onResolve('cancel')}
-            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Game Result Popup Component
+// Fixed Game Result Popup Component
 const GameResultPopup = ({
   isVisible,
   onComplete,
@@ -129,15 +67,18 @@ const GameResultPopup = ({
   onComplete: () => void
 }) => {
   const [countdown, setCountdown] = useState(3)
+  const [shouldComplete, setShouldComplete] = useState(false)
 
   useEffect(() => {
     if (isVisible) {
       setCountdown(3)
+      setShouldComplete(false)
+      
       const timer = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer)
-            onComplete()
+            setShouldComplete(true)
             return 0
           }
           return prev - 1
@@ -146,7 +87,17 @@ const GameResultPopup = ({
 
       return () => clearInterval(timer)
     }
-  }, [isVisible, onComplete])
+  }, [isVisible])
+
+  useEffect(() => {
+    if (shouldComplete) {
+      const timeoutId = setTimeout(() => {
+        onComplete()
+      }, 0)
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [shouldComplete, onComplete])
 
   if (!isVisible) return null
 
@@ -349,32 +300,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         socket.emit('PlayerLeftBeforeGameStart', { 
           gameId: gameId, 
           leaver: user.email 
-        })
-      }
-    }
-  }
-
-  // Enhanced session conflict resolution
-  const handleSessionConflictResolve = (action: 'force_takeover' | 'cancel' | 'cleanup_others') => {
-    if (action === 'cancel') {
-      setShowSessionConflict(false)
-      onBack()
-      return
-    }
-
-    if (socket && user?.email) {
-      if (gameId) {
-        // Game session conflict
-        socket.emit('ResolveSessionConflict', {
-          action,
-          gameId,
-          playerEmail: user.email
-        })
-      } else {
-        // Matchmaking conflict
-        socket.emit('ResolveMatchmakingConflict', {
-          action,
-          email: user.email
         })
       }
     }
@@ -615,26 +540,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       }
     }
 
-    const handleSessionConflictResolved = (data: any) => {
-      setShowSessionConflict(false)
-      setShowMatchmakingConflict(false)
-      
-      if (data.status === 'success') {
-        if (data.action === 'takeover_completed' || data.action === 'cleanup_completed') {
-          // Session was successfully resolved, retry matchmaking
-          setTimeout(() => {
-            if (socket && user?.email) {
-              startMatchmaking()
-            }
-          }, 500)
-        }
-      } else if (data.status === 'cancelled') {
-        onBack()
-      } else {
-        setErrorMessage('Failed to resolve session conflict')
-      }
-    }
-
     const handleGameSessionConflict = (data: any) => {
       setSessionConflictType(data.conflictType || data.type || 'unknown')
       setShowSessionConflict(true)
@@ -663,7 +568,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     socket.on('CleanupResponse', handleCleanupResponse)
     socket.on('MatchmakingPlayerLeft', handleMatchmakingPlayerLeft)
     socket.on('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
-    socket.on('SessionConflictResolved', handleSessionConflictResolved)
     socket.on('GameSessionConflict', handleGameSessionConflict)
     socket.on('MatchmakingSessionConflict', handleMatchmakingSessionConflict)
 
@@ -711,7 +615,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       socket.off('CleanupResponse', handleCleanupResponse)
       socket.off('MatchmakingPlayerLeft', handleMatchmakingPlayerLeft)
       socket.off('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
-      socket.off('SessionConflictResolved', handleSessionConflictResolved)
       socket.off('GameSessionConflict', handleGameSessionConflict)
       socket.off('MatchmakingSessionConflict', handleMatchmakingSessionConflict)
       socket.off('MatchExpired')
@@ -840,7 +743,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         <SessionConflictModal
           isVisible={showSessionConflict}
           conflictType={sessionConflictType}
-          onResolve={handleSessionConflictResolve}
         />
       </div>
     )
@@ -988,14 +890,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       <SessionConflictModal
         isVisible={showSessionConflict}
         conflictType={sessionConflictType}
-        onResolve={handleSessionConflictResolve}
-      />
-
-      {/* Matchmaking Conflict Modal */}
-      <MatchmakingConflictModal
-        isVisible={showMatchmakingConflict}
-        message={matchmakingConflictMessage}
-        onResolve={handleMatchmakingConflictResolve}
       />
     </div>
   )

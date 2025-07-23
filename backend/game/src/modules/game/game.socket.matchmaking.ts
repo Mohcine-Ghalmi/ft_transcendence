@@ -217,7 +217,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
           const gameRoom = gameRooms.get(currentGameId)
           
           if (gameRoom && (gameRoom.status === 'accepted' || gameRoom.status === 'waiting')) {
-            console.log(`[Matchmaking] Player ${userEmail} left after match found but before game started`)
             
             gameRoom.status = 'canceled'
             gameRoom.endedAt = Date.now()
@@ -330,10 +329,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       // Clean up any stale game data
       const { cleanedCount } = await cleanupUserGameData(email)
-      if (cleanedCount > 0) {
-        console.log(`Cleaned up ${cleanedCount} stale entries for ${email}`)
-      }
-
       // Clean up stale queue entries
       const now = Date.now()
       const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000)
@@ -395,9 +390,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       
       // Clean up any stale game data
       const { cleanedCount } = await cleanupUserGameData(email)
-      if (cleanedCount > 0) {
-        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email}`)
-      }
 
       // Clean up stale queue entries
       const now = Date.now()
@@ -453,7 +445,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     }
 
     if (!player1 || !player2) {
-      console.log('Could not find two different players to match')
       return
     }
 
@@ -473,7 +464,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     const player2SocketIds = (await getSocketIds(player2.email, 'sockets')) || []
 
     if (!player1SocketIds.includes(player1.socketId)) {
-      console.log(`Player ${player1.email} matchmaking session is no longer valid`)
       activeMatchmakingUsers.delete(player1.email)
       // Put player2 back in queue if still online
       if (player2SocketIds.includes(player2.socketId)) {
@@ -486,7 +476,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     }
 
     if (!player2SocketIds.includes(player2.socketId)) {
-      console.log(`Player ${player2.email} matchmaking session is no longer valid`)
       activeMatchmakingUsers.delete(player2.email)
       // Put player1 back in queue
       matchmakingQueue.push(player1)
@@ -501,7 +490,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     ])
     
     if (!player1User || !player2User) {
-      console.log('Could not fetch user data for matched players')
       activeMatchmakingUsers.delete(player1.email)
       activeMatchmakingUsers.delete(player2.email)
       return
@@ -588,13 +576,11 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       const currentPlayer2Sockets = (await getSocketIds(player2.email, 'sockets')) || []
 
       if (!currentPlayer1Sockets.includes(player1.socketId)) {
-        console.log(`Player 1 (${player1.email}) matched session disconnected before game start`)
         await handlePlayerLeftBeforeStart(io, gameId, player1.email, player2.email)
         return
       }
 
       if (!currentPlayer2Sockets.includes(player2.socketId)) {
-        console.log(`Player 2 (${player2.email}) matched session disconnected before game start`)
         await handlePlayerLeftBeforeStart(io, gameId, player2.email, player1.email)
         return
       }
@@ -775,7 +761,6 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       }, 5000)
 
     } catch (error) {
-      console.error('Error handling player left before game start:', error)
       processingGames.delete(data.gameId)
     }
   })

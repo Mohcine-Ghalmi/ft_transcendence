@@ -698,59 +698,59 @@ export const handleGameManagement: GameSocketHandler = (
     }
   });
 
-  // Add session conflict notification handler
-  socket.on('ResolveSessionConflict', async (data: { 
-    action: 'force_takeover' | 'cancel' | 'cleanup_others';
-    gameId: string;
-    playerEmail: string;
-  }) => {
-    try {
-      const { action, gameId, playerEmail } = data;
+  // // Add session conflict notification handler
+  // socket.on('ResolveSessionConflict', async (data: { 
+  //   action: 'force_takeover' | 'cancel' | 'cleanup_others';
+  //   gameId: string;
+  //   playerEmail: string;
+  // }) => {
+  //   try {
+  //     const { action, gameId, playerEmail } = data;
       
-      if (action === 'force_takeover') {
-        // Force cleanup other sessions and take over
-        const cleanedGames = forceCleanupUserFromAllGames(playerEmail);
-        addUserToGameSession(playerEmail, gameId, socket.id);
+  //     if (action === 'force_takeover') {
+  //       // Force cleanup other sessions and take over
+  //       const cleanedGames = forceCleanupUserFromAllGames(playerEmail);
+  //       addUserToGameSession(playerEmail, gameId, socket.id);
         
-        socket.emit('SessionConflictResolved', {
-          status: 'success',
-          action: 'takeover_completed',
-          message: 'Took over the game session.'
-        });
-      } else if (action === 'cleanup_others') {
-        // Clean up other sessions but keep this one
-        const gameSessions = activeGameSessions.get(gameId);
-        if (gameSessions) {
-          const userSocketIds = await getSocketIds(playerEmail, 'sockets') || [];
-          for (const sessionId of [...gameSessions]) {
-            const sessionUser = socketToUser.get(sessionId);
-            if (sessionUser === playerEmail && sessionId !== socket.id) {
-              gameSessions.delete(sessionId);
-              socketToUser.delete(sessionId);
-            }
-          }
-        }
+  //       socket.emit('SessionConflictResolved', {
+  //         status: 'success',
+  //         action: 'takeover_completed',
+  //         message: 'Took over the game session.'
+  //       });
+  //     } else if (action === 'cleanup_others') {
+  //       // Clean up other sessions but keep this one
+  //       const gameSessions = activeGameSessions.get(gameId);
+  //       if (gameSessions) {
+  //         const userSocketIds = await getSocketIds(playerEmail, 'sockets') || [];
+  //         for (const sessionId of [...gameSessions]) {
+  //           const sessionUser = socketToUser.get(sessionId);
+  //           if (sessionUser === playerEmail && sessionId !== socket.id) {
+  //             gameSessions.delete(sessionId);
+  //             socketToUser.delete(sessionId);
+  //           }
+  //         }
+  //       }
         
-        addUserToGameSession(playerEmail, gameId, socket.id);
+  //       addUserToGameSession(playerEmail, gameId, socket.id);
         
-        socket.emit('SessionConflictResolved', {
-          status: 'success',
-          action: 'cleanup_completed',
-          message: 'Cleaned up other sessions.'
-        });
-      } else {
-        // Cancel and redirect
-        socket.emit('SessionConflictResolved', {
-          status: 'cancelled',
-          action: 'redirect_to_play',
-          message: 'Session conflict cancelled.'
-        });
-      }
-    } catch (error) {
-      socket.emit('SessionConflictResolved', {
-        status: 'error',
-        message: 'Failed to resolve session conflict.'
-      });
-    }
-  });
+  //       socket.emit('SessionConflictResolved', {
+  //         status: 'success',
+  //         action: 'cleanup_completed',
+  //         message: 'Cleaned up other sessions.'
+  //       });
+  //     } else {
+  //       // Cancel and redirect
+  //       socket.emit('SessionConflictResolved', {
+  //         status: 'cancelled',
+  //         action: 'redirect_to_play',
+  //         message: 'Session conflict cancelled.'
+  //       });
+  //     }
+  //   } catch (error) {
+  //     socket.emit('SessionConflictResolved', {
+  //       status: 'error',
+  //       message: 'Failed to resolve session conflict.'
+  //     });
+  //   }
+  // });
 }
