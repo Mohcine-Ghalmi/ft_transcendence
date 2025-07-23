@@ -1,3 +1,5 @@
+// Enhanced matchmaking with proper session conflict detection and handling
+
 import { Socket, Server } from 'socket.io'
 import redis, { getSocketIds } from '../../database/redis'
 import {
@@ -17,11 +19,20 @@ import {
   userGameSessions,
   activeGameSessions,
   hasActiveSockets,
-  getUserCurrentGame
+  getUserCurrentGame,
+  checkGameSessionConflict,
+  forceCleanupUserFromAllGames
 } from './game.socket.types'
 import { v4 as uuidv4 } from 'uuid'
 import { getUserByEmail } from '../user/user.service'
 import { saveMatchHistory, cleanupGame, emitToUsers } from './game.socket.utils'
+
+// Track which users are actively in matchmaking to prevent duplicates
+const activeMatchmakingUsers = new Map<string, {
+  socketId: string;
+  joinedAt: number;
+  status: 'searching' | 'preparing' | 'match_found';
+}>()
 
 // Helper function to remove all queue entries for a user (prevent duplicates)
 function removeAllQueueEntriesForUser(email: string): number {
@@ -35,26 +46,49 @@ function removeAllQueueEntriesForUser(email: string): number {
   return removedCount
 }
 
-// Helper function to check if user can join matchmaking
-async function canUserJoinMatchmaking(email: string): Promise<{
+// Enhanced function to check if user can join matchmaking
+async function canUserJoinMatchmaking(email: string, socketId: string): Promise<{
   canJoin: boolean
   reason?: string
   conflictGameId?: string
+  conflictType?: 'already_searching' | 'in_active_game' | 'session_conflict'
 }> {
-  // Check if user is already in queue
+  // Check if user is already in matchmaking from another session
+  const existingMatchmaking = activeMatchmakingUsers.get(email)
+  if (existingMatchmaking && existingMatchmaking.socketId !== socketId) {
+    // Check if the existing session is still valid
+    const userSockets = await getSocketIds(email, 'sockets') || []
+    if (userSockets.includes(existingMatchmaking.socketId)) {
+      return { 
+        canJoin: false, 
+        reason: 'Already searching from another session',
+        conflictType: 'already_searching'
+      }
+    } else {
+      // Clean up stale matchmaking entry
+      activeMatchmakingUsers.delete(email)
+      removeAllQueueEntriesForUser(email)
+    }
+  }
+
+  // Check if user is already in queue (shouldn't happen with above check)
   if (isInQueue(email)) {
     return { canJoin: false, reason: 'Already in matchmaking queue' }
   }
 
-  // Check for active game sessions
-  const currentGameId = getUserCurrentGame(email)
-  if (currentGameId) {
-    const gameRoom = gameRooms.get(currentGameId)
-    if (gameRoom && (gameRoom.status === 'accepted' || gameRoom.status === 'in_progress')) {
-      return { 
-        canJoin: false, 
-        reason: 'Already in an active game',
-        conflictGameId: currentGameId
+  // Check for active game sessions with enhanced conflict detection
+  const conflict = checkGameSessionConflict(email, '', socketId)
+  if (conflict.hasConflict) {
+    const currentGameId = getUserCurrentGame(email)
+    if (currentGameId) {
+      const gameRoom = gameRooms.get(currentGameId)
+      if (gameRoom && (gameRoom.status === 'accepted' || gameRoom.status === 'in_progress')) {
+        return { 
+          canJoin: false, 
+          reason: 'Already in an active game',
+          conflictGameId: currentGameId,
+          conflictType: 'in_active_game'
+        }
       }
     }
   }
@@ -71,7 +105,8 @@ async function canUserJoinMatchmaking(email: string): Promise<{
           return { 
             canJoin: false, 
             reason: 'Already in an active game',
-            conflictGameId: gameRoom.gameId
+            conflictGameId: gameRoom.gameId,
+            conflictType: 'in_active_game'
           }
         }
       } catch (parseError) {
@@ -90,8 +125,10 @@ async function cleanupUserGameData(email: string): Promise<{ cleanedCount: numbe
   let cleanedCount = 0
   let details: any = []
 
-  // Remove from matchmaking queue first
+  // Remove from matchmaking queue and tracking
   const queueRemoved = removeAllQueueEntriesForUser(email)
+  activeMatchmakingUsers.delete(email)
+  
   if (queueRemoved > 0) {
     cleanedCount += queueRemoved
     details.push({
@@ -102,29 +139,9 @@ async function cleanupUserGameData(email: string): Promise<{ cleanedCount: numbe
     })
   }
 
-  // Clean up game sessions
-  const userGameId = getUserCurrentGame(email)
-  if (userGameId) {
-    const gameSessions = activeGameSessions.get(userGameId)
-    if (gameSessions) {
-      // Remove user's sessions from this game
-      const userSocketIds = await getSocketIds(email, 'sockets') || []
-      for (const socketId of userSocketIds) {
-        if (gameSessions.has(socketId)) {
-          gameSessions.delete(socketId)
-          cleanedCount++
-        }
-      }
-      
-      // If no sessions left, remove the game
-      if (gameSessions.size === 0) {
-        activeGameSessions.delete(userGameId)
-      }
-    }
-    
-    // Clear user game session mapping
-    userGameSessions.delete(email)
-  }
+  // Clean up game sessions using enhanced session management
+  const cleanedGames = forceCleanupUserFromAllGames(email)
+  cleanedCount += cleanedGames.length
 
   // Clean up Redis game rooms
   for (const roomKey of redisGameRooms) {
@@ -174,7 +191,7 @@ async function cleanupUserGameData(email: string): Promise<{ cleanedCount: numbe
 const processingGames = new Set<string>()
 
 export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server) => {
-  // Handle socket disconnect
+  // Handle socket disconnect with enhanced cleanup
   socket.on('disconnect', async () => {
     try {
       const userEmail = socketToUser.get(socket.id)
@@ -182,8 +199,14 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       if (userEmail) {
         cleanupUserSession(userEmail, socket.id)
         
-        // Remove ALL queue entries for this user (not just by socket)
+        // Remove ALL queue entries for this user
         removeAllQueueEntriesForUser(userEmail)
+        
+        // Clean up matchmaking tracking
+        const matchmakingEntry = activeMatchmakingUsers.get(userEmail)
+        if (matchmakingEntry && matchmakingEntry.socketId === socket.id) {
+          activeMatchmakingUsers.delete(userEmail)
+        }
         
         // Clean up any stale game data
         await cleanupUserGameData(userEmail)
@@ -194,6 +217,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
           const gameRoom = gameRooms.get(currentGameId)
           
           if (gameRoom && (gameRoom.status === 'accepted' || gameRoom.status === 'waiting')) {
+            console.log(`[Matchmaking] Player ${userEmail} left after match found but before game started`)
             
             gameRoom.status = 'canceled'
             gameRoom.endedAt = Date.now()
@@ -241,13 +265,14 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000)
       for (const player of stalePlayers) {
         removeAllQueueEntriesForUser(player.email)
+        activeMatchmakingUsers.delete(player.email)
       }
     } catch (error) {
       console.error('Error cleaning up on disconnect:', error)
     }
   })
 
-  // Join matchmaking queue - ENHANCED
+  // Enhanced Join matchmaking queue
   socket.on('JoinMatchmaking', async (data: { email: string }) => {
     try {
       const { email } = data
@@ -262,21 +287,31 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       // Map socket to user for session tracking
       socketToUser.set(socket.id, email)
 
-      // Check if user can join matchmaking
-      const { canJoin, reason, conflictGameId } = await canUserJoinMatchmaking(email)
+      // Enhanced check if user can join matchmaking
+      const { canJoin, reason, conflictGameId, conflictType } = await canUserJoinMatchmaking(email, socket.id)
       
       if (!canJoin) {
-        if (conflictGameId) {
+        if (conflictType === 'already_searching') {
+          // Notify about session conflict
+          return socket.emit('MatchmakingResponse', {
+            status: 'error',
+            message: reason || 'Already searching from another session',
+            sessionConflict: true,
+            conflictType: 'already_searching'
+          })
+        } else if (conflictGameId) {
           // Try to clean up the conflicting game first
           await cleanupUserGameData(email)
           
           // Recheck after cleanup
-          const recheckResult = await canUserJoinMatchmaking(email)
+          const recheckResult = await canUserJoinMatchmaking(email, socket.id)
           if (!recheckResult.canJoin) {
             return socket.emit('MatchmakingResponse', {
               status: 'error',
               message: reason || 'Cannot join matchmaking',
-              conflictGameId
+              conflictGameId,
+              sessionConflict: true,
+              conflictType: conflictType || 'session_conflict'
             })
           }
         } else {
@@ -289,22 +324,38 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
 
       // Remove any existing queue entries for this user (prevent duplicates)
       removeAllQueueEntriesForUser(email)
+      
+      // Clean up any existing matchmaking tracking
+      activeMatchmakingUsers.delete(email)
 
+      // Clean up any stale game data
+      const { cleanedCount } = await cleanupUserGameData(email)
+      if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} stale entries for ${email}`)
+      }
 
       // Clean up stale queue entries
       const now = Date.now()
       const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000)
       for (const player of stalePlayers) {
         removeAllQueueEntriesForUser(player.email)
+        activeMatchmakingUsers.delete(player.email)
       }
 
-      // Add to matchmaking queue
+      // Add to matchmaking queue and tracking
       const player: MatchmakingPlayer = {
         socketId: socket.id,
         email: email,
         joinedAt: Date.now(),
       }
       matchmakingQueue.push(player)
+      
+      // Track active matchmaking
+      activeMatchmakingUsers.set(email, {
+        socketId: socket.id,
+        joinedAt: Date.now(),
+        status: 'searching'
+      })
 
       socket.emit('MatchmakingResponse', {
         status: 'success',
@@ -322,7 +373,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     }
   })
 
-  // Leave matchmaking queue - ENHANCED
+  // Enhanced Leave matchmaking queue
   socket.on('LeaveMatchmaking', async (data: { email: string }) => {
     try {
       const { email } = data
@@ -339,14 +390,21 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       // Remove ALL queue entries for this user
       const removedCount = removeAllQueueEntriesForUser(email)
       
+      // Clean up matchmaking tracking
+      activeMatchmakingUsers.delete(email)
+      
       // Clean up any stale game data
       const { cleanedCount } = await cleanupUserGameData(email)
+      if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email}`)
+      }
 
       // Clean up stale queue entries
       const now = Date.now()
       const stalePlayers = matchmakingQueue.filter(player => now - player.joinedAt > 120000)
       for (const player of stalePlayers) {
         removeAllQueueEntriesForUser(player.email)
+        activeMatchmakingUsers.delete(player.email)
       }
 
       socket.emit('MatchmakingResponse', {
@@ -362,7 +420,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     }
   })
 
-  // Enhanced match finding function
+  // Enhanced match finding function with better session handling
   async function tryMatchPlayers(io: Server) {
     if (matchmakingQueue.length < 2) {
       return
@@ -377,37 +435,62 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         const p1 = matchmakingQueue[i]
         const p2 = matchmakingQueue[j]
         
-        // Ensure they are different players
+        // Ensure they are different players and both are still actively searching
         if (p1.email !== p2.email) {
-          player1 = p1
-          player2 = p2
-          break
+          const p1Matchmaking = activeMatchmakingUsers.get(p1.email)
+          const p2Matchmaking = activeMatchmakingUsers.get(p2.email)
+          
+          if (p1Matchmaking && p2Matchmaking && 
+              p1Matchmaking.status === 'searching' && 
+              p2Matchmaking.status === 'searching') {
+            player1 = p1
+            player2 = p2
+            break
+          }
         }
       }
       if (player1 && player2) break
     }
 
     if (!player1 || !player2) {
+      console.log('Could not find two different players to match')
       return
     }
+
+    // Update matchmaking status to prevent further matching
+    const p1Matchmaking = activeMatchmakingUsers.get(player1.email)
+    const p2Matchmaking = activeMatchmakingUsers.get(player2.email)
+    
+    if (p1Matchmaking) p1Matchmaking.status = 'match_found'
+    if (p2Matchmaking) p2Matchmaking.status = 'match_found'
 
     // Remove both players from queue
     removeAllQueueEntriesForUser(player1.email)
     removeAllQueueEntriesForUser(player2.email)
 
-    // Verify both players are still online
+    // Verify both players are still online and from the correct sessions
     const player1SocketIds = (await getSocketIds(player1.email, 'sockets')) || []
     const player2SocketIds = (await getSocketIds(player2.email, 'sockets')) || []
 
-    if (player1SocketIds.length === 0) {
-      if (player2SocketIds.length > 0) {
+    if (!player1SocketIds.includes(player1.socketId)) {
+      console.log(`Player ${player1.email} matchmaking session is no longer valid`)
+      activeMatchmakingUsers.delete(player1.email)
+      // Put player2 back in queue if still online
+      if (player2SocketIds.includes(player2.socketId)) {
         matchmakingQueue.push(player2)
+        if (p2Matchmaking) p2Matchmaking.status = 'searching'
+      } else {
+        activeMatchmakingUsers.delete(player2.email)
       }
       return
     }
 
-    if (player2SocketIds.length === 0) {
+    if (!player2SocketIds.includes(player2.socketId)) {
+      console.log(`Player ${player2.email} matchmaking session is no longer valid`)
+      activeMatchmakingUsers.delete(player2.email)
+      // Put player1 back in queue
       matchmakingQueue.push(player1)
+      if (p1Matchmaking) p1Matchmaking.status = 'searching'
       return
     }
 
@@ -418,6 +501,9 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     ])
     
     if (!player1User || !player2User) {
+      console.log('Could not fetch user data for matched players')
+      activeMatchmakingUsers.delete(player1.email)
+      activeMatchmakingUsers.delete(player2.email)
       return
     }
     
@@ -438,12 +524,16 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
     gameRooms.set(gameId, gameRoom)
 
-    // Add both players to game session tracking
+    // Add both players to game session tracking (ONLY the matched sessions)
     addUserToGameSession(player1.email, gameId, player1.socketId)
     addUserToGameSession(player2.email, gameId, player2.socketId)
 
-    // Notify both players about the match
-    io.to(player1SocketIds).emit('MatchFound', {
+    // Only notify the SPECIFIC sessions that were matched
+    const activePlayer1Socket = [player1.socketId]
+    const activePlayer2Socket = [player2.socketId]
+
+    // Notify only the matched sessions about the match
+    io.to(activePlayer1Socket).emit('MatchFound', {
       gameId,
       hostEmail: player1.email,
       guestEmail: player2.email,
@@ -454,7 +544,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       playerPosition: 'player1',
     })
 
-    io.to(player2SocketIds).emit('MatchFound', {
+    io.to(activePlayer2Socket).emit('MatchFound', {
       gameId,
       hostEmail: player1.email,
       guestEmail: player2.email,
@@ -465,22 +555,51 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       playerPosition: 'player2',
     })
 
-    // Auto-start the game after a delay
+    // Notify OTHER sessions of these users about the conflict
+    const otherPlayer1Sockets = player1SocketIds.filter(socketId => socketId !== player1.socketId)
+    const otherPlayer2Sockets = player2SocketIds.filter(socketId => socketId !== player2.socketId)
+
+    if (otherPlayer1Sockets.length > 0) {
+      io.to(otherPlayer1Sockets).emit('MatchmakingSessionConflict', {
+        type: 'another_session_matched',
+        message: 'A match was found in another session. This session will remain inactive.',
+        gameId,
+        action: 'stay_idle'
+      })
+    }
+
+    if (otherPlayer2Sockets.length > 0) {
+      io.to(otherPlayer2Sockets).emit('MatchmakingSessionConflict', {
+        type: 'another_session_matched',
+        message: 'A match was found in another session. This session will remain inactive.',
+        gameId,
+        action: 'stay_idle'
+      })
+    }
+
+    // Clean up matchmaking tracking after match is established
+    activeMatchmakingUsers.delete(player1.email)
+    activeMatchmakingUsers.delete(player2.email)
+
+    // Auto-start the game after a delay - but only check the matched sessions
     setTimeout(async () => {
+      // Verify the matched sessions are still active
       const currentPlayer1Sockets = (await getSocketIds(player1.email, 'sockets')) || []
       const currentPlayer2Sockets = (await getSocketIds(player2.email, 'sockets')) || []
 
-      if (currentPlayer1Sockets.length === 0) {
+      if (!currentPlayer1Sockets.includes(player1.socketId)) {
+        console.log(`Player 1 (${player1.email}) matched session disconnected before game start`)
         await handlePlayerLeftBeforeStart(io, gameId, player1.email, player2.email)
         return
       }
 
-      if (currentPlayer2Sockets.length === 0) {
+      if (!currentPlayer2Sockets.includes(player2.socketId)) {
+        console.log(`Player 2 (${player2.email}) matched session disconnected before game start`)
         await handlePlayerLeftBeforeStart(io, gameId, player2.email, player1.email)
         return
       }
 
-      // Both players still connected, start the game
+      // Both matched sessions still connected, start the game
       const updatedGameRoom = gameRooms.get(gameId)
       if (updatedGameRoom && updatedGameRoom.status === 'accepted') {
         updatedGameRoom.status = 'in_progress'
@@ -504,21 +623,22 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
         
         activeGames.set(gameId, {
           ...gameState,
-          gameStatus: 'playing' as 'playing',
-        });
+          gameStatus: 'playing' as 'playing'
+        })
 
-        io.to([...currentPlayer1Sockets, ...currentPlayer2Sockets]).emit('GameStarting', {
+        // Send game start events only to the matched sessions
+        io.to([player1.socketId, player2.socketId]).emit('GameStarting', {
           gameId,
           hostEmail: player1.email,
           guestEmail: player2.email,
           hostData: player1Data,
           guestData: player2Data,
           startedAt: updatedGameRoom.startedAt,
-        });
+        })
 
-        // Send GameStarted event after a brief delay
+        // Send GameStarted event after a brief delay (only to matched sessions)
         setTimeout(() => {
-          io.to([...currentPlayer1Sockets, ...currentPlayer2Sockets]).emit('GameStarted', {
+          io.to([player1.socketId, player2.socketId]).emit('GameStarted', {
             gameId,
             status: 'game_started',
             players: {
@@ -554,6 +674,10 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
     await saveMatchHistory(gameId, gameRoom, remainingPlayerEmail, leaverEmail, { p1: 0, p2: 0 }, 'player_left')
     await cleanupGame(gameId, 'player_left')
 
+    // Clean up matchmaking tracking
+    activeMatchmakingUsers.delete(leaverEmail)
+    activeMatchmakingUsers.delete(remainingPlayerEmail)
+
     const remainingPlayerSockets = await getSocketIds(remainingPlayerEmail, 'sockets') || []
     if (remainingPlayerSockets.length > 0) {
       io.to(remainingPlayerSockets).emit('GameEndedByOpponentLeave', {
@@ -574,6 +698,60 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       })
     }
   }
+
+  // Handle session conflicts for matchmaking
+  socket.on('ResolveMatchmakingConflict', async (data: { 
+    action: 'force_takeover' | 'cancel';
+    email: string;
+  }) => {
+    try {
+      const { action, email } = data;
+      
+      if (action === 'force_takeover') {
+        // Force cleanup other matchmaking sessions and take over
+        const existingEntry = activeMatchmakingUsers.get(email)
+        if (existingEntry) {
+          // Remove the old session from queue
+          removeAllQueueEntriesForUser(email)
+          
+          // Update the tracking to this session
+          activeMatchmakingUsers.set(email, {
+            socketId: socket.id,
+            joinedAt: Date.now(),
+            status: 'searching'
+          })
+          
+          // Add to queue
+          const player: MatchmakingPlayer = {
+            socketId: socket.id,
+            email: email,
+            joinedAt: Date.now(),
+          }
+          matchmakingQueue.push(player)
+          
+          socket.emit('MatchmakingResponse', {
+            status: 'success',
+            message: 'Took over matchmaking session. Searching for opponent...',
+            queuePosition: matchmakingQueue.length,
+          })
+          
+          // Try to find a match
+          await tryMatchPlayers(io)
+        }
+      } else {
+        // Cancel and don't join
+        socket.emit('MatchmakingResponse', {
+          status: 'cancelled',
+          message: 'Matchmaking cancelled.'
+        })
+      }
+    } catch (error) {
+      socket.emit('MatchmakingResponse', {
+        status: 'error',
+        message: 'Failed to resolve matchmaking conflict.'
+      })
+    }
+  })
 
   // Rest of the handlers remain the same...
   socket.on('PlayerLeftBeforeGameStart', async (data: { gameId: string; leaver: string }) => {
@@ -597,6 +775,7 @@ export const handleMatchmaking: GameSocketHandler = (socket: Socket, io: Server)
       }, 5000)
 
     } catch (error) {
+      console.error('Error handling player left before game start:', error)
       processingGames.delete(data.gameId)
     }
   })

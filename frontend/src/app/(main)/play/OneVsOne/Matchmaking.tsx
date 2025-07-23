@@ -9,7 +9,7 @@ interface MatchmakingProps {
   onBack: () => void
 }
 
-// Session Conflict Modal Component
+// Enhanced Session Conflict Modal Component
 const SessionConflictModal = ({
   isVisible,
   conflictType,
@@ -21,16 +21,28 @@ const SessionConflictModal = ({
 }) => {
   if (!isVisible) return null
 
+  const getConflictMessage = () => {
+    switch (conflictType) {
+      case 'already_searching':
+        return 'You are already searching for a match in another tab or session. What would you like to do?'
+      case 'same_game_different_session':
+        return 'This game is already being played from another tab or device. What would you like to do?'
+      case 'in_active_game':
+        return 'You have an active game session in another tab. What would you like to do?'
+      default:
+        return 'You have a conflicting session. What would you like to do?'
+    }
+  }
+
+  const showCleanupOption = conflictType === 'same_game_different_session'
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
       <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4">
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-white mb-4">Session Conflict</h2>
           <p className="text-gray-300 mb-6">
-            {conflictType === 'same_game_different_session' 
-              ? 'This game is already being played from another tab or device. What would you like to do?'
-              : 'You have an active game session in another tab. What would you like to do?'
-            }
+            {getConflictMessage()}
           </p>
         </div>
 
@@ -39,10 +51,13 @@ const SessionConflictModal = ({
             onClick={() => onResolve('force_takeover')}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
           >
-            Take Over Session
+            {conflictType === 'already_searching' 
+              ? 'Take Over Search' 
+              : 'Take Over Session'
+            }
           </button>
           
-          {conflictType === 'same_game_different_session' && (
+          {showCleanupOption && (
             <button
               onClick={() => onResolve('cleanup_others')}
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors"
@@ -50,6 +65,48 @@ const SessionConflictModal = ({
               Close Other Sessions
             </button>
           )}
+          
+          <button
+            onClick={() => onResolve('cancel')}
+            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Matchmaking Session Conflict Modal
+const MatchmakingConflictModal = ({
+  isVisible,
+  message,
+  onResolve,
+}: {
+  isVisible: boolean
+  message: string
+  onResolve: (action: 'force_takeover' | 'cancel') => void
+}) => {
+  if (!isVisible) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-white mb-4">Matchmaking Conflict</h2>
+          <p className="text-gray-300 mb-6">
+            {message}
+          </p>
+        </div>
+
+        <div className="flex flex-col space-y-3">
+          <button
+            onClick={() => onResolve('force_takeover')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+          >
+            Take Over and Search Here
+          </button>
           
           <button
             onClick={() => onResolve('cancel')}
@@ -146,6 +203,8 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   const [showCleanupOption, setShowCleanupOption] = useState(false)
   const [showSessionConflict, setShowSessionConflict] = useState(false)
   const [sessionConflictType, setSessionConflictType] = useState('')
+  const [showMatchmakingConflict, setShowMatchmakingConflict] = useState(false)
+  const [matchmakingConflictMessage, setMatchmakingConflictMessage] = useState('')
   const [pendingRedirect, setPendingRedirect] = useState<{
     isWinner: boolean
     winnerName: string
@@ -166,7 +225,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     }
   }, [])
 
-  // Handle route changes and page navigation
+  // Enhanced route change handling
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -295,19 +354,45 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     }
   }
 
-  // Handle session conflict resolution
+  // Enhanced session conflict resolution
   const handleSessionConflictResolve = (action: 'force_takeover' | 'cancel' | 'cleanup_others') => {
-    if (socket && gameId && user?.email) {
-      if (action === 'cancel') {
-        setShowSessionConflict(false)
-        onBack()
-        return
-      }
+    if (action === 'cancel') {
+      setShowSessionConflict(false)
+      onBack()
+      return
+    }
 
-      socket.emit('ResolveSessionConflict', {
+    if (socket && user?.email) {
+      if (gameId) {
+        // Game session conflict
+        socket.emit('ResolveSessionConflict', {
+          action,
+          gameId,
+          playerEmail: user.email
+        })
+      } else {
+        // Matchmaking conflict
+        socket.emit('ResolveMatchmakingConflict', {
+          action,
+          email: user.email
+        })
+      }
+    }
+  }
+
+  // Handle matchmaking session conflict resolution
+  const handleMatchmakingConflictResolve = (action: 'force_takeover' | 'cancel') => {
+    setShowMatchmakingConflict(false)
+    
+    if (action === 'cancel') {
+      onBack()
+      return
+    }
+
+    if (socket && user?.email) {
+      socket.emit('ResolveMatchmakingConflict', {
         action,
-        gameId,
-        playerEmail: user.email
+        email: user.email
       })
     }
   }
@@ -365,7 +450,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       setRoomPreparationCountdown(5)
     }
 
-    // Socket event listeners
+    // Enhanced socket event listeners
     const handleMatchmakingResponse = (data: any) => {
       if (data.status === 'success') {
         if (data.queuePosition) {
@@ -373,14 +458,20 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         }
         setErrorMessage('')
         setShowCleanupOption(false)
+        setShowMatchmakingConflict(false)
       } else {
         setMatchmakingStatus('idle')
         setErrorMessage(data.message || 'Failed to join matchmaking')
 
-        // Handle session conflicts
+        // Handle enhanced session conflicts
         if (data.sessionConflict || data.conflictType) {
-          setSessionConflictType(data.conflictType || 'unknown')
-          setShowSessionConflict(true)
+          if (data.conflictType === 'already_searching') {
+            setMatchmakingConflictMessage(data.message || 'Already searching from another session')
+            setShowMatchmakingConflict(true)
+          } else {
+            setSessionConflictType(data.conflictType || 'unknown')
+            setShowSessionConflict(true)
+          }
           return
         }
 
@@ -526,6 +617,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
 
     const handleSessionConflictResolved = (data: any) => {
       setShowSessionConflict(false)
+      setShowMatchmakingConflict(false)
       
       if (data.status === 'success') {
         if (data.action === 'takeover_completed' || data.action === 'cleanup_completed') {
@@ -549,43 +641,18 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       setMatchmakingStatus('idle')
     }
 
-    // Listen for player leaving during countdown
-    socket.on('MatchmakingPlayerLeft', handleMatchmakingPlayerLeft)
-
-    // Listen for match expired
-    socket.on('MatchExpired', (data: any) => {
-      setMatchmakingStatus('idle')
-      setGameId(null)
-      setMatchData(null)
-      setOpponent(null)
-      setIsHost(false)
-      setErrorMessage('Match expired. Please try again.')
-
-      // Navigate back to play page after a short delay
-      setTimeout(() => {
-        onBack()
-      }, 2000)
-    })
-
-    // Listen for match declined
-    socket.on('MatchDeclined', (data: any) => {
-      setMatchmakingStatus('idle')
-      setGameId(null)
-      setMatchData(null)
-      setOpponent(null)
-      setIsHost(false)
-      setErrorMessage('Opponent declined the match.')
-
-      // Navigate back to play page after a short delay
-      setTimeout(() => {
-        onBack()
-      }, 2000)
-    })
-
-    // Listen for player ready notification
-    socket.on('PlayerReady', (data: any) => {
-      setErrorMessage('Opponent is ready! Waiting for you to confirm...')
-    })
+    // Handle matchmaking session conflicts
+    const handleMatchmakingSessionConflict = (data: any) => {
+      if (data.type === 'another_session_matched') {
+        setErrorMessage(data.message || 'Match found in another session')
+        setMatchmakingStatus('idle')
+        
+        // Show notification that another session is handling the match
+        setTimeout(() => {
+          setErrorMessage('')
+        }, 5000)
+      }
+    }
 
     // Add event listeners
     socket.on('MatchmakingResponse', handleMatchmakingResponse)
@@ -598,6 +665,38 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     socket.on('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
     socket.on('SessionConflictResolved', handleSessionConflictResolved)
     socket.on('GameSessionConflict', handleGameSessionConflict)
+    socket.on('MatchmakingSessionConflict', handleMatchmakingSessionConflict)
+
+    // Enhanced event listeners for session conflicts
+    socket.on('MatchExpired', (data: any) => {
+      setMatchmakingStatus('idle')
+      setGameId(null)
+      setMatchData(null)
+      setOpponent(null)
+      setIsHost(false)
+      setErrorMessage('Match expired. Please try again.')
+
+      setTimeout(() => {
+        onBack()
+      }, 2000)
+    })
+
+    socket.on('MatchDeclined', (data: any) => {
+      setMatchmakingStatus('idle')
+      setGameId(null)
+      setMatchData(null)
+      setOpponent(null)
+      setIsHost(false)
+      setErrorMessage('Opponent declined the match.')
+
+      setTimeout(() => {
+        onBack()
+      }, 2000)
+    })
+
+    socket.on('PlayerReady', (data: any) => {
+      setErrorMessage('Opponent is ready! Waiting for you to confirm...')
+    })
 
     // Start matchmaking on mount with room preparation
     startMatchmaking()
@@ -614,6 +713,10 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       socket.off('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
       socket.off('SessionConflictResolved', handleSessionConflictResolved)
       socket.off('GameSessionConflict', handleGameSessionConflict)
+      socket.off('MatchmakingSessionConflict', handleMatchmakingSessionConflict)
+      socket.off('MatchExpired')
+      socket.off('MatchDeclined')
+      socket.off('PlayerReady')
     }
   }, [socket, user?.email, router])
 
@@ -886,6 +989,13 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         isVisible={showSessionConflict}
         conflictType={sessionConflictType}
         onResolve={handleSessionConflictResolve}
+      />
+
+      {/* Matchmaking Conflict Modal */}
+      <MatchmakingConflictModal
+        isVisible={showMatchmakingConflict}
+        message={matchmakingConflictMessage}
+        onResolve={handleMatchmakingConflictResolve}
       />
     </div>
   )

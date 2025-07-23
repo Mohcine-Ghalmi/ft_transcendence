@@ -1,3 +1,5 @@
+// game.socket.types.ts - Add session conflict helpers to existing types
+
 import { Socket, Server } from 'socket.io'
 
 export const activeGameSessions = new Map<string, Set<string>>()
@@ -6,7 +8,7 @@ export const socketToUser = new Map<string, string>()
 export const userToSockets = new Map<string, Set<string>>()
 export const gameSessionHeartbeat = new Map<string, number>()
 
-// Additional helper functions to add to game.socket.types.ts
+// Enhanced helper functions for session management
 
 // Check if user has conflicting game sessions
 export function checkGameSessionConflict(userEmail: string, gameId: string, socketId: string): {
@@ -209,8 +211,27 @@ export function getSessionStats(): {
   };
 }
 
+// Enhanced session management functions
 export function addUserToGameSession(userEmail: string, gameId: string, socketId: string) {
-  
+  // Clean up any existing sessions for this user in other games first
+  const existingGameId = userGameSessions.get(userEmail);
+  if (existingGameId && existingGameId !== gameId) {
+    const existingSessions = activeGameSessions.get(existingGameId);
+    if (existingSessions) {
+      // Remove user's old sessions
+      for (const sessionId of [...existingSessions]) {
+        const sessionUser = socketToUser.get(sessionId);
+        if (sessionUser === userEmail) {
+          existingSessions.delete(sessionId);
+        }
+      }
+      // Clean up empty game session
+      if (existingSessions.size === 0) {
+        activeGameSessions.delete(existingGameId);
+      }
+    }
+  }
+
   socketToUser.set(socketId, userEmail);
   if (!userToSockets.has(userEmail)) {
     userToSockets.set(userEmail, new Set());
@@ -237,16 +258,23 @@ export function cleanupUserSession(userEmail: string, socketId: string) {
         const gameSessions = activeGameSessions.get(gameId);
         if (gameSessions) {
           gameSessions.delete(socketId);
+          // Clean up empty game session
+          if (gameSessions.size === 0) {
+            activeGameSessions.delete(gameId);
+          }
         }
+        userGameSessions.delete(userEmail);
       }
     }
   }
   
-  const gameId = userGameSessions.get(userEmail);
-  if (gameId) {
-    const gameSessions = activeGameSessions.get(gameId);
-    if (gameSessions) {
-      gameSessions.delete(socketId);
+  // Also clean up from any game sessions
+  for (const [gameId, sessions] of activeGameSessions.entries()) {
+    if (sessions.has(socketId)) {
+      sessions.delete(socketId);
+      if (sessions.size === 0) {
+        activeGameSessions.delete(gameId);
+      }
     }
   }
 }
@@ -288,6 +316,7 @@ export function updateGameHeartbeat(gameId: string) {
   gameSessionHeartbeat.set(gameId, Date.now());
 }
 
+// Existing interfaces and types
 export interface InviteToGameData {
   myEmail: string
   hisEmail: string
@@ -422,4 +451,4 @@ export interface TournamentMatch {
   winner?: TournamentParticipant;
   loser?: TournamentParticipant;
   gameRoomId?: string;
-} 
+}
