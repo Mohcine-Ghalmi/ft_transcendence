@@ -1,49 +1,91 @@
 import { Socket, Server } from 'socket.io'
 
-export const activeGameSessions = new Map<string, Set<string>>() // gameId -> Set of socketIds
+export const activeGameSessions = new Map<string, Set<string>>()
 export const userGameSessions = new Map<string, string>()
+export const socketToUser = new Map<string, string>()
+export const userToSockets = new Map<string, Set<string>>()
+export const gameSessionHeartbeat = new Map<string, number>()
+
 
 export function addUserToGameSession(userEmail: string, gameId: string, socketId: string) {
   
-  const currentGameId = userGameSessions.get(userEmail)
-  
-  if (currentGameId === gameId) {
-    const existingSessions = activeGameSessions.get(gameId) || new Set()
-    existingSessions.add(socketId)
-    activeGameSessions.set(gameId, existingSessions)
-    return
+  socketToUser.set(socketId, userEmail);
+  if (!userToSockets.has(userEmail)) {
+    userToSockets.set(userEmail, new Set());
   }
-  
-  // If user is in a different game, clean up the old one first
-  if (currentGameId && currentGameId !== gameId) {
-    cleanupUserSession(userEmail, socketId)
-  }
-  
-  userGameSessions.set(userEmail, gameId)
+  userToSockets.get(userEmail)!.add(socketId);
+  userGameSessions.set(userEmail, gameId);
   if (!activeGameSessions.has(gameId)) {
-    activeGameSessions.set(gameId, new Set())
+    activeGameSessions.set(gameId, new Set());
   }
-  activeGameSessions.get(gameId)!.add(socketId)
+  activeGameSessions.get(gameId)!.add(socketId);
   
+  gameSessionHeartbeat.set(gameId, Date.now());
 }
 
 export function cleanupUserSession(userEmail: string, socketId: string) {
-  
-  const gameId = userGameSessions.get(userEmail)
-  if (gameId) {
-    const gameSessions = activeGameSessions.get(gameId)
-    if (gameSessions) {
-      gameSessions.delete(socketId)
-      
-      if (gameSessions.size === 0) {
-        activeGameSessions.delete(gameId)
-        userGameSessions.delete(userEmail)
+  socketToUser.delete(socketId);
+  const userSockets = userToSockets.get(userEmail);
+  if (userSockets) {
+    userSockets.delete(socketId);
+    if (userSockets.size === 0) {
+      userToSockets.delete(userEmail);
+      const gameId = userGameSessions.get(userEmail);
+      if (gameId) {
+        const gameSessions = activeGameSessions.get(gameId);
+        if (gameSessions) {
+          gameSessions.delete(socketId);
+        }
       }
+    }
+  }
+  
+  const gameId = userGameSessions.get(userEmail);
+  if (gameId) {
+    const gameSessions = activeGameSessions.get(gameId);
+    if (gameSessions) {
+      gameSessions.delete(socketId);
     }
   }
 }
 
-// Core game types
+// New function to handle reconnection
+export function reconnectUserToGameSession(userEmail: string, gameId: string, socketId: string): boolean {
+  const existingGameId = userGameSessions.get(userEmail);
+  if (existingGameId === gameId) {
+    addUserToGameSession(userEmail, gameId, socketId);
+    return true;
+  }
+  
+  return false;
+}
+
+// Check if user has any active sockets
+export function hasActiveSockets(userEmail: string): boolean {
+  const sockets = userToSockets.get(userEmail);
+  return sockets ? sockets.size > 0 : false;
+}
+
+export function getUserCurrentGame(userEmail: string): string | undefined {
+  return userGameSessions.get(userEmail);
+}
+
+export function isGameSessionActive(gameId: string): boolean {
+  const sessions = activeGameSessions.get(gameId);
+  if (!sessions || sessions.size === 0) return false;
+  
+  const lastHeartbeat = gameSessionHeartbeat.get(gameId);
+  if (lastHeartbeat && Date.now() - lastHeartbeat > 30000) {
+    return false;
+  }
+  
+  return true;
+}
+
+export function updateGameHeartbeat(gameId: string) {
+  gameSessionHeartbeat.set(gameId, Date.now());
+}
+
 export interface InviteToGameData {
   myEmail: string
   hisEmail: string

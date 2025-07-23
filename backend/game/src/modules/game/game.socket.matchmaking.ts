@@ -9,12 +9,20 @@ import {
   MatchmakingPlayer,
   GameSocketHandler,
   getPlayerData,
+  activeGames,
+  gameRooms,
+  addUserToGameSession,
+  cleanupUserSession,
+  socketToUser,
+  userGameSessions,
+  activeGameSessions,
+  hasActiveSockets,
+  getUserCurrentGame
 } from './game.socket.types'
-import { createMatchHistory } from './game.service'
 import { v4 as uuidv4 } from 'uuid'
 import { getUserByEmail } from '../user/user.service'
+import { saveMatchHistory, cleanupGame, emitToUsers } from './game.socket.utils'
 
-// Function to clean up user's game data
 async function cleanupUserGameData(
   email: string
 ): Promise<{ cleanedCount: number; details: any[] }> {
@@ -78,6 +86,8 @@ async function cleanupUserGameData(
   return { cleanedCount, details }
 }
 
+const processingGames = new Set<string>()
+
 export const handleMatchmaking: GameSocketHandler = (
   socket: Socket,
   io: Server
@@ -85,18 +95,89 @@ export const handleMatchmaking: GameSocketHandler = (
   // Handle socket disconnect - clean up user data
   socket.on('disconnect', async () => {
     try {
-      // Find user email from socket ID in queue
-      const playerInQueue = matchmakingQueue.find(
-        (p) => p.socketId === socket.id
-      )
-      if (playerInQueue) {
-        const { email } = playerInQueue
+      const userEmail = socketToUser.get(socket.id)
+      
+      if (userEmail) {
+        // Clean up session tracking
+        cleanupUserSession(userEmail, socket.id)
+        
+        // Find player in queue
+        const playerInQueue = matchmakingQueue.find(
+          (p) => p.socketId === socket.id || p.email === userEmail
+        )
+        
+        if (playerInQueue) {
+          // Remove from queue
+          removeFromQueueByEmail(userEmail)
+          
+          // Clean up any stale game data
+          await cleanupUserGameData(userEmail)
+        }
 
-        // Remove from queue
-        removeFromQueueByEmail(email)
-
-        // Clean up any stale game data
-        await cleanupUserGameData(email)
+        // Handle case where player disconnects after match found but before game starts
+        const currentGameId = getUserCurrentGame(userEmail)
+        if (currentGameId) {
+          const gameRoom = gameRooms.get(currentGameId)
+          
+          if (gameRoom && (gameRoom.status === 'accepted' || gameRoom.status === 'waiting')) {
+            console.log(`[Matchmaking] Player ${userEmail} left after match found but before game started`)
+            
+            // Check if user still has active sockets (other sessions)
+            if (!hasActiveSockets(userEmail)) {
+              // Mark player as having left
+              gameRoom.status = 'canceled'
+              gameRoom.endedAt = Date.now()
+              gameRoom.leaver = userEmail
+              
+              const otherPlayerEmail = gameRoom.hostEmail === userEmail 
+                ? gameRoom.guestEmail 
+                : gameRoom.hostEmail
+              
+              // Award win to the other player
+              const winner = otherPlayerEmail
+              const loser = userEmail
+              
+              gameRoom.winner = winner
+              gameRoom.loser = loser
+              
+              // Save match history (forfeit)
+              await saveMatchHistory(
+                currentGameId, 
+                gameRoom, 
+                winner, 
+                loser, 
+                { p1: 0, p2: 0 }, 
+                'player_left'
+              )
+              
+              // Clean up game
+              await cleanupGame(currentGameId, 'player_left')
+              
+              // Notify other player
+              const otherPlayerSockets = await getSocketIds(otherPlayerEmail, 'sockets') || []
+              if (otherPlayerSockets.length > 0) {
+                io.to(otherPlayerSockets).emit('MatchmakingPlayerLeft', {
+                  gameId: currentGameId,
+                  winner,
+                  loser,
+                  message: 'Opponent left before the game started. You win!',
+                  reason: 'player_left'
+                })
+                
+                // Also emit game ended event for consistency
+                io.to(otherPlayerSockets).emit('GameEnded', {
+                  gameId: currentGameId,
+                  winner,
+                  loser,
+                  finalScore: { p1: 0, p2: 0 },
+                  gameDuration: 0,
+                  reason: 'player_left',
+                  message: 'Opponent left before the game started. You win!'
+                })
+              }
+            }
+          }
+        }
       }
 
       // Also clean up any stale queue entries (older than 2 minutes)
@@ -125,6 +206,9 @@ export const handleMatchmaking: GameSocketHandler = (
         })
       }
 
+      // Map socket to user for session tracking
+      socketToUser.set(socket.id, email)
+
       // Check if user is already in queue
       if (isInQueue(email)) {
         return socket.emit('MatchmakingResponse', {
@@ -136,6 +220,7 @@ export const handleMatchmaking: GameSocketHandler = (
       // Always clean up any stale game data first
       const { cleanedCount } = await cleanupUserGameData(email)
       if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email}`)
       }
 
       // Clean up any stale queue entries (older than 2 minutes)
@@ -220,12 +305,16 @@ export const handleMatchmaking: GameSocketHandler = (
         })
       }
 
+      // Clean up session tracking
+      cleanupUserSession(email, socket.id)
+
       // Remove from queue
       removeFromQueueByEmail(email)
 
       // Clean up any stale game data when leaving matchmaking
       const { cleanedCount } = await cleanupUserGameData(email)
       if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} stale game rooms for ${email}`)
       }
 
       // Also clean up any stale queue entries (older than 2 minutes)
@@ -247,6 +336,83 @@ export const handleMatchmaking: GameSocketHandler = (
         status: 'error',
         message: 'Failed to leave matchmaking queue.',
       })
+    }
+  })
+
+  // Handle player leaving before game start but after match found
+  socket.on('PlayerLeftBeforeGameStart', async (data: { gameId: string; leaver: string }) => {
+    try {
+      const { gameId, leaver } = data
+
+      if (!gameId || !leaver) {
+        return
+      }
+
+      const gameRoom = gameRooms.get(gameId)
+      if (!gameRoom) {
+        return
+      }
+
+      // Check if game is already being processed
+      if (processingGames.has(gameId)) {
+        return
+      }
+
+      processingGames.add(gameId)
+
+      const otherPlayerEmail = gameRoom.hostEmail === leaver 
+        ? gameRoom.guestEmail 
+        : gameRoom.hostEmail
+
+      // Mark game as canceled and award win to remaining player
+      gameRoom.status = 'canceled'
+      gameRoom.endedAt = Date.now()
+      gameRoom.leaver = leaver
+      gameRoom.winner = otherPlayerEmail
+      gameRoom.loser = leaver
+
+      // Save match history (forfeit)
+      await saveMatchHistory(
+        gameId, 
+        gameRoom, 
+        otherPlayerEmail, 
+        leaver, 
+        { p1: 0, p2: 0 }, 
+        'player_left'
+      )
+
+      // Clean up game
+      await cleanupGame(gameId, 'player_left')
+
+      // Notify other player
+      const otherPlayerSockets = await getSocketIds(otherPlayerEmail, 'sockets') || []
+      if (otherPlayerSockets.length > 0) {
+        io.to(otherPlayerSockets).emit('GameEndedByOpponentLeave', {
+          gameId,
+          winner: otherPlayerEmail,
+          leaver,
+          message: 'Opponent left before the game started. You win!'
+        })
+
+        // Also emit game ended event
+        io.to(otherPlayerSockets).emit('GameEnded', {
+          gameId,
+          winner: otherPlayerEmail,
+          loser: leaver,
+          finalScore: { p1: 0, p2: 0 },
+          gameDuration: 0,
+          reason: 'player_left',
+          message: 'Opponent left before the game started. You win!'
+        })
+      }
+
+      setTimeout(() => {
+        processingGames.delete(gameId)
+      }, 5000)
+
+    } catch (error) {
+      console.error('Error handling player left before game start:', error)
+      processingGames.delete(data.gameId)
     }
   })
 
@@ -324,6 +490,24 @@ export const handleMatchmaking: GameSocketHandler = (
       return
     }
 
+    // Verify both players are still online before creating match
+    const player1SocketIds = (await getSocketIds(player1.email, 'sockets')) || []
+    const player2SocketIds = (await getSocketIds(player2.email, 'sockets')) || []
+
+    if (player1SocketIds.length === 0) {
+      console.log(`Player ${player1.email} is no longer online, removing from match`)
+      // Put player2 back in queue
+      matchmakingQueue.unshift(player2)
+      return
+    }
+
+    if (player2SocketIds.length === 0) {
+      console.log(`Player ${player2.email} is no longer online, removing from match`)
+      // Put player1 back in queue
+      matchmakingQueue.unshift(player1)
+      return
+    }
+
     // Fetch user data for both players
     const [player1User, player2User] = await Promise.all([
       getUserByEmail(player1.email),
@@ -344,12 +528,11 @@ export const handleMatchmaking: GameSocketHandler = (
 
     // Save game room to Redis
     await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+    gameRooms.set(gameId, gameRoom)
 
-    // Get socket IDs for both players
-    const player1SocketIds =
-      (await getSocketIds(player1.email, 'sockets')) || []
-    const player2SocketIds =
-      (await getSocketIds(player2.email, 'sockets')) || []
+    // Add both players to game session tracking
+    addUserToGameSession(player1.email, gameId, player1.socketId)
+    addUserToGameSession(player2.email, gameId, player2.socketId)
 
     // Notify both players about the match
     const matchData = {
@@ -387,20 +570,95 @@ export const handleMatchmaking: GameSocketHandler = (
 
     // Wait a moment for players to prepare, then start the game
     setTimeout(async () => {
-      // Update game status to in_progress
-      gameRoom.status = 'in_progress'
-      gameRoom.startedAt = Date.now()
-      await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
+      // Check if both players are still connected before starting
+      const currentPlayer1Sockets = (await getSocketIds(player1.email, 'sockets')) || []
+      const currentPlayer2Sockets = (await getSocketIds(player2.email, 'sockets')) || []
 
-      // Notify players that game is starting
-      io.to([...player1SocketIds, ...player2SocketIds]).emit('GameStarting', {
-        gameId,
-        hostEmail: player1.email,
-        guestEmail: player2.email,
-        hostData: player1Data,
-        guestData: player2Data,
-        startedAt: gameRoom.startedAt,
-      })
+      // If either player disconnected, handle it
+      if (currentPlayer1Sockets.length === 0) {
+        console.log(`Player 1 (${player1.email}) disconnected before game start`)
+        await handlePlayerLeftBeforeStart(io, gameId, player1.email, player2.email)
+        return
+      }
+
+      if (currentPlayer2Sockets.length === 0) {
+        console.log(`Player 2 (${player2.email}) disconnected before game start`)
+        await handlePlayerLeftBeforeStart(io, gameId, player2.email, player1.email)
+        return
+      }
+
+      // Both players still connected, start the game
+      const updatedGameRoom = gameRooms.get(gameId)
+      if (updatedGameRoom && updatedGameRoom.status === 'accepted') {
+        // Update game status to in_progress
+        updatedGameRoom.status = 'in_progress'
+        updatedGameRoom.startedAt = Date.now()
+        await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(updatedGameRoom))
+        gameRooms.set(gameId, updatedGameRoom)
+
+        // Notify players that game is starting
+        io.to([...currentPlayer1Sockets, ...currentPlayer2Sockets]).emit('GameStarting', {
+          gameId,
+          hostEmail: player1.email,
+          guestEmail: player2.email,
+          hostData: player1Data,
+          guestData: player2Data,
+          startedAt: updatedGameRoom.startedAt,
+        })
+      }
     }, 3000) // 3 second delay before starting
+  }
+
+  // Helper function to handle player leaving before game starts
+  async function handlePlayerLeftBeforeStart(
+    io: Server, 
+    gameId: string, 
+    leaverEmail: string, 
+    remainingPlayerEmail: string
+  ) {
+    const gameRoom = gameRooms.get(gameId)
+    if (!gameRoom) return
+
+    // Mark game as canceled and award win to remaining player
+    gameRoom.status = 'canceled'
+    gameRoom.endedAt = Date.now()
+    gameRoom.leaver = leaverEmail
+    gameRoom.winner = remainingPlayerEmail
+    gameRoom.loser = leaverEmail
+
+    // Save match history (forfeit)
+    await saveMatchHistory(
+      gameId, 
+      gameRoom, 
+      remainingPlayerEmail, 
+      leaverEmail, 
+      { p1: 0, p2: 0 }, 
+      'player_left'
+    )
+
+    // Clean up game
+    await cleanupGame(gameId, 'player_left')
+
+    // Notify remaining player
+    const remainingPlayerSockets = await getSocketIds(remainingPlayerEmail, 'sockets') || []
+    if (remainingPlayerSockets.length > 0) {
+      io.to(remainingPlayerSockets).emit('GameEndedByOpponentLeave', {
+        gameId,
+        winner: remainingPlayerEmail,
+        leaver: leaverEmail,
+        message: 'Opponent left before the game started. You win!'
+      })
+
+      // Also emit game ended event
+      io.to(remainingPlayerSockets).emit('GameEnded', {
+        gameId,
+        winner: remainingPlayerEmail,
+        loser: leaverEmail,
+        finalScore: { p1: 0, p2: 0 },
+        gameDuration: 0,
+        reason: 'player_left',
+        message: 'Opponent left before the game started. You win!'
+      })
+    }
   }
 }
