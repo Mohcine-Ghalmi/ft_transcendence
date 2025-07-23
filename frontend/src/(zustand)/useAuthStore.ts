@@ -91,8 +91,8 @@ interface UserState {
   connectSocket: () => void
   disconnectSocket: () => void
   googleLogin: (data: any) => Promise<void>
-  notifications: any | null
-  setNotifations: () => void
+  notifications: any
+  setNotifations: (data: any) => void
   seachedUsers: any
   setIsLoading: (data: boolean) => void
   setUser: (user: any) => void
@@ -105,7 +105,7 @@ interface UserState {
   setHidePopUp: (data: boolean) => void
   userDetails: UserDetails | null
   setUserDetails: (data: UserDetails) => void
-  getUserDetails: () => Promise<void>
+  getUserDetails: (email: string) => Promise<void>
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -114,7 +114,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   isLoading: false,
   socketConnected: false,
   onlineUsers: [],
-  notifications: null,
+  notifications: [],
   seachedUsers: [],
   hidePopUp: false,
   userDetails: null,
@@ -123,12 +123,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     set({ userDetails: data })
   },
 
-  getUserDetails: async () => {
-    if (get().userDetails) return
+  getUserDetails: async (email: string) => {
     try {
-      const res = await axiosInstance.get('/api/users/getUserDetails')
-      console.log('User Details:', res.data)
-
+      const res = await axiosInstance.post('/api/users/getUserDetails', {
+        email,
+      })
       const data: UserDetails = res.data
       get().setUserDetails(data)
     } catch (err) {
@@ -143,8 +142,8 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   setUser: (user) => {
     set({ user })
   },
-  setNotifations: () => {
-    set({ notifications: null })
+  setNotifations: (data) => {
+    set({ notifications: data })
   },
   setIsLoading: (data) => {
     set({ isLoading: data })
@@ -361,9 +360,43 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       set({ socketConnected: false })
     }
 
-    const onNewMessageNotification = (notifications: any) => {
-      set({ notifications })
-      setTimeout(() => set({ notifications: null }), 10000)
+    const onNewNotification = (notifications: any) => {
+      const currentNotifications = get().notifications || []
+
+      switch (notifications.type) {
+        case 'message':
+          const newNotification = {
+            message: notifications.message,
+            type: 'message',
+            senderEmail: notifications.sender.email,
+            avatar: notifications.sender.avatar,
+            userId: notifications.sender.id,
+            senderUsername: notifications.sender.username,
+            senderLogin: notifications.sender.login,
+          }
+
+          const filteredNotifications = currentNotifications.filter(
+            (n) => !(n.type === 'message')
+          )
+
+          set({
+            notifications: [newNotification, ...filteredNotifications],
+          })
+          break
+        case 'friend_request':
+          const friendNotification = {
+            message: notifications.message,
+            type: 'friend_request',
+            senderEmail: notifications.senderEmail,
+          }
+
+          set({
+            notifications: [friendNotification, ...currentNotifications],
+          })
+          break
+        default:
+          break
+      }
     }
 
     const onsearchResults = (seachedUsers: any) => {
@@ -445,7 +478,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     socketInstance.on('blockResponse', onBlockResponse)
 
     //
-    socketInstance.on('newMessageNotification', onNewMessageNotification)
+    socketInstance.on('newNotification', onNewNotification)
     socketInstance.on('error-in-connection', (data) => {
       console.log('Socket connection error:', data)
 
@@ -461,7 +494,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.off('disconnect')
       socketInstance.off('connect_error')
       socketInstance.off('getOnlineUsers')
-      socketInstance.off('newMessageNotification')
+      socketInstance.off('newNotification')
       socketInstance.off('error-in-connection')
       socketInstance.off('InviteToGameResponse')
 

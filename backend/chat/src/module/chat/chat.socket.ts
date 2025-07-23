@@ -15,77 +15,139 @@ interface SentMessageData {
   image: string
 }
 
-export function setupChatNamespace(chatNamespace: Namespace) {
-  chatNamespace.on('connection', (socket: Socket) => {
-    const cryptedMail = socket.handshake.query.cryptedMail
-    console.log('cryptedMail : ', cryptedMail)
+async function checkSocketConnection(socket: any) {
+  if (!socket || !socket.handshake || !socket.handshake.query) {
+    return null
+  }
+  const key = process.env.ENCRYPTION_KEY || ''
+  console.log('ENCRYPTION_KEY:', key)
 
-    if (!cryptedMail) {
-      console.error('No cryptedMail provided in handshake query')
-      return
-    }
-    const key = process.env.ENCRYPTION_KEY as string
+  if (!key) {
+    socket.emit('error-in-connection', {
+      status: 'error',
+      message: 'ENCRYPTION_KEY is not set in environment variables',
+    })
+    socket.disconnect(true)
+    return null
+  }
+  try {
+    const cryptedMail = socket.handshake.query.cryptedMail
+    console.log('cryptedMail:', cryptedMail)
+
     const userEmail = CryptoJs.AES.decrypt(cryptedMail as string, key).toString(
       CryptoJs.enc.Utf8
     )
-    if (!userEmail) {
-      console.error('Failed to decrypt user email from cryptedMail')
-      return
-    }
+    console.log('userEmail:', userEmail)
 
-    addSocketId(userEmail, socket.id, 'chat')
+    if (!userEmail) {
+      socket.emit('error-in-connection', {
+        status: 'error',
+        message: 'Invalid email format',
+      })
+      socket.disconnect(true)
+      return null
+    }
+    const me = await getUserByEmail(userEmail)
+    console.log('User found:', me ? me.email : 'No user found')
+
+    if (!me) {
+      socket.emit('error-in-connection', {
+        status: 'error',
+        message: 'User not found',
+      })
+      socket.disconnect(true)
+      return null
+    }
+    return me
+  } catch (err) {
+    console.log('Error decrypting email:', err)
+
+    socket.emit('error-in-connection', {
+      status: 'error',
+      message: 'Invalid email format',
+    })
+    socket.disconnect(true)
+    return null
+  }
+}
+
+export function setupChatNamespace(chatNamespace: Namespace) {
+  chatNamespace.on('connection', async (socket: Socket) => {
+    const key = process.env.ENCRYPTION_KEY || ''
+    const me: any = await checkSocketConnection(socket)
+
+    if (!me) return
+
+    addSocketId(me.email, socket.id, 'chat')
 
     //seen message
 
-    socket.on('seenMessage', async ({ myId, id }) => {
-      try {
-        const sql = db.prepare(
-          `UPDATE Messages SET seen = TRUE  WHERE (senderId = ? AND receiverId = ?)`
-        )
-        sql.run(id, myId)
+    socket.on(
+      'seenMessage',
+      async ({ myId, id }: { myId: number; id: number }) => {
+        try {
+          if (!myId || !id)
+            return socket.emit(
+              'errorWhenSeeingAmessage',
+              'Invalid IDs provided'
+            )
+          const sql = db.prepare(
+            `UPDATE Messages SET seen = TRUE  WHERE (senderId = ? AND receiverId = ?)`
+          )
+          sql.run(id, myId)
 
-        // Get the users involved
-        const [me, otherUser]: any = await Promise.all([
-          getUserById(myId),
-          getUserById(id),
-        ])
+          // Get the users involved
+          const [me, otherUser]: any = await Promise.all([
+            getUserById(myId),
+            getUserById(id),
+          ])
 
-        if (!me || !otherUser) {
-          return socket.emit('errorWhenSeeingAmessage', 'User not found')
+          if (!me || !otherUser) {
+            return socket.emit('errorWhenSeeingAmessage', 'User not found')
+          }
+
+          // Emit to both users that the messages have been seen
+          // Send to the user who just saw the message
+          const mySockets = await getSocketIds(me.email, 'chat')
+          if (mySockets?.length) {
+            chatNamespace.to(mySockets).emit('messagesSeenUpdate', {
+              conversationWith: id,
+              seen: true,
+            })
+          }
+
+          // Send to the other user that their messages have been seen
+          const otherUserSockets = await getSocketIds(otherUser.email, 'chat')
+          if (otherUserSockets?.length) {
+            chatNamespace.to(otherUserSockets).emit('messagesSeenUpdate', {
+              conversationWith: myId,
+              seen: true,
+            })
+          }
+
+          return
+        } catch (err: any) {
+          console.log(err.message || err)
+          return socket.emit(
+            'errorWhenSeeingAmessage',
+            err.message || 'Failed to mark messages as seen'
+          )
         }
-
-        // Emit to both users that the messages have been seen
-        // Send to the user who just saw the message
-        const mySockets = await getSocketIds(me.email, 'chat')
-        if (mySockets?.length) {
-          chatNamespace.to(mySockets).emit('messagesSeenUpdate', {
-            conversationWith: id,
-            seen: true,
-          })
-        }
-
-        // Send to the other user that their messages have been seen
-        const otherUserSockets = await getSocketIds(otherUser.email, 'chat')
-        if (otherUserSockets?.length) {
-          chatNamespace.to(otherUserSockets).emit('messagesSeenUpdate', {
-            conversationWith: myId,
-            seen: true,
-          })
-        }
-
-        return
-      } catch (err) {
-        console.log(err)
-        return socket.emit(
-          'errorWhenSeeingAmessage',
-          'Failed to mark messages as seen'
-        )
       }
-    })
+    )
 
     //searching for a user in chat
-    socket.on('searchForUser', ({ searchedUser, email }) => {
+    socket.on('searchForUser', async ({ searchedUser, email }) => {
       try {
+        if (
+          !searchedUser ||
+          !email ||
+          typeof searchedUser !== 'string' ||
+          typeof email !== 'string'
+        )
+          return socket.emit('searchError', 'Invalid search parameters')
+        if (email !== me.email)
+          return socket.emit('searchError', 'You are not authorized to search')
         const sql = db.prepare(`
             SELECT
               f.id AS f_id,
@@ -137,22 +199,25 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           },
         }))
         socket.emit('searchingInFriends', users)
-      } catch (err) {
-        console.log(err)
-
-        return socket.emit('searchError', 'Error while Searching')
+      } catch (err: any) {
+        return socket.emit(
+          'searchError',
+          err.message || 'Error while Searching'
+        )
       }
     })
 
     socket.on('sendMessage', async (data) => {
+      let dencrypt: SentMessageData = {} as SentMessageData
       try {
-        const key = process.env.ENCRYPTION_KEY as string
-        if (!key) {
-          console.error('ENCRYPTION_KEY is not set in environment variables')
-          return socket.emit('failedToSendMessage', 'Internal server error')
-        }
+        if (!key)
+          return socket.emit('failedToSendMessage', 'ENCRYPTION_KEY is not set')
         const bytes = CryptoJs.AES.decrypt(data, key)
-        const dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+        dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
+      } catch (err) {
+        return socket.emit('failedToSendMessage', 'Invalid message data format')
+      }
+      try {
         const {
           recieverId,
           senderEmail,
@@ -166,13 +231,8 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           getUserById(recieverId),
         ])
 
-        if (!me) {
+        if (!me || !receiver) {
           socket.emit('failedToSendMessage', 'Sender Not Found')
-          return
-        }
-
-        if (!receiver) {
-          socket.emit('failedToSendMessage', 'User Not Found')
           return
         }
 
@@ -203,11 +263,6 @@ export function setupChatNamespace(chatNamespace: Namespace) {
             getConversations(me.id, me.email),
             getConversations(receiver.id, receiver.email),
           ])
-        // const conversationsPromise = await getConversations(me.id, me.email)
-        // const receiverConversationsPromise = await getConversations(
-        //   receiver.id,
-        //   receiver.email
-        // )
 
         const mySockets = await getSocketIds(me.email, 'chat')
         const recieverSockets = await getSocketIds(receiver.email, 'chat')
@@ -218,17 +273,21 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
         const messagePayload = {
           ...newMessage,
-          receiver,
-          sender: me,
+          receiver: {
+            id: receiver.id,
+            email: receiver.email,
+            username: receiver.username,
+            login: receiver.login,
+            avatar: receiver.avatar,
+          },
+          sender: {
+            id: me.id,
+            email: me.email,
+            username: me.username,
+            login: me.login,
+            avatar: me.avatar,
+          },
         }
-
-        // const cryptedMessage = CryptoJs.AES.encrypt(
-        //   JSON.stringify(messagePayload),
-        //   key
-        // ).toString()
-        console.log('mySockets : ', mySockets)
-        console.log('recieverSockets : ', recieverSockets)
-        console.log('receiverGlobalSockets : ', receiverGlobalSockets)
 
         if (mySockets?.length) {
           chatNamespace.to(mySockets).emit('newMessage', messagePayload)
@@ -248,10 +307,16 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         }
 
         if (receiverGlobalSockets?.length) {
-          io.to(receiverGlobalSockets).emit('newMessageNotification', {
+          io.to(receiverGlobalSockets).emit('newNotification', {
             type: 'message',
-            me,
-            newMessage,
+            sender: {
+              email: me.email,
+              username: me.username,
+              id: me.id,
+              avatar: me.avatar,
+              login: me.login,
+            },
+            message: newMessage.message || 'sent you a new message',
           })
         }
       } catch (error) {
@@ -261,22 +326,11 @@ export function setupChatNamespace(chatNamespace: Namespace) {
     })
 
     socket.on('disconnect', () => {
-      const cryptedMail = socket.handshake.query.cryptedMail
-      if (!cryptedMail) {
-        console.error('No cryptedMail provided in handshake query')
-        return
-      }
-      const key = process.env.ENCRYPTION_KEY as string
-      const userEmail = CryptoJs.AES.decrypt(
-        cryptedMail as string,
-        key
-      ).toString(CryptoJs.enc.Utf8)
-      if (!userEmail) {
+      if (!me || !me.email) {
         console.error('Failed to decrypt user email from cryptedMail')
         return
       }
-
-      removeSocketId(userEmail, socket.id, 'chat')
+      removeSocketId(me.email, socket.id, 'chat')
     })
   })
 }

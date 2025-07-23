@@ -50,10 +50,9 @@ export const handleGameAcceptance: GameSocketHandler = (
         // Clean up invitation
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${guestEmail}`),
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`),
         ])
 
-        // Get user data
         const [hostUser, guestUser] = await Promise.all([
           getUserByEmail(invite.hostEmail),
           getUserByEmail(invite.guestEmail),
@@ -85,10 +84,9 @@ export const handleGameAcceptance: GameSocketHandler = (
         )
         gameRooms.set(gameId, gameRoomData)
 
-        // Notify both players
+        // FIXED: Get ALL socket IDs but handle them differently
         const hostSocketIds = (await getSocketIds(host.email, 'sockets')) || []
-        const guestSocketIds =
-          (await getSocketIds(guest.email, 'sockets')) || []
+        const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
 
         const acceptedData = {
           gameId,
@@ -96,15 +94,29 @@ export const handleGameAcceptance: GameSocketHandler = (
           acceptedBy: guest.email,
         }
 
-        io.to(hostSocketIds).emit('GameInviteAccepted', {
+        socket.emit('GameInviteAccepted', {
           ...acceptedData,
-          guestData: getPlayerData(guest),
-        })
-
-        io.to(guestSocketIds).emit('GameInviteAccepted', {
-          ...acceptedData,
+          hostEmail: host.email,
+          guestEmail: guest.email,
           hostData: getPlayerData(host),
         })
+
+        io.to(hostSocketIds).emit('GameInviteAccepted', {
+          ...acceptedData,
+          hostEmail: host.email,
+          guestEmail: guest.email,
+          guestData: getPlayerData(guest),
+          isHostNotification: true, // Flag to indicate this is for host
+        })
+
+        const otherGuestSockets = guestSocketIds.filter(socketId => socketId !== socket.id)
+        if (otherGuestSockets.length > 0) {
+          io.to(otherGuestSockets).emit('GameInviteCleanup', {
+            gameId,
+            action: 'accepted',
+            message: 'Invite accepted in another session'
+          })
+        }
       } catch (error) {
         socket.emit('GameInviteResponse', {
           status: 'error',
@@ -114,7 +126,6 @@ export const handleGameAcceptance: GameSocketHandler = (
     }
   )
 
-  // Handle declining game invitations
   socket.on(
     'DeclineGameInvite',
     async (data: { gameId: string; guestEmail: string }) => {
@@ -148,25 +159,30 @@ export const handleGameAcceptance: GameSocketHandler = (
         // Clean up invitation
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${guestEmail}`),
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), // Host-specific key
         ])
 
         const guestUser = await getUserByEmail(invite.guestEmail)
         const guest = guestUser as unknown as User
 
         if (guest) {
-          // Notify host of decline
-          const hostSocketIds =
-            (await getSocketIds(invite.hostEmail, 'sockets')) || []
+          const hostSocketIds = (await getSocketIds(invite.hostEmail, 'sockets')) || []
+          const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
+
           io.to(hostSocketIds).emit('GameInviteDeclined', {
             gameId,
             declinedBy: guest.email,
             guestName: guest.username,
             guestLogin: guest.login,
           })
+
+          io.to(guestSocketIds).emit('GameInviteCleanup', {
+            gameId,
+            action: 'declined',
+            message: 'Invite declined in another session'
+          })
         }
 
-        // Confirm to guest
         socket.emit('GameInviteResponse', {
           status: 'success',
           message: 'Invitation declined.',

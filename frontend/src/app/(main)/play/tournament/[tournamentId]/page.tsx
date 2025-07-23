@@ -184,12 +184,10 @@ export default function TournamentGamePage() {
 
     const handleTournamentMatchCompleted = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        // Update tournament data
         if (data.tournament) {
           setTournamentData(data.tournament)
         }
         
-        // Show notification about match result
         if (data.reason === 'player_disconnected') {
           setNotification({ 
             message: 'A player disconnected in the tournament match.', 
@@ -247,7 +245,6 @@ export default function TournamentGamePage() {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         
-        // Show notification about participant leaving
         const participantName = data.participant?.nickname || data.participantEmail
         setNotification({ 
           message: `${participantName} left the tournament.`, 
@@ -386,14 +383,13 @@ export default function TournamentGamePage() {
     };
 
     const handleGameStarting = (data: any) => {
-      const gameId = data.gameId || data.gameRoomId; // Support both field names for compatibility
+      const gameId = data.gameId || data.gameRoomId;
       if (gameId) {
         setNotification({
           type: 'success',
           message: `🎮 Your tournament match is starting! Redirecting to game...`
         });
         
-        // Redirect to the game room immediately for tournament matches
         router.push(`/play/game/${gameId}`);
       }
     };
@@ -405,13 +401,11 @@ export default function TournamentGamePage() {
           setTournamentData(data.tournament);
         }
         
-        // Show notification about round start
         setNotification({
           type: 'success',
           message: data.message || `⚔️ Round ${data.round + 1} has started!`
         });
         
-        // Clear notification after 5 seconds
         setTimeout(() => setNotification(null), 5000);
       }
     };
@@ -423,7 +417,6 @@ export default function TournamentGamePage() {
           setTournamentData(data.tournament)
         }
         
-        // Show notification about the forfeit
         const forfeitedPlayerName = data.forfeitedPlayer?.nickname || 'A player'
         const advancingPlayerName = data.advancingPlayer?.nickname || 'opponent'
         

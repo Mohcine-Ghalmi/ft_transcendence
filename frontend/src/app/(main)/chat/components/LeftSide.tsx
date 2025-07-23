@@ -348,8 +348,13 @@ const FriendsConversations = () => {
 }
 
 const LeftSide = () => {
+  const { selectedConversationId } = useChatStore()
   return (
-    <div className="flex flex-col justify-between w-[700px]">
+    <div
+      className={`${
+        selectedConversationId ? 'max-xl:hidden' : 'flex'
+      } flex-col justify-between w-full xl:w-[700px]`}
+    >
       <FriendsConversations />
     </div>
   )

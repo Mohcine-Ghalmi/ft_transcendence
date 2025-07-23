@@ -4,6 +4,7 @@ import CryptoJS from 'crypto-js'
 import { getFriend } from './user.service'
 import { changeFriendStatus } from '../friends/friends.socket'
 import { getSocketIds } from '../../socket'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 
 const searchForUsersInDb = (query: string, myEmail: string) => {
   const sql = db.prepare(`
@@ -23,7 +24,7 @@ const searchForUsersInDb = (query: string, myEmail: string) => {
       OR (FriendRequest.fromEmail = User.email AND FriendRequest.toEmail = ?)
     WHERE
       (User.email LIKE ? OR User.username LIKE ? OR User.login LIKE ?)
-      AND User.email != ?
+      AND User.email != ? LIMIT 10
   `)
 
   const users = sql.all(
@@ -180,4 +181,3 @@ export function setupUserSocket(socket: Socket, io: Server) {
     }
   })
 }
-

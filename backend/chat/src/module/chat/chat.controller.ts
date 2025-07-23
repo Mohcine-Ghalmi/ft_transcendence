@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 
 import { db } from '../../app'
 import axios from 'axios'
-import { isBlockedStatus, getUserById } from '../user/user.service'
+import { isBlockedStatus, getUserById, getFriend } from '../user/user.service'
 
 const fs = require('fs')
 const path = require('path')
@@ -24,50 +24,55 @@ export async function addMessage(
   return await getSql.get(result.lastInsertRowid)
 }
 
-export function formatMessages(rawMessages: any, myEmail: string) {
-  return rawMessages.map((row: any) => {
-    const hisEmail =
-      row.sender_email === myEmail ? row.receiver_email : row.sender_email
+export async function formatMessages(rawMessages: any, myEmail: string) {
+  return Promise.all(
+    rawMessages.map(async (row: any) => {
+      const hisEmail =
+        row.sender_email === myEmail ? row.receiver_email : row.sender_email
 
-    const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(myEmail, hisEmail)
+      const { isBlockedByMe, isBlockedByHim } = await isBlockedStatus(
+        myEmail,
+        hisEmail
+      )
 
-    return {
-      id: row.message_id,
-      senderId: row.message_senderId,
-      receiverId: row.message_receiverId,
-      message: row.message_text,
-      seen: row.message_seen,
-      image: row.message_image,
-      date: row.message_date,
-      status: row.friend_status,
+      return {
+        id: row.message_id,
+        senderId: row.message_senderId,
+        receiverId: row.message_receiverId,
+        message: row.message_text,
+        seen: row.message_seen,
+        image: row.message_image,
+        date: row.message_date,
+        status: row.friend_status,
 
-      isBlockedByMe,
-      isBlockedByHim,
+        isBlockedByMe,
+        isBlockedByHim,
 
-      sender: {
-        id: row.sender_id,
-        email: row.sender_email,
-        username: row.sender_username,
-        login: row.sender_login,
-        level: row.sender_level,
-        avatar: row.sender_avatar,
-        type: row.sender_type,
-        resetOtp: row.sender_resetOtp,
-        resetOtpExpireAt: row.sender_resetOtpExpireAt,
-      },
-      receiver: {
-        id: row.receiver_id,
-        email: row.receiver_email,
-        username: row.receiver_username,
-        login: row.receiver_login,
-        level: row.receiver_level,
-        avatar: row.receiver_avatar,
-        type: row.receiver_type,
-        resetOtp: row.receiver_resetOtp,
-        resetOtpExpireAt: row.receiver_resetOtpExpireAt,
-      },
-    }
-  })
+        sender: {
+          id: row.sender_id,
+          email: row.sender_email,
+          username: row.sender_username,
+          login: row.sender_login,
+          level: row.sender_level,
+          avatar: row.sender_avatar,
+          type: row.sender_type,
+          resetOtp: row.sender_resetOtp,
+          resetOtpExpireAt: row.sender_resetOtpExpireAt,
+        },
+        receiver: {
+          id: row.receiver_id,
+          email: row.receiver_email,
+          username: row.receiver_username,
+          login: row.receiver_login,
+          level: row.receiver_level,
+          avatar: row.receiver_avatar,
+          type: row.receiver_type,
+          resetOtp: row.receiver_resetOtp,
+          resetOtpExpireAt: row.receiver_resetOtpExpireAt,
+        },
+      }
+    })
+  )
 }
 
 export async function getConversations(id: number, myEmail: string) {
@@ -147,7 +152,8 @@ export async function getConversations(id: number, myEmail: string) {
 
     const rawMessages = sql.all(id, id, id, id, id, id)
 
-    const messages = formatMessages(rawMessages, myEmail)
+    const messages = await formatMessages(rawMessages, myEmail)
+    console.log('Conversations fetched:', messages)
 
     return messages
   } catch (err) {
@@ -180,55 +186,9 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
 
     if (!reciever)
       return rep.code(200).send({ error: 'User Not Found', status: false })
-    const sql_friend = db.prepare(`
-      SELECT
-        FriendRequest.*,
-        UA.email AS userA_email,
-        UA.username AS userA_username,
-        UA.login AS userA_login,
-        UA.avatar AS userA_avatar,
-        UB.email AS userB_email,
-        UB.username AS userB_username,
-        UB.login AS userB_login,
-        UB.avatar AS userB_avatar
-      FROM FriendRequest
-      JOIN User AS UA ON UA.email = FriendRequest.fromEmail
-      JOIN User AS UB ON UB.email = FriendRequest.toEmail
-      WHERE (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
-      OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?) AND status = 'ACCEPTED' LIMIT 1;
-    `)
-    const data = sql_friend.all(
-      reciever.email,
-      me.email,
-      me.email,
-      reciever.email
-    )
-    const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(
-      me.email,
-      reciever.email
-    )
 
-    const friend = data.map((row: any) => ({
-      id: row.id,
-      userA: {
-        status: row.status,
-        email: row.userA_email,
-        username: row.userA_username,
-        login: row.userA_login,
-        avatar: row.userA_avatar,
-        isBlockedByMe,
-        isBlockedByHim,
-      },
-      userB: {
-        status: row.status,
-        email: row.userB_email,
-        username: row.userB_username,
-        login: row.userB_login,
-        avatar: row.userB_avatar,
-        isBlockedByMe,
-        isBlockedByHim,
-      },
-    }))
+    const friend = await getFriend(reciever.email, me.email)
+
     // const friend = await getFriend(reciever.email, me.email)
     if (!friend)
       return rep.code(200).send({ error: 'User Not Found', status: false })
@@ -284,16 +244,10 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
       ORDER BY m.date DESC
       LIMIT 20 OFFSET ?;
     `)
-    const rawMessages = await sql.all(
-      me.id,
-      reciever.id,
-      reciever.id,
-      me.id,
-      offset
-    )
+    const rawMessages = sql.all(me.id, reciever.id, reciever.id, me.id, offset)
 
-    const conversation = formatMessages(rawMessages, me.email)
-    console.log(conversation)
+    const conversation = await formatMessages(rawMessages, me.email)
+    console.log(friend)
 
     return rep.code(200).send({ friend, conversation })
   } catch (err) {

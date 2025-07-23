@@ -25,7 +25,6 @@ async function getAllActiveTournaments(): Promise<any[]> {
     }
     return tournaments
   } catch (err) {
-    console.error('Error getting active tournaments:', err)
     return []
   }
 }
@@ -47,7 +46,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
       }
       socket.emit('TournamentList', tournaments)
     } catch (err) {
-      console.error('[Tournament] Error listing tournaments:', err)
       socket.emit('TournamentError', { message: 'Failed to list tournaments.' })
     }
   })
@@ -100,38 +98,35 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         })
 
       // Check for existing invite and clean up if expired
-      const existingInviteId = await redis.get(
-        `${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`
-      )
+      const existingInviteId = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`);
       if (existingInviteId) {
-        const existingInviteData = await redis.get(
-          `${TOURNAMENT_INVITE_PREFIX}${existingInviteId}`
-        )
+        const existingInviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${existingInviteId}`);
         if (existingInviteData) {
-          const existingInvite = JSON.parse(existingInviteData)
-          // Check if the existing invite is from the same tournament
-          if (existingInvite.tournamentId === tournamentId) {
-            return socket.emit('InviteToTournamentResponse', {
-              status: 'error',
-              message: 'Already invited to this tournament.',
-            })
-          }
-          // Check if existing invite is expired (older than 30 seconds)
+          const existingInvite = JSON.parse(existingInviteData);
+          // If invite is expired (older than 30 seconds), clean up and allow new invite
           if (Date.now() - existingInvite.createdAt > 30000) {
-            // Clean up expired invite
             await Promise.all([
               redis.del(`${TOURNAMENT_INVITE_PREFIX}${existingInviteId}`),
               redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`),
-            ])
+            ]);
           } else {
+            // If invite is for the same tournament, block
+            if (existingInvite.tournamentId === tournamentId) {
+              return socket.emit('InviteToTournamentResponse', {
+                status: 'error',
+                message: 'Already invited to this tournament.',
+              });
+            }
+            // If invite is for a different tournament, allow new invite
+            // (or optionally block, but old behavior allowed new invites)
             return socket.emit('InviteToTournamentResponse', {
               status: 'error',
               message: 'Already has a pending invite.',
-            })
+            });
           }
         } else {
-          // Clean up stale invite reference
-          await redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`)
+          // Clean up stale invite reference and allow new invite
+          await redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`);
         }
       }
 
@@ -461,7 +456,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           })
         }
       } catch (error) {
-        console.error('[Tournament] Error leaving tournament:', error)
         socket.emit('TournamentLeaveResponse', {
           status: 'error',
           message: 'Failed to leave tournament.',
@@ -549,7 +543,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           message: 'Tournament canceled successfully.',
         })
       } catch (error) {
-        console.error('[Tournament] Error canceling tournament:', error)
         socket.emit('TournamentCancelResponse', {
           status: 'error',
           message: 'Failed to cancel tournament.',

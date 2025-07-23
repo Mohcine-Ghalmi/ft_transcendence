@@ -13,13 +13,14 @@ const PADDLE_SPEED = 8;
 const BALL_SIZE = 15;
 const BALL_SPEED = 6;
 
-const isMobile = () => typeof window !== 'undefined' && window.innerWidth < 640;
+const isMobile = () => typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window);
 
 interface PingPongGameProps {
   player1: any;
   player2: any;
   onExit: (winner?: any) => void;
   isTournamentMode?: boolean;
+  // Remote game props
   gameId?: string;
   socket?: any;
   isHost?: boolean;
@@ -50,6 +51,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   });
   const {user} = useAuthStore();
 
+  // Remote game state
   const [isRemoteGame, setIsRemoteGame] = useState(false);
   const [remoteGameState, setRemoteGameState] = useState<any>(null);
   const [isPlayer1, setIsPlayer1] = useState(true);
@@ -59,19 +61,78 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   const animationRef = useRef<number | null>(null);
   const router = useRouter();
 
+  // Tournament participant data
+  const [tournamentPlayer1Data, setTournamentPlayer1Data] = useState<any>(null);
+  const [tournamentPlayer2Data, setTournamentPlayer2Data] = useState<any>(null);
+
   // Mobile paddle state
   const [paddle1Move, setPaddle1Move] = useState<'' | 'up' | 'down'>('');
   const [paddle2Move, setPaddle2Move] = useState<'' | 'up' | 'down'>('');
+
+  // Function to fetch tournament participant data
+  const fetchTournamentParticipant = async (email: string) => {
+    try {
+      const response = await fetch(`http://localhost:5007/api/game/tournament-participant?email=${encodeURIComponent(email)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const result = await response.json();
+      return result.success ? result.data : null;
+    } catch (error) {
+      console.error('Error fetching tournament participant data:', error);
+      return null;
+    }
+  };
 
   // Determine if this is a remote game
   useEffect(() => {
     setIsRemoteGame(!!gameId && !!socket);
     if (gameId && socket) {
+      // For ALL remote games (tournament and matchmaking), maintain consistent positioning
+      // Host is always Player 1 (left), Guest is always Player 2 (right)
       setIsPlayer1(isHost);
       setIsGameHost(isHost);
     }
   }, [gameId, socket, isHost]);
 
+  // Fetch tournament participant data
+  useEffect(() => {
+    if (isTournamentMode && isRemoteGame) {
+      const fetchParticipantData = async () => {
+        try {
+          // Fetch current user data
+          if (user?.email) {
+            const userData = await fetchTournamentParticipant(user.email);
+            if (userData) {
+              if (isHost) {
+                setTournamentPlayer1Data(userData);
+              } else {
+                setTournamentPlayer2Data(userData);
+              }
+            }
+          }
+
+          // Fetch opponent data
+          if (opponent?.email) {
+            const opponentData = await fetchTournamentParticipant(opponent.email);
+            if (opponentData) {
+              if (isHost) {
+                setTournamentPlayer2Data(opponentData);
+              } else {
+                setTournamentPlayer1Data(opponentData);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching tournament participant data:', error);
+        }
+      };
+
+      fetchParticipantData();
+    }
+  }, [isTournamentMode, isRemoteGame, user?.email, opponent?.email, isHost]);
+
+  // Listen for game start event from server
   useEffect(() => {
     if (!isRemoteGame || !socket) return;
 
@@ -81,7 +142,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         setPaused(false);
         gameStartTime.current = Date.now();
         
-        // Initialize game state from server if available
         if (data.gameState) {
           ball.current.x = data.gameState.ballX;
           ball.current.y = data.gameState.ballY;
@@ -92,6 +152,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           currentScores.current = data.gameState.scores;
           setScores(data.gameState.scores);
         } else {
+          // Initialize with default values
           ball.current.x = GAME_WIDTH / 2 - BALL_SIZE / 2;
           ball.current.y = GAME_HEIGHT / 2 - BALL_SIZE / 2;
           ball.current.dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
@@ -105,6 +166,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         if (isTournamentMode) {
           setGameReady(true);
         } else {
+          // Add small delay for regular games
           setTimeout(() => {
             setGameReady(true);
           }, 500);
@@ -119,8 +181,10 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
   }, [isRemoteGame, socket, gameId, isPlayer1, isGameHost, isTournamentMode]);
 
+  // Auto-start for tournament games immediately when component mounts
   useEffect(() => {
     if (isTournamentMode && !gameStarted) {
+      // For all tournament games (both remote and local), start immediately without waiting for events
       setGameStarted(true);
       setPaused(false);
       gameStartTime.current = Date.now();
@@ -143,29 +207,39 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         if (!gameStarted && socket && gameId) {
           socket.emit('StartGame', { gameId });
         }
-      }, 1000);
+      }, 1000); // 1 second delay for regular games
 
       return () => clearTimeout(autoStartTimer);
     }
   }, [isRemoteGame, socket, gameId, gameStarted, isTournamentMode]);
 
   const safePlayer1 = {
-    id: isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id) || crypto.randomUUID(),
-    name: isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username),
-    avatar: isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar),
-    nickname: isRemoteGame && isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : user?.login) || 'Player 1',
-    email: isRemoteGame && isHost ? user?.email : (isRemoteGame ? opponent?.email : user?.email)
+    id: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.id : 
+        (isRemoteGame && isHost ? user?.id : (isRemoteGame ? opponent?.id : user?.id)) || crypto.randomUUID(),
+    name: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.name : 
+          (isRemoteGame && isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : user?.username)),
+    avatar: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.avatar : 
+            (isRemoteGame && isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : user?.avatar)),
+    nickname: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.nickname : 
+              (isRemoteGame && isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : user?.login)) || 'Player 1',
+    email: isTournamentMode && tournamentPlayer1Data ? tournamentPlayer1Data.email : 
+           (isRemoteGame && isHost ? user?.email : (isRemoteGame ? opponent?.email : user?.email))
   };
 
   const safePlayer2 = {
-    id: isRemoteGame && !isHost ? user?.id : (isRemoteGame ? opponent?.id : player2?.id) || crypto.randomUUID(),
-    name: isRemoteGame && !isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : player2?.username || player2?.name),
-    avatar: isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar),
-    nickname: isRemoteGame && !isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : player2?.login || player2?.nickname) || 'Player 2',
-    email: isRemoteGame && !isHost ? user?.email : (isRemoteGame ? opponent?.email : player2?.email)
+    id: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.id : 
+        (isRemoteGame && !isHost ? user?.id : (isRemoteGame ? opponent?.id : player2?.id)) || crypto.randomUUID(),
+    name: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.name : 
+          (isRemoteGame && !isHost ? user?.username : (isRemoteGame ? opponent?.username || opponent?.name : player2?.username || player2?.name)),
+    avatar: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.avatar : 
+            (isRemoteGame && !isHost ? user?.avatar : (isRemoteGame ? opponent?.avatar : player2?.avatar)),
+    nickname: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.nickname : 
+              (isRemoteGame && !isHost ? user?.login : (isRemoteGame ? opponent?.login || opponent?.nickname : player2?.login || player2?.nickname)) || 'Player 2',
+    email: isTournamentMode && tournamentPlayer2Data ? tournamentPlayer2Data.email : 
+           (isRemoteGame && !isHost ? user?.email : (isRemoteGame ? opponent?.email : player2?.email))
   };
 
-
+  // Paddle positions: player1 left, player2 right
   const paddle1Y = useRef<number>(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
   const paddle2Y = useRef<number>(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
   const ball = useRef({
@@ -196,10 +270,55 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
     };
   }, [gameStarted, paused]);
 
+  // UI helpers - moved up to be available for other useEffects
+  const gameOver = scores.p1 >= 7 || scores.p2 >= 7;
+  const isGameActive = gameStarted && !paused && !gameOver;
+
   // Mobile detection
   useEffect(() => {
-    setMobile(isMobile());
+    const updateMobileState = () => {
+      setMobile(isMobile());
+    };
+    
+    updateMobileState();
+    window.addEventListener('resize', updateMobileState);
+    window.addEventListener('orientationchange', updateMobileState);
+    
+    return () => {
+      window.removeEventListener('resize', updateMobileState);
+      window.removeEventListener('orientationchange', updateMobileState);
+    };
   }, []);
+
+  // Touch event handling for mobile
+  useEffect(() => {
+    if (!mobile || !isGameActive) return;
+    
+    // Prevent default touch behaviors on game area to avoid scrolling issues
+    const handleTouchMove = (e: TouchEvent) => {
+      // Only prevent default on the canvas and button areas
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'CANVAS' || target.tagName === 'BUTTON')) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      // Only prevent default on the canvas and button areas
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'CANVAS' || target.tagName === 'BUTTON')) {
+        e.preventDefault();
+      }
+    };
+    
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchstart', handleTouchStart, { passive: false });
+    
+    return () => {
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchstart', handleTouchStart);
+    };
+  }, [mobile, isGameActive]);
 
   // Canvas resize handler
   useEffect(() => {
@@ -210,23 +329,36 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
       
-      // Calculate canvas dimensions maintaining aspect ratio
-      let width = containerWidth;
-      let height = containerWidth / GAME_RATIO;
+      // Update mobile state on resize
+      setMobile(isMobile());
       
-      if (height > containerHeight) {
-        height = containerHeight;
-        width = containerHeight * GAME_RATIO;
+      // Calculate canvas dimensions maintaining aspect ratio
+      let width = Math.min(containerWidth - 32, containerWidth * 0.95);
+      let height = width / GAME_RATIO;
+      
+      // Ensure canvas fits in container height
+      if (height > containerHeight - 100) {
+        height = containerHeight - 100;
+        width = height * GAME_RATIO;
       }
+      
+      // Set minimum and maximum sizes based on screen
+      const minWidth = isMobile() ? 320 : 600;
+      const maxWidth = isMobile() ? Math.min(containerWidth - 16, 500) : 1200;
+      
+      width = Math.max(minWidth, Math.min(maxWidth, width));
+      height = width / GAME_RATIO;
       
       setCanvasDims({ width, height });
     };
 
     handleResize();
     window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
     
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
     };
   }, []);
 
@@ -363,8 +495,12 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             if (keys.current["arrowup"] && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
             if (keys.current["arrowdown"] && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
           } else {
-            if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
-            if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+            if (paddle2Move === "up" && paddle2Y.current > 0) {
+              paddle2Y.current -= PADDLE_SPEED;
+            }
+            if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) {
+              paddle2Y.current += PADDLE_SPEED;
+            }
           }
         }
         
@@ -459,10 +595,18 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
           if ((keys.current["arrowdown"] || keys.current["↓"]) && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
         } else {
           // Touch/mobile, button-based control
-          if (paddle1Move === "up" && paddle1Y.current > 0) paddle1Y.current -= PADDLE_SPEED;
-          if (paddle1Move === "down" && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle1Y.current += PADDLE_SPEED;
-          if (paddle2Move === "up" && paddle2Y.current > 0) paddle2Y.current -= PADDLE_SPEED;
-          if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) paddle2Y.current += PADDLE_SPEED;
+          if (paddle1Move === "up" && paddle1Y.current > 0) {
+            paddle1Y.current -= PADDLE_SPEED;
+          }
+          if (paddle1Move === "down" && paddle1Y.current < GAME_HEIGHT - PADDLE_HEIGHT) {
+            paddle1Y.current += PADDLE_SPEED;
+          }
+          if (paddle2Move === "up" && paddle2Y.current > 0) {
+            paddle2Y.current -= PADDLE_SPEED;
+          }
+          if (paddle2Move === "down" && paddle2Y.current < GAME_HEIGHT - PADDLE_HEIGHT) {
+            paddle2Y.current += PADDLE_SPEED;
+          }
         }
 
         // Ball movement for local game
@@ -577,7 +721,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
         animationRef.current = null;
       }
     };
-  }, [gameStarted, paused, gameReady]); // Add gameReady to dependencies
+  }, [gameStarted, paused, gameReady, paddle1Move, paddle2Move, mobile]); // Add paddle states and mobile to dependencies
 
   // Win condition - Fixed for consistent scoring
   useEffect(() => {
@@ -625,10 +769,6 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       }
     }
   }, [scores.p1, scores.p2, safePlayer1, safePlayer2, onExit, isTournamentMode, isRemoteGame, socket, gameId, isGameHost, isHost, opponent?.email, user?.email]);
-
-  // UI helpers
-  const gameOver = scores.p1 >= 7 || scores.p2 >= 7;
-  const isGameActive = gameStarted && !paused && !gameOver;
 
   // Game end handler - defined before socket handlers
   const handleGameEnd = useCallback((winner: any) => {
@@ -748,12 +888,12 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   }, [isRemoteGame, socket, handleGameStateUpdate, handlePaddleUpdate, handleGameEnded, handlePlayerLeft]);
 
   // Touch button event helpers
-  const handleMobilePress = (which: 'p1up' | 'p1down' | 'p2up' | 'p2down', isDown: boolean) => {
+  const handleMobilePress = useCallback((which: 'p1up' | 'p1down' | 'p2up' | 'p2down', isDown: boolean) => {
     if (which === 'p1up') setPaddle1Move(isDown ? 'up' : '');
     if (which === 'p1down') setPaddle1Move(isDown ? 'down' : '');
     if (which === 'p2up') setPaddle2Move(isDown ? 'up' : '');
     if (which === 'p2down') setPaddle2Move(isDown ? 'down' : '');
-  };
+  }, [mobile, isGameActive, paddle1Move, paddle2Move]);
 
   // Reset/exit helpers
   const handleStart = () => {
@@ -800,6 +940,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             style={{
               width: canvasDims.width,
               height: canvasDims.height,
+              maxWidth: '100%',
+              maxHeight: '100%',
             }}
           >
             <canvas
@@ -838,38 +980,140 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Mobile Controls */}
             {mobile && isGameActive && (
               <>
-                {/* Player controls based on actual position */}
+                {/* Left paddle controls - show for local games or if user is host */}
                 {(!isRemoteGame || isHost) && (
                   <div className="absolute left-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
                     <button
-                      className="w-12 h-12 bg-blue-700/80 hover:bg-blue-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg"
-                      onTouchStart={() => handleMobilePress('p1up', true)}
-                      onTouchEnd={() => handleMobilePress('p1up', false)}
+                      className="w-12 h-12 bg-blue-700/80 active:bg-blue-900 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg select-none"
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p1up', true);
+                      }}
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p1up', false);
+                      }}
+                      onTouchCancel={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p1up', false);
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p1up', true);
+                      }}
+                      onMouseUp={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p1up', false);
+                      }}
+                      onMouseLeave={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p1up', false);
+                      }}
                     >
                       ↑
                     </button>
                     <button
-                      className="w-12 h-12 bg-blue-700/80 hover:bg-blue-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg"
-                      onTouchStart={() => handleMobilePress('p1down', true)}
-                      onTouchEnd={() => handleMobilePress('p1down', false)}
+                      className="w-12 h-12 bg-blue-700/80 active:bg-blue-900 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-blue-400 shadow-lg select-none"
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p1down', true);
+                      }}
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p1down', false);
+                      }}
+                      onTouchCancel={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p1down', false);
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p1down', true);
+                      }}
+                      onMouseUp={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p1down', false);
+                      }}
+                      onMouseLeave={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p1down', false);
+                      }}
                     >
                       ↓
                     </button>
                   </div>
                 )}
+                
+                {/* Right paddle controls - show for local games or if user is guest */}
                 {(!isRemoteGame || !isHost) && (
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-20">
                     <button
-                      className="w-12 h-12 bg-red-700/80 hover:bg-red-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg"
-                      onTouchStart={() => handleMobilePress('p2up', true)}
-                      onTouchEnd={() => handleMobilePress('p2up', false)}
+                      className="w-12 h-12 bg-red-700/80 active:bg-red-900 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg select-none"
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p2up', true);
+                      }}
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p2up', false);
+                      }}
+                      onTouchCancel={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p2up', false);
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p2up', true);
+                      }}
+                      onMouseUp={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p2up', false);
+                      }}
+                      onMouseLeave={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p2up', false);
+                      }}
                     >
                       ↑
                     </button>
                     <button
-                      className="w-12 h-12 bg-red-700/80 hover:bg-red-800/90 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg"
-                      onTouchStart={() => handleMobilePress('p2down', true)}
-                      onTouchEnd={() => handleMobilePress('p2down', false)}
+                      className="w-12 h-12 bg-red-700/80 active:bg-red-900 rounded-lg text-white font-bold text-xl flex items-center justify-center touch-manipulation border-2 border-red-400 shadow-lg select-none"
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p2down', true);
+                      }}
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p2down', false);
+                      }}
+                      onTouchCancel={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMobilePress('p2down', false);
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p2down', true);
+                      }}
+                      onMouseUp={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p2down', false);
+                      }}
+                      onMouseLeave={(e) => {
+                        e.preventDefault();
+                        handleMobilePress('p2down', false);
+                      }}
                     >
                       ↓
                     </button>
@@ -879,27 +1123,27 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             )}
             {/* Desktop Controls Overlay */}
             {!mobile && isGameActive && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 flex gap-8 bg-black/60 rounded-xl px-6 py-3 border border-gray-700 shadow-lg">
+              <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-30 flex gap-4 bg-black/60 rounded-lg px-3 py-2 border border-gray-700 shadow-lg">
                 {/* Player 1 Controls - only show if controlling left paddle */}
                 {(!isRemoteGame || isHost) && (
                   <div className="flex flex-col items-center">
-                    <div className="flex gap-2 items-center mb-1">
-                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">W</span>
-                      <span className="text-white font-semibold">/</span>
-                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">S</span>
+                    <div className="flex gap-1 items-center mb-1">
+                      <span className="w-5 h-5 flex items-center justify-center bg-gray-700 text-white rounded text-xs font-bold border border-gray-400">W</span>
+                      <span className="text-white text-xs">/</span>
+                      <span className="w-5 h-5 flex items-center justify-center bg-gray-700 text-white rounded text-xs font-bold border border-gray-400">S</span>
                     </div>
-                    <span className="text-xs text-blue-200 font-semibold">Left Paddle</span>
+                    <span className="text-xs text-blue-200 font-semibold">Left</span>
                   </div>
                 )}
                 {/* Player 2 Controls - only show if controlling right paddle */}
                 {(!isRemoteGame || !isHost) && (
                   <div className="flex flex-col items-center">
-                    <div className="flex gap-2 items-center mb-1">
-                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↑</span>
-                      <span className="text-white font-semibold">/</span>
-                      <span className="w-6 h-6 flex items-center justify-center bg-gray-700 text-white rounded font-bold border-2 border-gray-400">↓</span>
+                    <div className="flex gap-1 items-center mb-1">
+                      <span className="w-5 h-5 flex items-center justify-center bg-gray-700 text-white rounded text-xs font-bold border border-gray-400">↑</span>
+                      <span className="text-white text-xs">/</span>
+                      <span className="w-5 h-5 flex items-center justify-center bg-gray-700 text-white rounded text-xs font-bold border border-gray-400">↓</span>
                     </div>
-                    <span className="text-xs text-red-200 font-semibold">Right Paddle</span>
+                    <span className="text-xs text-red-200 font-semibold">Right</span>
                   </div>
                 )}
               </div>
@@ -932,7 +1176,9 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
             {/* Player 1 - Left Column */}
             <div className="flex items-center gap-2 sm:gap-3 justify-start">
               <img
-                src={`/images/${safePlayer1.avatar}`}
+                src={isRemoteGame ? 
+                  `${safePlayer1.avatar?.startsWith('/') ? safePlayer1.avatar : `/images/${safePlayer1.avatar}`}` :
+                  `/images/${safePlayer1.avatar}`}
                 alt={safePlayer1.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />
@@ -960,7 +1206,11 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
                 <p className="text-gray-400 text-xs sm:text-sm md:text-lg truncate">@{safePlayer2.nickname}</p>
               </div>
               <img
-                src={`/images/${safePlayer2.avatar}`}
+                src={isRemoteGame ? 
+                  `${safePlayer2.avatar?.startsWith('/') ? safePlayer2.avatar : `/images/${safePlayer2.avatar}`}` :
+                  `${safePlayer2.avatar?.startsWith('data:') ? safePlayer2.avatar : 
+                    (safePlayer2.avatar === 'Default.avif' || safePlayer2.avatar === 'Default.svg') ? `/avatar/${safePlayer2.avatar}` : 
+                    safePlayer2.avatar?.startsWith('/') ? safePlayer2.avatar : `/avatar/Default.avif`}`}
                 alt={safePlayer2.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-blue-400 object-cover flex-shrink-0"
               />

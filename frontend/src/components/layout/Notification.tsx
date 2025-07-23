@@ -1,4 +1,5 @@
-import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import { useChatStore } from '@/(zustand)/useChatStore'
 import { Bell, Check, MessageCircle, X } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -9,8 +10,11 @@ export const NotificationItem = ({
   onAction,
 }: {
   notification: AppNotification | any
-  onAction: (id: string | number, action: string) => void
+  onAction: (id: number, action: string) => void
 }) => {
+  console.log('notification : ', notification)
+  const [acceptBtn, setAcceptBtn] = useState('Accept')
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'friend_request':
@@ -28,6 +32,23 @@ export const NotificationItem = ({
         return null
     }
   }
+  const handleAction = (action: string, hisEmail: string, type: string) => {
+    switch (action) {
+      case 'friend_request':
+        if (!socketInstance?.connected) break
+        if (type === 'decline') {
+          socketInstance.emit('rejectFriend', hisEmail)
+          setAcceptBtn('Declined')
+          break
+        }
+        socketInstance.emit('acceptFriend', hisEmail)
+        setAcceptBtn('Accepted')
+        break
+
+      case 'game_invitation':
+        break
+    }
+  }
 
   const getNotificationStatus = () => {
     if (notification.status === 'accepted') {
@@ -36,12 +57,9 @@ export const NotificationItem = ({
     return null
   }
 
-  const handleAction = (action: string, id: string) => {
-    // Handle notification action
-  }
-
   return (
     <div
+      onClick={() => onAction(notification.userId, 'message')}
       className={`p-4 border-b border-gray-800 last:border-b-0 hover:bg-gray-800/30 transition-colors ${
         notification.unread ? 'bg-gray-800/20' : ''
       }`}
@@ -52,7 +70,7 @@ export const NotificationItem = ({
           {notification.avatar ? (
             <div className="w-8 h-8 rounded-full overflow-hidden">
               <Image
-                src={notification.avatar}
+                src={`/images/${notification.avatar}`}
                 alt="User avatar"
                 width={32}
                 height={32}
@@ -87,13 +105,25 @@ export const NotificationItem = ({
             notification.status !== 'declined' && (
               <div className="flex gap-2 mt-3">
                 <button
-                  onClick={() => handleAction('accept', notification.id)}
+                  onClick={() =>
+                    handleAction(
+                      notification.type,
+                      notification.senderEmail,
+                      'accept'
+                    )
+                  }
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors"
                 >
                   Accept
                 </button>
                 <button
-                  onClick={() => handleAction('decline', notification.id)}
+                  onClick={() =>
+                    handleAction(
+                      notification.type,
+                      notification.senderEmail,
+                      'decline'
+                    )
+                  }
                   className="px-4 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded-md transition-colors"
                 >
                   Decline
@@ -116,23 +146,29 @@ export const NotificationItem = ({
 }
 
 export const NotificationDropdown = ({
-  notifications,
   className = '',
 }: {
-  notifications: AppNotification[] | any
   className: string
 }) => {
   const [showNotifications, setShowNotifications] = useState(false)
+  const { notifications, logout, setNotifations } = useAuthStore()
+  const { setSelectedConversationId } = useChatStore()
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const unreadCount = notifications.filter((n) => n.unread).length
-  const { logout } = useAuthStore()
+  const [unreadCount, setUnreadCount] = useState(notifications?.length || 0)
   const router = useRouter()
-
+  useEffect(() => {
+    if (!notifications) return
+    setUnreadCount(notifications.length)
+    console.log('Notifications updated:', notifications)
+  }, [notifications])
   const handleLogout = async () => {
     await logout()
     router.push('/')
   }
-
+  const closeDropdown = () => {
+    setNotifations([])
+    setShowNotifications(false)
+  }
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -140,7 +176,7 @@ export const NotificationDropdown = ({
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
       ) {
-        setShowNotifications(false)
+        closeDropdown()
       }
     }
 
@@ -153,16 +189,26 @@ export const NotificationDropdown = ({
     }
   }, [showNotifications])
 
-  const handleNotificationAction = (id: string | number, action: string) => {
-    // Handle notification actions here
-    // You can add logic to update the notification status
-    // or make API calls here
+  const handleNotificationAction = (id: number, action: string) => {
+    switch (action) {
+      case 'message':
+        setSelectedConversationId(id)
+        closeDropdown()
+        router.push(`/chat`)
+        break
+      default:
+        console.log('Unknown action:', action)
+        break
+    }
   }
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
-        onClick={() => setShowNotifications(!showNotifications)}
+        onClick={() => (
+          showNotifications && setNotifations([]),
+          setShowNotifications(!showNotifications)
+        )}
         className="relative p-1.5 sm:p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
       >
         <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -188,7 +234,7 @@ export const NotificationDropdown = ({
           {/* Backdrop for mobile */}
           <div
             className="fixed inset-0 bg-black/20 md:hidden z-40"
-            onClick={() => setShowNotifications(false)}
+            onClick={() => closeDropdown()}
           />
           <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-[#1a1d21] border border-gray-700 rounded-xl shadow-2xl z-50">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
@@ -196,16 +242,16 @@ export const NotificationDropdown = ({
                 Notifications
               </h3>
               <button
-                onClick={() => setShowNotifications(false)}
+                onClick={() => closeDropdown()}
                 className="md:hidden text-gray-400 hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {notifications.map((notification) => (
+              {notifications.map((notification, idx) => (
                 <NotificationItem
-                  key={notification.id}
+                  key={idx}
                   notification={notification}
                   onAction={handleNotificationAction}
                 />

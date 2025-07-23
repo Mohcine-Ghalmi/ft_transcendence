@@ -10,6 +10,10 @@ interface GetPlayerStatsParams {
   email: string
 }
 
+interface GetTournamentParticipantParams {
+  email: string
+}
+
 export async function gameRoutes(fastify: FastifyInstance) {
   // Get match history for a user
   fastify.get<{ Querystring: GetMatchHistoryParams }>(
@@ -48,7 +52,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Get player statistics
   fastify.get<{ Querystring: GetPlayerStatsParams }>(
     '/player-stats',
     {
@@ -80,6 +83,53 @@ export async function gameRoutes(fastify: FastifyInstance) {
         })
       } catch (error) {
         console.error('Error fetching player stats:', error)
+        return reply.status(500).send({ error: 'Internal server error' })
+      }
+    }
+  )
+
+  fastify.get<{ Querystring: GetTournamentParticipantParams }>(
+    '/tournament-participant',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            email: { type: 'string', format: 'email' }
+          },
+          required: ['email']
+        }
+      }
+    },
+    async (request: FastifyRequest<{ Querystring: GetTournamentParticipantParams }>, reply: FastifyReply) => {
+      try {
+        const { email } = request.query
+        
+        const user = await getUserByEmail(email)
+        if (!user) {
+          return reply.status(404).send({ error: 'User not found' })
+        }
+        const typedUser = user as {
+          id: number | string
+          email: string
+          username: string
+          login?: string
+          avatar?: string
+        }
+        return reply.send({
+          success: true,
+          data: {
+            id: typedUser.id,
+            email: typedUser.email,
+            username: typedUser.username,
+            login: typedUser.login,
+            avatar: typedUser.avatar,
+            nickname: typedUser.login || typedUser.username,
+            name: typedUser.username
+          }
+        })
+      } catch (error) {
+        console.error('Error fetching tournament participant data:', error)
         return reply.status(500).send({ error: 'Internal server error' })
       }
     }
