@@ -106,12 +106,21 @@ async function registerPlugins() {
     secret: process.env.JWT_SECRET || '',
   })
 
-  await server.register(cors, {
-    origin: process.env.FRONT_END_URL,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+  await server.register(require('@fastify/cors'), {
+    origin: (origin: string | undefined, cb: any) => {
+      const allowedOrigins = [
+        process.env.FRONT_END_URL,
+        process.env.CHAT_BACKEND_URL,
+        process.env.GAME_BACKEND_URL,
+      ].filter(Boolean) as string[]
+
+      if (!origin || allowedOrigins.includes(origin)) {
+        cb(null, true)
+      } else {
+        cb(new Error('Not allowed'), false)
+      }
+    },
     credentials: true,
-    exposedHeaders: ['set-cookie'],
   })
 
   await server.register(fastifyMultipart, {

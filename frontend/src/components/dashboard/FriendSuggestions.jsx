@@ -78,7 +78,7 @@ export const FriendSuggestions = () => {
             <Friend user={friend} key={index} />
           ))
         ) : (
-          <div className="border border-gray-500 rounded-xl min-h-[300px] flex items-center justify-center text-gray-500">
+          <div className="rounded-xl min-h-[300px] flex items-center justify-center text-gray-500">
             no friends Suggestions
           </div>
         )}
