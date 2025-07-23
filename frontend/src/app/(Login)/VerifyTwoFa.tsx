@@ -14,10 +14,13 @@ const VerifyTwoFa = ({ email }) => {
       return
     }
     try {
-      const res = await axiosInstance.post('/api/2fa/verifyTwoFaLogin', {
-        token: twoFactorCode,
-        email,
-      })
+      const res = await axiosInstance.post(
+        '/api/user-service/2fa/verifyTwoFaLogin',
+        {
+          token: twoFactorCode,
+          email,
+        }
+      )
       setUser(res.data)
       setHidePopUp(false)
       router.push('/dashboard')

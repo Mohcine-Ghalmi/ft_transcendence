@@ -5,7 +5,7 @@ const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT || '7001'),
   enableReadyCheck: false,
-  maxRetriesPerRequest: 3,
+  maxRetriesPerRequest: 10,
   lazyConnect: true,
   connectTimeout: 10000,
   commandTimeout: 5000,

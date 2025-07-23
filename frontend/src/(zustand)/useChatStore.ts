@@ -9,7 +9,7 @@ const FRON_END = process.env.NEXT_PUBLIC_FRONEND
 const BACK_END = 'http://localhost:5006'
 
 export const axiosChatInstance = axios.create({
-  baseURL: BACK_END,
+  baseURL: `${BACK_END}`,
   withCredentials: true,
 })
 
@@ -99,7 +99,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   getConversations: async () => {
     set({ isLoading: true })
     try {
-      const res = await axiosChatInstance.get('/api/chat/getFriends')
+      const res = await axiosChatInstance.get('/api/chat-service/getFriends')
 
       set({ conversations: res.data })
 
@@ -113,7 +113,9 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   getMessage: async (id: number, offset: number) => {
     set({ isLoading: true })
     try {
-      const res = await axiosChatInstance.get(`/api/chat/${id}/${offset}`)
+      const res = await axiosChatInstance.get(
+        `/api/chat-service/${id}/${offset}`
+      )
       const user = useAuthStore.getState().user
       set({
         selectedConversation:

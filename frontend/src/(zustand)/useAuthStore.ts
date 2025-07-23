@@ -125,9 +125,12 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   getUserDetails: async (email: string) => {
     try {
-      const res = await axiosInstance.post('/api/users/getUserDetails', {
-        email,
-      })
+      const res = await axiosInstance.post(
+        '/api/user-service/users/getUserDetails',
+        {
+          email,
+        }
+      )
       const data: UserDetails = res.data
       get().setUserDetails(data)
     } catch (err) {
@@ -150,7 +153,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
   getUser: async () => {
     try {
-      const res = await axiosInstance.get('/api/users/me')
+      const res = await axiosInstance.get('/api/user-service/users/me')
       get().setUser(res.data.user)
     } catch (err) {
       get().setUser(null)
@@ -162,7 +165,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     return true
     // set({ isLoading: true })
     // try {
-    //   const res = await axiosInstance.get('/api/users/getMe')
+    //   const res = await axiosInstance.get('/api/user-service/users/getMe')
     //   const { user } = res.data
     //   set({ user, isAuthenticated: true })
     //   get().connectSocket()
@@ -211,7 +214,10 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(`/v2/api/users/register`, data)
+      const res = await axiosInstance.post(
+        `/api/user-service/v2/api/users/register`,
+        data
+      )
       console.log(res)
 
       if (!res.data) {
@@ -240,7 +246,10 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   }) => {
     set({ isLoading: true })
     try {
-      const res = await axiosInstance.post(`/api/users/changePassword`, data)
+      const res = await axiosInstance.post(
+        `/api/user-service/users/changePassword`,
+        data
+      )
       if (res?.status === 200) {
         toast.success('Password changed successfully!')
         return true
@@ -275,7 +284,10 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       //   )
       //   return false
       // }
-      const res = await axiosInstance.post(`/v2/api/users/login`, data)
+      const res = await axiosInstance.post(
+        `/api/user-service/v2/api/users/login`,
+        data
+      )
       if (!res.data) {
         toast.warning('Login failed')
         return false
@@ -305,7 +317,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   logout: async () => {
     try {
-      const res = await axiosInstance.post(`/api/users/logout`)
+      const res = await axiosInstance.post(`/api/user-service/users/logout`)
       if (res?.status === 200) {
         toast.success('Logout successful!')
       } else {

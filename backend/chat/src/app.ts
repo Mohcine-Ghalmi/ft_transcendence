@@ -113,6 +113,14 @@ server.decorate(
   }
 )
 
+server.get('/healthcheck', async function () {
+  try {
+    return { status: 'OK', timestamp: new Date().toISOString() }
+  } catch (err) {
+    return { status: 'ERROR', message: 'Database error' }
+  }
+})
+
 async function startServer() {
   try {
     const CHAT_BACK_END_PORT = process.env.CHAT_BACK_END_PORT as string
@@ -120,7 +128,7 @@ async function startServer() {
       throw new Error('CHAT_BACK_END_PORT environment variable is not set')
     }
 
-    await cleanupStaleSocketsOnStartup()
+    //await cleanupStaleSocketsOnStartup()
 
     await server.register(fastifyCookie)
 
@@ -148,7 +156,7 @@ async function startServer() {
       exposedHeaders: ['set-cookie'],
     })
 
-    await server.register(chatRoutes, { prefix: 'api/chat' })
+    await server.register(chatRoutes, { prefix: 'api/chat-service' })
 
     setupSocketIO(server)
 

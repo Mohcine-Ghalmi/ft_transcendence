@@ -65,6 +65,14 @@ server.decorate(
   }
 )
 
+server.get('/healthcheck', async function () {
+  try {
+    return { status: 'OK', timestamp: new Date().toISOString() }
+  } catch (err) {
+    return { status: 'ERROR', message: 'Database error' }
+  }
+})
+
 async function startServer() {
   try {
     const GAME_BACK_END_PORT = process.env.GAME_BACK_END_PORT as string
@@ -72,7 +80,7 @@ async function startServer() {
       throw new Error('GAME_BACK_END_PORT environment variable is not set')
     }
 
-    await cleanupStaleSocketsOnStartup()
+    //await cleanupStaleSocketsOnStartup()
 
     await server.register(fastifyCookie)
 
@@ -90,7 +98,7 @@ async function startServer() {
 
     setupSocketIO(server)
 
-    server.register(gameRoutes, { prefix: '/api/game' })
+    server.register(gameRoutes, { prefix: 'api/game-service' })
 
     await server.listen({
       port: parseInt(GAME_BACK_END_PORT),

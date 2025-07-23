@@ -13,7 +13,7 @@ const BACK_END = 'http://localhost:5007'
 const FRON_END = process.env.NEXT_PUBLIC_FRONEND
 
 export const axiosGameInstance = axios.create({
-  baseURL: BACK_END,
+  baseURL: `${BACK_END}`,
   withCredentials: true,
 })
 
@@ -47,7 +47,6 @@ axiosGameInstance.interceptors.response.use(
     return Promise.reject(error)
   }
 )
-
 
 export let gameSocketInstance: Socket | null = null
 

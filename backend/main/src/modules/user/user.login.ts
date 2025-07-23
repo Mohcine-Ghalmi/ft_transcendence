@@ -226,6 +226,6 @@ export async function loginHandler(
 export async function loginRouter() {
   server.get('/login/google/callback', googleRegister)
   server.get('/login/42/callback', fortyTwoRegister)
-  server.post('/v2/api/users/register', registerHandler)
-  server.post('/v2/api/users/login', loginHandler)
+  server.post('/api/user-service/v2/api/users/register', registerHandler)
+  server.post('/api/user-service/v2/api/users/login', loginHandler)
 }

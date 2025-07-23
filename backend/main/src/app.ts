@@ -252,9 +252,9 @@ async function registerRoutes() {
     server.addSchema(schema)
   }
 
-  server.register(userRoutes, { prefix: 'api/users' })
-  server.register(mailRoutes, { prefix: 'api/mail' })
-  server.register(twoFARoutes, { prefix: 'api/2fa' })
+  server.register(userRoutes, { prefix: 'api/user-service/users' })
+  server.register(mailRoutes, { prefix: 'api/user-service/mail' })
+  server.register(twoFARoutes, { prefix: 'api/user-service/2fa' })
   server.register(loginRouter)
 }
 
@@ -269,7 +269,7 @@ async function startServer() {
 
     await registerRoutes()
 
-    await cleanupStaleSocketsOnStartup()
+    //await cleanupStaleSocketsOnStartup()
 
     await server.listen({
       port: parseInt(BACK_END_PORT),

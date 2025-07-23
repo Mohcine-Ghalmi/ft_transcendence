@@ -1,13 +1,13 @@
 import axios from 'axios'
 
 export const axiosMainInstance = axios.create({
-  baseURL: 'http://localhost:5005',
+  baseURL: 'http://user-service:5005/api/user-service/users',
   withCredentials: true,
 })
 
 export async function getUserByEmail(email: string) {
   try {
-    const res = await axiosMainInstance.post(`/api/users/getUserByEmail`, {
+    const res = await axiosMainInstance.post(`/getUserByEmail`, {
       email,
     })
     return res.data || null
@@ -19,7 +19,7 @@ export async function getUserByEmail(email: string) {
 
 export async function getUserById(id: number) {
   try {
-    const res = await axiosMainInstance.post(`/api/users/getUserById`, { id })
+    const res = await axiosMainInstance.post(`/getUserById`, { id })
     return res.data || null
   } catch (err: any) {
     console.error('Error fetching user by ID:', err.message)
@@ -29,7 +29,7 @@ export async function getUserById(id: number) {
 
 export const getIsBlocked = async (myEmail: string) => {
   try {
-    const res = await axiosMainInstance.post(`/api/users/getIsBlocked`, {
+    const res = await axiosMainInstance.post(`/getIsBlocked`, {
       myEmail,
     })
     return res.data || null
@@ -44,7 +44,7 @@ export async function getFriend(
   status: string = 'ACCEPTED'
 ) {
   try {
-    const res = await axiosMainInstance.post(`/api/users/getFriend`, {
+    const res = await axiosMainInstance.post(`/getFriend`, {
       fromEmail,
       toEmail,
       status,
