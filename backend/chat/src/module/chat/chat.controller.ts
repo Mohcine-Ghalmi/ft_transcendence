@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 
 import { db } from '../../app'
 import axios from 'axios'
-import { isBlockedStatus, getUserById } from '../user/user.service'
+import { isBlockedStatus, getUserById, getFriend } from '../user/user.service'
 
 const fs = require('fs')
 const path = require('path')
@@ -186,55 +186,9 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
 
     if (!reciever)
       return rep.code(200).send({ error: 'User Not Found', status: false })
-    const sql_friend = db.prepare(`
-      SELECT
-        FriendRequest.*,
-        UA.email AS userA_email,
-        UA.username AS userA_username,
-        UA.login AS userA_login,
-        UA.avatar AS userA_avatar,
-        UB.email AS userB_email,
-        UB.username AS userB_username,
-        UB.login AS userB_login,
-        UB.avatar AS userB_avatar
-      FROM FriendRequest
-      JOIN User AS UA ON UA.email = FriendRequest.fromEmail
-      JOIN User AS UB ON UB.email = FriendRequest.toEmail
-      WHERE (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
-      OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?) AND status = 'ACCEPTED' LIMIT 1;
-    `)
-    const data = sql_friend.all(
-      reciever.email,
-      me.email,
-      me.email,
-      reciever.email
-    )
-    const { isBlockedByMe, isBlockedByHim } = await isBlockedStatus(
-      me.email,
-      reciever.email
-    )
 
-    const friend = data.map((row: any) => ({
-      id: row.id,
-      userA: {
-        status: row.status,
-        email: row.userA_email,
-        username: row.userA_username,
-        login: row.userA_login,
-        avatar: row.userA_avatar,
-        isBlockedByMe,
-        isBlockedByHim,
-      },
-      userB: {
-        status: row.status,
-        email: row.userB_email,
-        username: row.userB_username,
-        login: row.userB_login,
-        avatar: row.userB_avatar,
-        isBlockedByMe,
-        isBlockedByHim,
-      },
-    }))
+    const friend = await getFriend(reciever.email, me.email)
+
     // const friend = await getFriend(reciever.email, me.email)
     if (!friend)
       return rep.code(200).send({ error: 'User Not Found', status: false })
@@ -293,7 +247,7 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
     const rawMessages = sql.all(me.id, reciever.id, reciever.id, me.id, offset)
 
     const conversation = await formatMessages(rawMessages, me.email)
-    console.log(conversation)
+    console.log(friend)
 
     return rep.code(200).send({ friend, conversation })
   } catch (err) {

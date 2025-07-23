@@ -104,6 +104,7 @@ export const ConversationContainer = () => {
 
   useEffect(() => {
     scrollToBottom()
+    console.log('Chat header updated:', chatHeader)
   }, [chatHeader])
 
   const handleGettingMsgOnScroll = async (e) => {

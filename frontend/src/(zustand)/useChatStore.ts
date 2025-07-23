@@ -124,11 +124,21 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
                 ...get().selectedConversation,
               ],
       })
+      const userB = { ...res.data.friend.userB }
+      const userA = { ...res.data.friend.userA }
+
       const friend =
-        user.email === res.data.friend[0].userA.email
-          ? res.data.friend[0].userB
-          : res.data.friend[0].userA
-      console.log('friend : ', friend)
+        user.email === res.data.friend.userA.email
+          ? {
+              ...userB,
+              isBlockedByMe: res.data.friend.isBlockedByMe,
+              isBlockedByHim: res.data.friend.isBlockedByHim,
+            }
+          : {
+              ...userA,
+              isBlockedByMe: res.data.friend.isBlockedByMe,
+              isBlockedByHim: res.data.friend.isBlockedByHim,
+            }
 
       set({ chatHeader: friend })
       if (id !== undefined && chatSocket && offset === 0) {
