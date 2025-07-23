@@ -4,6 +4,7 @@ import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { useChatStore } from '@/(zustand)/useChatStore'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { StatisticsChart } from '@/components/dashboard/StatisticsChart'
+import { useFriend } from '@/utils/useFriend'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -44,6 +45,13 @@ const TopProfile = ({ user }) => {
     })
   }
 
+  const {
+    handleFriendAction,
+    getButtonText,
+    isButtonDisabled,
+    handleChatWithUser,
+  } = useFriend(user)
+
   // useEffect(() => {}, [user.isBlockedByMe])
 
   return (
@@ -65,6 +73,24 @@ const TopProfile = ({ user }) => {
         >
           Edit Profile
         </Link>
+      ) : !user.status || user.status !== 'ACCEPTED' ? (
+        <>
+          <button
+            onClick={handleFriendAction}
+            disabled={isButtonDisabled()}
+            className={`text-center mt-4 w-[300px] cursor-pointer rounded-2xl py-2 text-white duration-300 hover:scale-99 ${
+              isButtonDisabled()
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-[#2B3036] cursor-pointer hover:bg-[#2a3d52]'
+            }`}
+          >
+            {getButtonText() === 'Friends' ? (
+              <div onClick={handleChatWithUser}>Chat</div>
+            ) : (
+              getButtonText()
+            )}
+          </button>
+        </>
       ) : (
         <div className="flex gap-4">
           <button
@@ -128,13 +154,13 @@ const Level = ({ user }) => {
   const { userDetails } = useAuthStore()
   useEffect(() => {
     const newProgress = (user.xp / 100) * width
-    setProgress(newProgress)
+    setProgress(newProgress > 100 ? newProgress / 100 : newProgress)
   }, [user.xp, width])
 
   return (
     <div className="w-full flex-col flex items-center justify-center">
       <div className="w-full mt-10">
-        <h3>Next Level</h3>
+        <h3>Your Level : {user.level}</h3>
         {/* progress bar */}
         <div className="w-full bg-gray-700 h-2 rounded-2xl relative mt-5">
           <div
@@ -142,7 +168,9 @@ const Level = ({ user }) => {
             className={`h-2 rounded-2xl absolute left-0 top-0 bg-white`}
           ></div>
         </div>
-        <p className="mt-4 text-gray-400">{user.xp}/100XP</p>
+        <p className="mt-4 text-gray-400">
+          {user.xp}/{(user.level + 1) * 100}XP
+        </p>
       </div>
       <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,_minmax(200px,1fr))] mt-10">
         <Card number={userDetails?.wins | 0} text="Wins" />
@@ -154,44 +182,44 @@ const Level = ({ user }) => {
   )
 }
 
-// export const Profile = ({ user }) => {
-//   const [isSelected, setIsSelected] = useState(false)
-//   return (
-//     <div className="w-[80%] h-[90vh] mt-15">
-//       <TopProfile user={user} />
-//       <Level user={user} />
-//       {/* select */}
-//       <div className="mt-10 flex items-center gap-6 my-4">
-//         <button
-//           onClick={() => setIsSelected(false)}
-//           className={`${
-//             !isSelected && 'border-white'
-//           } border-b border-transparent text-xl p-6 duration-75`}
-//         >
-//           State
-//         </button>
-//         <button
-//           onClick={() => setIsSelected(true)}
-//           className={`${
-//             isSelected && 'border-white'
-//           } border-b border-transparent text-xl p-6 duration-75`}
-//         >
-//           Match History
-//         </button>
-//       </div>
-//       <div className=" flex flex-col items-center justify-center w-full">
-//         {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
-//       </div>
-//     </div>
-//   )
-// }
+export const Profile = ({ user }) => {
+  const [isSelected, setIsSelected] = useState(false)
+  return (
+    <div className="w-[80%] h-[90vh] mt-15">
+      <TopProfile user={user} />
+      <Level user={user} />
+      {/* select */}
+      <div className="mt-10 flex items-center gap-6 my-4">
+        <button
+          onClick={() => setIsSelected(false)}
+          className={`${
+            !isSelected && 'border-white'
+          } border-b border-transparent text-xl p-6 duration-75`}
+        >
+          State
+        </button>
+        <button
+          onClick={() => setIsSelected(true)}
+          className={`${
+            isSelected && 'border-white'
+          } border-b border-transparent text-xl p-6 duration-75`}
+        >
+          Match History
+        </button>
+      </div>
+      <div className=" flex flex-col items-center justify-center w-full">
+        {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
+      </div>
+    </div>
+  )
+}
 
 export default function Page() {
-  const { user: me, getUser, getUserDetails } = useAuthStore()
+  const { user: me, getUser, getUserDetails, userDetails } = useAuthStore()
   const { userProfile, setUserProfile } = useSearchStore()
   const pathname = usePathname()
   const [isSelected, setIsSelected] = useState(false)
-  const [user, setUser] = useState()
+  const [user, setUser] = useState<any>()
 
   useEffect(() => {
     getUser()
@@ -200,8 +228,8 @@ export default function Page() {
   }, [pathname])
 
   useEffect(() => {
-    getUserDetails()
-  }, [])
+    getUserDetails(me.email)
+  }, [pathname])
   return (
     <div className="flex items-center justify-center text-white">
       <div className="w-[80%] h-[90vh] mt-15">

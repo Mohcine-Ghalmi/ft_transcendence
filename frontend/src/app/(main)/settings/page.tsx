@@ -75,7 +75,7 @@ const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
       </div>
       {/* Avatar Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg md:rounded-xl xl:rounded-2xl p-20 md:p-12 xl:p-16 transition-colors cursor-pointer ${
+        className={`border-2 border-dashed rounded-lg md:rounded-xl xl:rounded-2xl p-6 xl:p-16 transition-colors cursor-pointer ${
           isDragOver
             ? 'border-blue-500 bg-blue-500/10'
             : errors.avatar
@@ -299,7 +299,7 @@ const Settings = () => {
   return (
     <div className="w-full">
       <h2 className="text-4xl">Settings</h2>
-      <div className="flex flex-col  gap-6 mt-6">
+      <div className="flex flex-col gap-6 mt-6">
         <div className="flex flex-col gap-2">
           <span>Username</span>
           <input
@@ -406,7 +406,7 @@ const PassowrdSettings = () => {
   return (
     <div className="w-full">
       <h2 className="text-4xl">Change Password</h2>
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <form onSubmit={handleSubmit} className="mt-6 xl:space-y-4 space-y-2">
         <div>
           <label className="block mb-2">Current Password</label>
           <input
@@ -422,12 +422,14 @@ const PassowrdSettings = () => {
                 ),
               }))
             }}
-            className={`w-full px-2 py-4 border rounded-2xl bg-[#1F2124] outline-none ${
+            className={`w-full xl:px-2 xl:py-4 p-2 border rounded-2xl bg-[#1F2124] outline-none ${
               errors.currentPassword ? 'border-red-500' : 'border-gray-500'
             }`}
           />
           {errors.currentPassword && (
-            <p className="text-red-500 text-sm">{errors.currentPassword}</p>
+            <p className="text-red-500 text-xs xl:text-md">
+              {errors.currentPassword}
+            </p>
           )}
         </div>
         <div>
@@ -442,12 +444,14 @@ const PassowrdSettings = () => {
                 newPassword: validateField('newPassword', e.target.value),
               }))
             }}
-            className={`w-full px-2 py-4 border rounded-2xl bg-[#1F2124] outline-none ${
+            className={`w-full xl:px-2 xl:py-4 p-2 border rounded-2xl bg-[#1F2124] outline-none ${
               errors.currentPassword ? 'border-red-500' : 'border-gray-500'
             }`}
           />
           {errors.newPassword && (
-            <p className="text-red-500 text-sm">{errors.newPassword}</p>
+            <p className="text-red-500 text-xs xl:text-md">
+              {errors.newPassword}
+            </p>
           )}
         </div>
         <div>
@@ -465,17 +469,19 @@ const PassowrdSettings = () => {
                 ),
               }))
             }}
-            className={`w-full px-2 py-4 border rounded-2xl bg-[#1F2124] outline-none ${
+            className={`w-full xl:px-2 xl:py-4 p-2 border rounded-2xl bg-[#1F2124] outline-none ${
               errors.currentPassword ? 'border-red-500' : 'border-gray-500'
             }`}
           />
           {errors.confirmPassword && (
-            <p className="text-red-500 text-sm">{errors.confirmPassword}</p>
+            <p className="text-red-500 text-xs xl:text-md">
+              {errors.confirmPassword}
+            </p>
           )}
         </div>
         <button
           type="submit"
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="xl:px-6 xl:py-2 p-2 text-xs xl:text-md mt-2 xl:mt-0 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           Change Password
         </button>
@@ -489,34 +495,34 @@ export default function SettingsPage() {
   const { user } = useAuthStore()
   if (!user) return <div className="text-white">Loading...</div>
   return (
-    <div className="flex text-white py-10 h-full">
+    <div className="flex text-white py-10 h-full flex-col xl:flex-row p-4">
       {/* left side */}
-      <div className="w-[25%] flex items-center flex-col gap-4">
+      <div className="w-full xl:w-[25%] flex items-center xl:flex-col gap-4 xl:mb-0 mb-5">
         <button
           onClick={() => setPage(0)}
-          className={`w-[200px] py-4 px-6 ${
+          className={`w-[200px] xl:py-4 xl:px-6 p-2 ${
             page === 0 && 'bg-[#2B3036]'
-          } rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
+          } rounded-2xl border-1 border-gray-700 text-xs xl:text-md hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
         >
           Account
         </button>
         {user.type === 0 && (
           <button
             onClick={() => setPage(1)}
-            className={`w-[200px] py-4 px-6 ${
+            className={`w-[200px] xl:py-4 xl:px-6 p-2 ${
               page === 1 && 'bg-[#2B3036]'
-            }  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
+            }  rounded-2xl border-1 border-gray-700 text-xs xl:text-md hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer`}
           >
             Security
           </button>
         )}
 
-        <button className="w-[200px] py-4 px-6  rounded-2xl border-1 border-gray-700 hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
+        <button className="w-[200px] xl:py-4 xl:px-6 p-2  rounded-2xl border-1 border-gray-700 text-xs xl:text-md hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
           Game Settings
         </button>
       </div>
       {/* right side */}
-      <div className="h-full w-[50%]">
+      <div className="h-full w-full xl:w-[50%]">
         {page === 0 && <Settings />}
         {page === 1 && (
           <>

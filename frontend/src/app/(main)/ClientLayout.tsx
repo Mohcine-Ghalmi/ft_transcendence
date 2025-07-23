@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { ToastContainer } from 'react-toastify'
 import TournamentRejoinHelper from '../../utils/tournament/TournamentRejoinHelper'
 import { TournamentNotificationProvider } from '../../utils/tournament/TournamentNotificationProvider'
+import ConnectingLoading from '@/components/layout/ConnectingLoading'
 
 export default function ClientLayout({
   children,
@@ -46,9 +47,7 @@ export default function ClientLayout({
       <ToastContainer theme="dark" stacked hideProgressBar />
       <Header />
       {!socketConnected ? (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-white">Connecting to server...</div>
-        </div>
+        <ConnectingLoading text="Please wait while we connect to the server..." />
       ) : (
         <>
           {children}

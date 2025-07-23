@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { notifications } from '../../data/mockData'
+// import { notifications } from '../../data/mockData'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Menu, X } from 'lucide-react'
@@ -180,7 +180,7 @@ export const Header = () => {
               height={32}
               className="w-7 h-7 sm:w-8 sm:h-8"
             />
-            <h1 className="text-white font-semibold text-base sm:text-lg">
+            <h1 className="text-white font-semibold text-base hidden xl:text-lg">
               PingPong
             </h1>
           </Link>
@@ -198,7 +198,7 @@ export const Header = () => {
           {/* Search Bar */}
           <SearchBar />
 
-          <NotificationDropdown notifications={notifications} className="" />
+          <NotificationDropdown className="" />
 
           {/* Profile Avatar */}
           <Link href="/profile">

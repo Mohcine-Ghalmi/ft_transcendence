@@ -99,14 +99,16 @@ export const StatisticsChart = ({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            <path
-              d={lossesPath}
-              stroke="#EF4444"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            {chartType !== 'bar' && (
+              <path
+                d={lossesPath}
+                stroke="#EF4444"
+                strokeWidth="2"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
           </svg>
         </div>
       ) : (
@@ -143,15 +145,6 @@ export const StatisticsChart = ({
             {item.label}
           </span>
         ))}
-      </div>
-
-      <div className="flex gap-4 text-gray-400 text-xs sm:text-sm mt-2">
-        <div>
-          <span className="inline-block w-3 h-3 bg-blue-500 mr-1"></span> Wins
-        </div>
-        <div>
-          <span className="inline-block w-3 h-3 bg-red-500 mr-1"></span> Losses
-        </div>
       </div>
     </div>
   )

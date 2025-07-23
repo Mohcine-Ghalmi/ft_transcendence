@@ -93,10 +93,10 @@ const ParticipantItem = ({ player, isHost }: {
   return (
     <div className="flex items-center bg-[#1a1d23] rounded-lg p-3 hover:bg-[#2a2f3a] transition-all border border-[#2a2f3a]">
       <div className="w-10 h-10 rounded-full bg-[#2a2f3a] flex-shrink-0 overflow-hidden mr-3 border border-[#3a3f4a]">
-        <Image 
+        <Image
           src={`/images/${player.avatar}`}
-          alt={player.login || "zahay"} 
-          width={40}  
+          alt={player.login || "zahay"}
+          width={40}
           height={40}
           className="w-full h-full object-cover"
         />
@@ -126,7 +126,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
         <span className="text-white text-lg">Round:</span>
         <span className="text-blue-400 font-bold text-xl">{currentRound + 1}/{totalRounds}</span>
       </div>
-      
+
       <button
         onClick={onAdvanceRound}
         disabled={!canAdvance}
@@ -155,7 +155,7 @@ export default function OnlineTournament() {
   const [currentRound, setCurrentRound] = useState(0);
   const [participants, setParticipants] = useState(user ? [{
     id: user.id || 'host',
-    login: user.name, 
+    login: user.name,
     avatar: user.avatar,
     nickname: user.nickname,
     isHost: true
@@ -194,7 +194,7 @@ export default function OnlineTournament() {
         setTournamentName(data.activeTournament.name);
         setTournamentState(data.activeTournament.status);
         setTournamentSize(data.activeTournament.size);
-        
+
         if (data.activeTournament.participants) {
           const formattedParticipants = data.activeTournament.participants.map((p: any) => ({
             id: p.email,
@@ -229,15 +229,15 @@ export default function OnlineTournament() {
 
   useEffect(() => {
     if (!socket) return;
-    
+
     socket.emit('ListTournaments');
-    
+
     const handleTournamentList = (data: any) => {
       setTournaments(data);
     };
-    
+
     socket.on('TournamentList', handleTournamentList);
-    
+
     return () => {
       socket.off('TournamentList', handleTournamentList);
     };
@@ -290,16 +290,16 @@ export default function OnlineTournament() {
       const matchToUpdateIndex = updatedMatches.findIndex(
         m => m.round === roundIndex && m.matchIndex === matchIndex
       );
-      
+
       if (matchToUpdateIndex === -1) return prevMatches;
-      
+
       const matchToUpdate = { ...updatedMatches[matchToUpdateIndex] };
       matchToUpdate.state = newState;
       updatedMatches[matchToUpdateIndex] = matchToUpdate;
-      
+
       if (newState === MATCH_STATES.PLAYER1_WIN || newState === MATCH_STATES.PLAYER2_WIN) {
         const winner = newState === MATCH_STATES.PLAYER1_WIN ? matchToUpdate.player1 : matchToUpdate.player2;
-        
+
         if (roundIndex === totalRounds - 1) {
           setChampion(winner);
           setTournamentComplete(true);
@@ -308,32 +308,32 @@ export default function OnlineTournament() {
           const nextRound = roundIndex + 1;
           const nextMatchIndex = Math.floor(matchIndex / 2);
           const isFirstMatchOfPair = matchIndex % 2 === 0;
-          
+
           const nextMatchIndex2 = updatedMatches.findIndex(
             m => m.round === nextRound && m.matchIndex === nextMatchIndex
           );
-          
+
           if (nextMatchIndex2 !== -1) {
             const nextMatch = { ...updatedMatches[nextMatchIndex2] };
-            
+
             if (isFirstMatchOfPair) {
               nextMatch.player1 = winner;
             } else {
               nextMatch.player2 = winner;
             }
-            
+
             updatedMatches[nextMatchIndex2] = nextMatch;
           }
         }
       }
-      
+
       return updatedMatches;
     });
   };
 
   const canAdvanceRound = () => {
     const currentRoundMatches = matches.filter(m => m.round === currentRound);
-    return currentRoundMatches.length > 0 && currentRoundMatches.every(m => 
+    return currentRoundMatches.length > 0 && currentRoundMatches.every(m =>
       m.state === MATCH_STATES.PLAYER1_WIN || m.state === MATCH_STATES.PLAYER2_WIN
     );
   };
@@ -344,7 +344,7 @@ export default function OnlineTournament() {
     } else {
       const finalMatch = matches.find(m => m.round === totalRounds - 1 && m.matchIndex === 0);
       if (finalMatch) {
-        const winner = finalMatch.state === MATCH_STATES.PLAYER1_WIN ? 
+        const winner = finalMatch.state === MATCH_STATES.PLAYER1_WIN ?
           finalMatch.player1 : finalMatch.player2;
         setChampion(winner);
       }
@@ -367,7 +367,7 @@ export default function OnlineTournament() {
       });
       return;
     }
-    
+
     console.log('🎮 Starting current round matches:', {
       tournamentId,
       hostEmail: user.email,
@@ -385,10 +385,10 @@ export default function OnlineTournament() {
     if (participants.length >= tournamentSize || !tournamentId || !socket) {
       return;
     }
-    
+
     // Add this player to the inviting set
     setInvitingPlayers(prev => new Set([...prev, player.email]));
-    
+
     if (!process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
       // Remove from inviting set if failed
       setInvitingPlayers(prev => {
@@ -398,18 +398,18 @@ export default function OnlineTournament() {
       });
       return;
     }
-    
+
     const inviteData = {
       tournamentId: tournamentId,
       hostEmail: user.email,
       inviteeEmail: player.email
     };
-    
+
     const encrypted = CryptoJS.AES.encrypt(
       JSON.stringify(inviteData),
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY
     ).toString();
-    
+
     socket.emit('InviteToTournament', encrypted);
   };
 
@@ -431,7 +431,7 @@ export default function OnlineTournament() {
           return newSet;
         });
       }
-      
+
       if (data.newParticipant) {
         setParticipants(prev => [...prev, data.newParticipant]);
       }
@@ -496,10 +496,10 @@ export default function OnlineTournament() {
   const leaveTournament = () => {
     if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
       // Check if user is the host
-      const isHost = participants.some(p => 
+      const isHost = participants.some(p =>
         (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
       );
-      
+
       if (isHost) {
         handleCancelTournament();
       } else {
@@ -508,11 +508,11 @@ export default function OnlineTournament() {
           playerEmail: user.email,
           reason: 'explicit_leave_button'
         });
-        
+
         setTournamentId(null);
         setParticipants([{
           id: user.id || user.nickname || 'host',
-          login: user.name, 
+          login: user.name,
           avatar: user.avatar,
           nickname: user.nickname,
           isHost: true
@@ -528,12 +528,12 @@ export default function OnlineTournament() {
         return;
       }
     }
-    
+
     // Reset local state for host after canceling or if not in lobby
     setTournamentId(null);
     setParticipants([{
       id: user.id || user.nickname || 'host',
-      login: user.name, 
+      login: user.name,
       avatar: user.avatar,
       nickname: user.nickname,
       isHost: true
@@ -556,7 +556,7 @@ export default function OnlineTournament() {
   // Get players who are still in the tournament (not eliminated)
   const getActivePlayers = () => {
     const eliminatedPlayerIds = new Set();
-    
+
     // Find all eliminated players
     matches.forEach(match => {
       if (match.state === MATCH_STATES.PLAYER1_WIN && match.player2) {
@@ -565,7 +565,7 @@ export default function OnlineTournament() {
         eliminatedPlayerIds.add(match.player1.id);
       }
     });
-    
+
     // Return active players
     return participants.filter(p => !eliminatedPlayerIds.has(p.id));
   };
@@ -574,16 +574,16 @@ export default function OnlineTournament() {
   const handleCreateTournament = () => {
     // Clear any existing errors
     setTournamentNameError(null);
-    
+
     if (!tournamentName || tournamentName.trim().length === 0) {
       setTournamentNameError('Please enter a tournament name');
       return;
     }
-    
+
     if (!user?.email || !socket) {
       return;
     }
-    
+
     socket.emit('CreateTournament', {
       name: tournamentName,
       hostEmail: user.email,
@@ -617,7 +617,7 @@ export default function OnlineTournament() {
           email: p.email
         }));
         setParticipants(updatedParticipants);
-        
+
         if (data.tournament.status !== tournamentState)
           setTournamentState(data.tournament.status);
       }
@@ -630,11 +630,11 @@ export default function OnlineTournament() {
     const handleTournamentStarted = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setTournamentState('in_progress');
-        
-        const isHost = participants.some(p => 
+
+        const isHost = participants.some(p =>
           (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
         );
-        
+
         if (isHost) {
           // Host gets notification about joining the game bracket
           addNotification({
@@ -645,7 +645,7 @@ export default function OnlineTournament() {
             showBracketLink: true,
             autoClose: false
           });
-          
+
           // Redirect host to tournament page
           router.push(`/play/tournament/${tournamentId}`);
         } else {
@@ -661,7 +661,7 @@ export default function OnlineTournament() {
         }
       }
     };
-    
+
     const handleMatchStartingSoon = (data: any) => {
       if (data.tournamentId === tournamentId && data.playerEmail === user?.email) {
         // Player has a match starting soon - show countdown using global notification
@@ -681,9 +681,9 @@ export default function OnlineTournament() {
         });
       }
     };
-    
+
     const handleTournamentMatchReady = (data: any) => {
-      if (data.tournamentId === tournamentId && 
+      if (data.tournamentId === tournamentId &&
           (data.player1Email === user?.email || data.player2Email === user?.email)) {
         // This player's match is ready - use global notification
         addNotification({
@@ -703,7 +703,7 @@ export default function OnlineTournament() {
         console.error('❌ Tournament start failed:', data.message);
       }
     };
-    
+
     const handleStartCurrentRoundResponse = (data: any) => {
       console.log('🎮 StartCurrentRoundResponse:', data);
       if (data.status === 'error') {
@@ -714,7 +714,7 @@ export default function OnlineTournament() {
           matchCount: data.matchCount,
           message: data.message
         });
-        
+
         // Show success message to host
         addNotification({
           type: 'tournament_info',
@@ -727,14 +727,14 @@ export default function OnlineTournament() {
     };
     const handleTournamentParticipantLeft = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        
+
         // Remove participant using multiple identifiers for robustness
         setParticipants(prev => prev.filter(p => {
           const leftPlayerEmail = data.leftPlayer?.email || data.playerEmail;
           const leftPlayerId = data.leftPlayer?.id;
           const leftPlayerNickname = data.leftPlayer?.nickname;
           const participant = p as any;
-          
+
           // Check multiple identifiers to ensure robust removal
           return !(
             participant.id === leftPlayerEmail ||
@@ -743,7 +743,7 @@ export default function OnlineTournament() {
             (leftPlayerNickname && participant.nickname === leftPlayerNickname)
           );
         }));
-        
+
         if (data.tournament?.participants) {
           const updatedParticipants = data.tournament.participants.map((p: any) => ({
             id: p.email,
@@ -764,7 +764,7 @@ export default function OnlineTournament() {
         setTournamentId(null);
         setParticipants(user ? [{
           id: user.id || user.nickname || 'host',
-          login: user.name, 
+          login: user.name,
           avatar: user.avatar,
           nickname: user.nickname,
           isHost: true
@@ -779,7 +779,7 @@ export default function OnlineTournament() {
         setTournamentId(null);
         setParticipants(user ? [{
           id: user.id || user.nickname || 'host',
-          login: user.name, 
+          login: user.name,
           avatar: user.avatar,
           nickname: user.nickname,
           isHost: true
@@ -787,7 +787,7 @@ export default function OnlineTournament() {
         setMatches([]);
       }
     };
-    
+
     socket.on('TournamentCreated', handleTournamentCreated);
     socket.on('TournamentError', handleTournamentError);
     socket.on('TournamentUpdated', handleTournamentUpdated);
@@ -823,7 +823,7 @@ export default function OnlineTournament() {
     if (!tournamentId || !user?.email || !socket) {
       return;
     }
-    
+
     socket.emit('CancelTournament', {
       tournamentId,
       hostEmail: user.email
@@ -835,10 +835,10 @@ export default function OnlineTournament() {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
         // Check if user is the host
-        const isHost = participants.some(p => 
+        const isHost = participants.some(p =>
           (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
         );
-        
+
         if (isHost) {
           // Only cancel tournament when HOST closes browser/tab
           socket.emit('CancelTournament', {
@@ -853,13 +853,13 @@ export default function OnlineTournament() {
       // Only check if host is navigating away from tournament pages
       const currentPath = window.location.pathname;
       const isTournamentPage = currentPath.includes('/tournament') || currentPath.includes('/play');
-      
+
       if (tournamentState === 'lobby' && tournamentId && user?.email && socket && !isTournamentPage) {
         // Check if user is the host
-        const isHost = participants.some(p => 
+        const isHost = participants.some(p =>
           (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
         );
-        
+
         if (isHost) {
           // Only cancel tournament when HOST navigates away from tournament area
           socket.emit('CancelTournament', {
@@ -871,22 +871,22 @@ export default function OnlineTournament() {
     };
 
     // Only add event listeners for hosts to prevent tournament cancellation
-    const isHost = participants.some(p => 
+    const isHost = participants.some(p =>
       (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
     );
 
     if (isHost) {
       window.addEventListener('beforeunload', handleBeforeUnload);
-      
+
       // Listen for route changes (Next.js App Router)
       const originalPushState = history.pushState;
       const originalReplaceState = history.replaceState;
-      
+
       history.pushState = function() {
         handleRouteChange();
         return originalPushState.apply(history, arguments);
       };
-      
+
       history.replaceState = function() {
         handleRouteChange();
         return originalReplaceState.apply(history, arguments);
@@ -920,14 +920,14 @@ export default function OnlineTournament() {
           <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
             {tournamentState === 'setup' ? "Online Tournament" : tournamentName}
           </h1>
-          
+
           {/* Tournament Setup Section */}
           {tournamentState === 'setup' && (
             <div className="space-y-6">
               {/* Tournament Settings */}
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <h2 className="text-2xl font-semibold mb-6">Tournament Setup</h2>
-                
+
                 <div className="mb-6">
                   <label className="block text-gray-300 mb-2 text-lg">Tournament Name</label>
                   <input
@@ -935,8 +935,8 @@ export default function OnlineTournament() {
                     value={tournamentName}
                     onChange={handleTournamentNameChange}
                     className={`bg-[#2a2f3a] text-white rounded-lg px-4 py-3 w-full outline-none focus:ring-2 border text-lg transition-all ${
-                      tournamentNameError 
-                        ? 'border-red-500 focus:ring-red-500' 
+                      tournamentNameError
+                        ? 'border-red-500 focus:ring-red-500'
                         : 'border-[#3a3f4a] focus:ring-blue-500'
                     }`}
                     placeholder="Enter tournament name"
@@ -949,15 +949,15 @@ export default function OnlineTournament() {
                     </p>
                   )}
                 </div>
-                
+
                 <div className="mb-6">
                   <label className="block text-gray-300 mb-3 text-lg">Tournament Size</label>
                   <div className="grid grid-cols-3 gap-3">
                     {[4, 8, 16].map(size => (
-                      <button 
-                        key={size} 
-                        className={`py-3 px-4 rounded-lg font-medium transition-colors ${tournamentSize === size ? 
-                          'bg-blue-600 text-white' : 
+                      <button
+                        key={size}
+                        className={`py-3 px-4 rounded-lg font-medium transition-colors ${tournamentSize === size ?
+                          'bg-blue-600 text-white' :
                           'bg-[#2a2f3a] text-gray-300 hover:bg-[#3a3f4a] border border-[#3a3f4a]'}`}
                         onClick={() => setTournamentSize(size)}
                       >
@@ -967,7 +967,7 @@ export default function OnlineTournament() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Create Button */}
               <div className="text-center">
                 <button
@@ -984,7 +984,7 @@ export default function OnlineTournament() {
               </div>
             </div>
           )}
-          
+
           {/* Tournament Lobby Section */}
           {tournamentState === 'lobby' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -998,12 +998,12 @@ export default function OnlineTournament() {
                     </span>
                   </div>
                 </div>
-                
+
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-4">
                     <h4 className="text-white text-lg font-medium">Participants ({participants.length}/{tournamentSize})</h4>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                     {participants.map((player, index) => (
                       <ParticipantItem
@@ -1012,7 +1012,7 @@ export default function OnlineTournament() {
                         isHost={true}
                       />
                     ))}
-                    
+
                     {/* Empty slots */}
                     {Array.from({ length: tournamentSize - participants.length }).map((_, index) => (
                       <div key={`empty-slot-${index}`} className="flex items-center justify-center bg-[#1a1d23] rounded-lg p-3 border border-[#2a2f3a] border-dashed min-h-[58px]">
@@ -1020,27 +1020,27 @@ export default function OnlineTournament() {
                       </div>
                     ))}
                   </div>
-                  
+
                   {participants.length < tournamentSize && (
                     <div className="text-yellow-400 text-sm mb-4">
                       You need to invite {tournamentSize - participants.length} more players
                     </div>
                   )}
-                  
+
                   <div className="text-gray-400 text-xs mb-4">
-                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) 
+                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost)
                       ? 'As the host, you must stay on tournament pages. Leaving will cancel the tournament.'
                       : 'You can freely navigate anywhere! You\'ll remain in the tournament and get notified when matches start. Only click "Leave Tournament" if you want to quit completely.'}
                   </div>
                 </div>
-                
+
                 <div className="flex gap-3">
                   <button
                     onClick={leaveTournament}
                     className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
                   >
-                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) 
-                      ? 'Cancel Tournament' 
+                    {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost)
+                      ? 'Cancel Tournament'
                       : 'Leave Tournament'}
                   </button>
                   <button
@@ -1056,11 +1056,11 @@ export default function OnlineTournament() {
                   </button>
                 </div>
               </div>
-              
+
               {/* Online Player Search and Invite - Only for Tournament Host */}
               {participants.some(p => (p.id === user?.id || p.id === user?.email || (p as any).email === user?.email) && p.isHost) && (
-                <OnlinePlayMode 
-                  onInvitePlayer={handleInvitePlayer} 
+                <OnlinePlayMode
+                  onInvitePlayer={handleInvitePlayer}
                   pendingInvites={pendingInvites}
                   sentInvites={sentInvites}
                   friends={friends}
@@ -1069,7 +1069,7 @@ export default function OnlineTournament() {
               )}
             </div>
           )}
-          
+
           {/* Tournament Progress Section */}
           {tournamentState === 'in_progress' && !tournamentComplete && (
             <div className="space-y-6">
@@ -1079,24 +1079,24 @@ export default function OnlineTournament() {
                 onAdvanceRound={advanceRound}
                 canAdvance={canAdvanceRound()}
               />
-              
+
               {/* Start Matches Button */}
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <h3 className="text-xl font-semibold text-white mb-4">Tournament Controls</h3>
                 <div className="flex flex-wrap gap-4">
                   <button
                     onClick={startCurrentRoundMatches}
-                    disabled={matches.filter(m => 
-                      m.round === currentRound && 
-                      m.state === MATCH_STATES.WAITING && 
-                      m.player1 && 
+                    disabled={matches.filter(m =>
+                      m.round === currentRound &&
+                      m.state === MATCH_STATES.WAITING &&
+                      m.player1 &&
                       m.player2
                     ).length === 0}
                     className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                      matches.filter(m => 
-                        m.round === currentRound && 
-                        m.state === MATCH_STATES.WAITING && 
-                        m.player1 && 
+                      matches.filter(m =>
+                        m.round === currentRound &&
+                        m.state === MATCH_STATES.WAITING &&
+                        m.player1 &&
                         m.player2
                       ).length > 0
                         ? 'bg-green-600 hover:bg-green-700 text-white'
@@ -1106,16 +1106,16 @@ export default function OnlineTournament() {
                     Start Next Match
                   </button>
                   <div className="text-gray-300 text-sm flex items-center">
-                    {matches.filter(m => 
-                      m.round === currentRound && 
-                      m.state === MATCH_STATES.WAITING && 
-                      m.player1 && 
+                    {matches.filter(m =>
+                      m.round === currentRound &&
+                      m.state === MATCH_STATES.WAITING &&
+                      m.player1 &&
                       m.player2
                     ).length} matches waiting in Round {currentRound + 1}
                   </div>
                 </div>
               </div>
-              
+
               <TournamentBracket
                 participants={participants}
                 tournamentSize={tournamentSize}
@@ -1124,17 +1124,17 @@ export default function OnlineTournament() {
                 onMatchUpdate={handleMatchUpdate}
                 onPlayMatch={() => {}}
               />
-              
+
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <h3 className="text-xl font-semibold text-white mb-4">Active Players</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                   {getActivePlayers().map((player, index) => (
                     <div key={player.id || player.nickname || player.login || `active-player-${index}`} className="flex flex-col items-center bg-[#2a2f3a] rounded-lg p-3 border border-[#3a3f4a]">
                       <div className="w-12 h-12 rounded-full bg-[#3a3f4a] overflow-hidden border-2 border-green-500">
-                        <Image 
-                          src={`/images/${player.avatar}`} 
+                        <Image
+                          src={`/images/${player.avatar}`}
                           alt={player.login || player.nickname || "Player Avatar"}
-                          width={48} 
+                          width={48}
                           height={48}
                           className="w-full h-full object-cover"
                         />
@@ -1148,11 +1148,11 @@ export default function OnlineTournament() {
               </div>
             </div>
           )}
-          
+
           {/* Tournament Complete Section */}
           {tournamentComplete && (
             <div className="text-center space-y-6">
-              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]"> 
+              <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]">
                 <h2 className="text-3xl font-bold text-white mb-4">Tournament Complete!</h2>
                 {champion && (
                   <div className="mb-6">

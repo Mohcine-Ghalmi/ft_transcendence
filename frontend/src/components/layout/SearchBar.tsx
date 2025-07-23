@@ -79,7 +79,7 @@ const Notification = ({ user }) => {
   }, [user.status])
 
   return (
-    <div className="flex items-center justify-between px-2 py-4 border-b-1 border-[#334D66]">
+    <div className="flex items-center justify-between p-2 xl:px-2 xl:py-4 border-b-1 border-[#334D66]">
       <div className="flex items-center">
         <div className="relative">
           <Image
@@ -96,12 +96,12 @@ const Notification = ({ user }) => {
           ></div>
         </div>
         <div className="ml-2">
-          <h3 className="text-xs">
+          <h3 className="text-[7px] xl:text-xs">
             {user.username.length > 15
               ? user.username.substring(0, 15) + '...'
               : user.username}
           </h3>
-          <span className="text-xs">
+          <span className="xl:text-xs text-[7px]">
             {user.login.length > 15
               ? user.login.substring(0, 15) + '...'
               : user.login}
@@ -112,7 +112,7 @@ const Notification = ({ user }) => {
       <button
         onClick={handleClick}
         disabled={isButtonDisabled()}
-        className={`py-1 px-2 text-xs rounded-2xl ${
+        className={`py-1 px-2 text-xs flex rounded-2xl ${
           isButtonDisabled()
             ? 'bg-gray-400 cursor-not-allowed'
             : 'bg-[#334D66] cursor-pointer hover:bg-[#2a3d52]'
@@ -125,11 +125,13 @@ const Notification = ({ user }) => {
               alt="chat"
               width={100}
               height={100}
-              className="w-4 h-4"
+              className="xl:w-4 xl:h-4 w-2 h-2"
             />
           </div>
         ) : (
-          getButtonText()
+          <span className="xl:text-md text-[6px] text-center">
+            {getButtonText()}
+          </span>
         )}
       </button>
     </div>
