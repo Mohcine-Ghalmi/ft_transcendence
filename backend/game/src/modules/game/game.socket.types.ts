@@ -6,6 +6,208 @@ export const socketToUser = new Map<string, string>()
 export const userToSockets = new Map<string, Set<string>>()
 export const gameSessionHeartbeat = new Map<string, number>()
 
+// Additional helper functions to add to game.socket.types.ts
+
+// Check if user has conflicting game sessions
+export function checkGameSessionConflict(userEmail: string, gameId: string, socketId: string): {
+  hasConflict: boolean;
+  conflictType: 'same_game_different_session' | 'different_game' | 'none';
+  conflictGameId?: string;
+} {
+  const currentGameId = userGameSessions.get(userEmail);
+  
+  if (!currentGameId) {
+    return { hasConflict: false, conflictType: 'none' };
+  }
+  
+  if (currentGameId === gameId) {
+    // Check if there are other active sessions for the same game
+    const gameSessions = activeGameSessions.get(gameId) || new Set();
+    const otherSessions = new Set([...gameSessions].filter(sid => sid !== socketId));
+    
+    if (otherSessions.size > 0) {
+      // Check if other sessions belong to the same user
+      let hasOtherUserSessions = false;
+      for (const sessionId of otherSessions) {
+        const sessionUser = socketToUser.get(sessionId);
+        if (sessionUser === userEmail) {
+          hasOtherUserSessions = true;
+          break;
+        }
+      }
+      
+      if (hasOtherUserSessions) {
+        return { 
+          hasConflict: true, 
+          conflictType: 'same_game_different_session',
+          conflictGameId: gameId
+        };
+      }
+    }
+    
+    return { hasConflict: false, conflictType: 'none' };
+  } else {
+    // User is in a different game
+    const existingSessions = activeGameSessions.get(currentGameId) || new Set();
+    if (existingSessions.size > 0) {
+      return { 
+        hasConflict: true, 
+        conflictType: 'different_game',
+        conflictGameId: currentGameId
+      };
+    }
+    
+    return { hasConflict: false, conflictType: 'none' };
+  }
+}
+
+// Clean up stale sessions for a specific game
+export function cleanupStaleGameSessions(gameId: string): number {
+  const gameSessions = activeGameSessions.get(gameId);
+  if (!gameSessions) return 0;
+  
+  let cleanedCount = 0;
+  const staleSessions = new Set<string>();
+  
+  // Find sessions that no longer have valid socket connections
+  for (const sessionId of gameSessions) {
+    const userEmail = socketToUser.get(sessionId);
+    if (!userEmail) {
+      staleSessions.add(sessionId);
+      continue;
+    }
+    
+    const userSockets = userToSockets.get(userEmail);
+    if (!userSockets || !userSockets.has(sessionId)) {
+      staleSessions.add(sessionId);
+    }
+  }
+  
+  // Remove stale sessions
+  for (const staleSession of staleSessions) {
+    gameSessions.delete(staleSession);
+    cleanedCount++;
+  }
+  
+  // If no sessions left, remove the game entry
+  if (gameSessions.size === 0) {
+    activeGameSessions.delete(gameId);
+  }
+  
+  return cleanedCount;
+}
+
+// Get all active games for a user
+export function getUserActiveGames(userEmail: string): string[] {
+  const activeGames: string[] = [];
+  
+  for (const [gameId, sessions] of activeGameSessions.entries()) {
+    for (const sessionId of sessions) {
+      const sessionUser = socketToUser.get(sessionId);
+      if (sessionUser === userEmail) {
+        activeGames.push(gameId);
+        break; // Don't add the same game multiple times
+      }
+    }
+  }
+  
+  return activeGames;
+}
+
+// Force cleanup user from all games
+export function forceCleanupUserFromAllGames(userEmail: string): string[] {
+  const cleanedGames: string[] = [];
+  
+  // Remove user from all game sessions
+  for (const [gameId, sessions] of activeGameSessions.entries()) {
+    const userSessions = new Set<string>();
+    
+    for (const sessionId of sessions) {
+      const sessionUser = socketToUser.get(sessionId);
+      if (sessionUser === userEmail) {
+        userSessions.add(sessionId);
+      }
+    }
+    
+    if (userSessions.size > 0) {
+      for (const sessionId of userSessions) {
+        sessions.delete(sessionId);
+      }
+      cleanedGames.push(gameId);
+      
+      // If no sessions left, remove the game entry
+      if (sessions.size === 0) {
+        activeGameSessions.delete(gameId);
+      }
+    }
+  }
+  
+  // Remove user game session mapping
+  userGameSessions.delete(userEmail);
+  
+  return cleanedGames;
+}
+
+// Check if a game session is still valid
+export function isValidGameSession(gameId: string, userEmail: string): boolean {
+  const currentGameId = userGameSessions.get(userEmail);
+  if (currentGameId !== gameId) {
+    return false;
+  }
+  
+  const gameSessions = activeGameSessions.get(gameId);
+  if (!gameSessions || gameSessions.size === 0) {
+    return false;
+  }
+  
+  // Check if user has any active sessions in this game
+  for (const sessionId of gameSessions) {
+    const sessionUser = socketToUser.get(sessionId);
+    if (sessionUser === userEmail) {
+      // Verify the socket still exists
+      const userSockets = userToSockets.get(userEmail);
+      if (userSockets && userSockets.has(sessionId)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+// Get session statistics for debugging
+export function getSessionStats(): {
+  totalActiveSessions: number;
+  totalActiveGames: number;
+  totalUsers: number;
+  gamesWithMultipleSessions: number;
+  usersWithMultipleSessions: number;
+} {
+  let totalActiveSessions = 0;
+  let gamesWithMultipleSessions = 0;
+  
+  for (const [gameId, sessions] of activeGameSessions.entries()) {
+    totalActiveSessions += sessions.size;
+    if (sessions.size > 2) { // More than 2 sessions (1 per player)
+      gamesWithMultipleSessions++;
+    }
+  }
+  
+  let usersWithMultipleSessions = 0;
+  for (const [userEmail, sockets] of userToSockets.entries()) {
+    if (sockets.size > 1) {
+      usersWithMultipleSessions++;
+    }
+  }
+  
+  return {
+    totalActiveSessions,
+    totalActiveGames: activeGameSessions.size,
+    totalUsers: userToSockets.size,
+    gamesWithMultipleSessions,
+    usersWithMultipleSessions
+  };
+}
 
 export function addUserToGameSession(userEmail: string, gameId: string, socketId: string) {
   
