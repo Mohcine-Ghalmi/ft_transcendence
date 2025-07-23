@@ -256,11 +256,14 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     }
 
     const onDisconnect = () => {
-      console.log('difconnected to chat')
+      set({ isChatSocketConnected: false })
     }
 
     const onConnectError = (err: Error) => {
-      console.log('Socket connection error:', err.message)
+      toast.warning('Failed To Connect To the Chat Server')
+      setTimeout(() => {
+        window.location.href = `${FRON_END}/`
+      }, 2000)
     }
 
     chatSocket.on('connect', onConnect)
