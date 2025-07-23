@@ -222,8 +222,22 @@ export default function Page() {
   const [user, setUser] = useState<any>()
 
   useEffect(() => {
-    getUser()
-    setUser(userProfile ? userProfile : me)
+    if (!userProfile) {
+      setUser(me)
+      return
+    }
+    if (userProfile && userProfile.email === me.email) {
+      setUser(me)
+      return
+    }
+    if (userProfile && userProfile.email !== me.email) {
+      setUser(userProfile)
+    }
+  }, [userProfile, me])
+
+  useEffect(() => {
+    // getUser()
+    // setUser(userProfile ? userProfile : me)
     setUserProfile(null)
   }, [pathname])
 

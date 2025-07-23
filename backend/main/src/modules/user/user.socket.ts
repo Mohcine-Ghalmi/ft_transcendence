@@ -4,6 +4,7 @@ import CryptoJS from 'crypto-js'
 import { getFriend } from './user.service'
 import { changeFriendStatus } from '../friends/friends.socket'
 import { getSocketIds } from '../../socket'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 
 const searchForUsersInDb = (query: string, myEmail: string) => {
   const sql = db.prepare(`

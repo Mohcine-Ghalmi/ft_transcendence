@@ -19,8 +19,21 @@ import {
   getUserDetails,
 } from './user.controller'
 import { $ref } from './user.schema'
+import {
+  getUserByEmailROUTE,
+  getUserByIdROUTE,
+  getIsBlockedROUTE,
+  getFriendROUTE,
+} from './user.service'
 
 async function userRoutes(server: FastifyInstance) {
+  // microservices routes
+  server.post('/getUserByEmail', getUserByEmailROUTE)
+  server.post('/getUserById', getUserByIdROUTE)
+  server.post('/getIsBlocked', getIsBlockedROUTE)
+  server.post('/getFriend', getFriendROUTE)
+
+  //
   server.post(
     '/reset-password',
     { schema: { body: $ref('resetPasswordSchema') } },

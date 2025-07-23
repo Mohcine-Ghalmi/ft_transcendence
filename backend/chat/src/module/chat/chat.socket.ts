@@ -48,6 +48,7 @@ async function checkSocketConnection(socket: any) {
       return null
     }
     const me = await getUserByEmail(userEmail)
+    console.log('User found:', me ? me.email : 'No user found')
 
     if (!me) {
       socket.emit('error-in-connection', {
