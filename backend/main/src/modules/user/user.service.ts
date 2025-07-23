@@ -12,8 +12,13 @@ import { getIsBlocked } from './user.socket'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export async function getUserByEmail(email: string) {
-  const sql = db.prepare(`SELECT * FROM User WHERE email = ?`)
-  return (await sql.get(email)) as typeof createUserResponseSchema
+  try {
+    const sql = db.prepare(`SELECT * FROM User WHERE email = ?`)
+    return (await sql.get(email)) as typeof createUserResponseSchema
+  } catch (err: any) {
+    console.log(err.message)
+    return null
+  }
 }
 
 export async function getUserByEmailROUTE(
@@ -72,14 +77,15 @@ export async function getUserByIdROUTE(
 }
 
 export async function createUser(input: CreateUserInput) {
-  const characterName: string = uniqueNamesGenerator({
-    dictionaries: [colors, adjectives, animals],
-    style: 'lowerCase',
-  })
-  const { password, login, resetOtp, resetOtpExpireAt, ...rest } = input
-  const { hash, salt } = hashPassword(password)
+  try {
+    const characterName: string = uniqueNamesGenerator({
+      dictionaries: [colors, adjectives, animals],
+      style: 'lowerCase',
+    })
+    const { password, login, resetOtp, resetOtpExpireAt, ...rest } = input
+    const { hash, salt } = hashPassword(password)
 
-  const sql = db.prepare(`
+    const sql = db.prepare(`
     INSERT INTO User (
       email, username, login,
       password, salt, avatar,
@@ -90,18 +96,22 @@ export async function createUser(input: CreateUserInput) {
       :type, :resetOtp, :resetOtpExpireAt
     )
   `)
-  sql.run({
-    email: rest.email,
-    username: rest.username,
-    login: login || characterName,
-    password: hash,
-    salt: salt,
-    avatar: rest.avatar || null,
-    type: rest.type || 0,
-    resetOtp: resetOtp || null,
-    resetOtpExpireAt: resetOtpExpireAt || null,
-  })
-  return await getUserByEmail(rest.email)
+    sql.run({
+      email: rest.email,
+      username: rest.username,
+      login: login || characterName,
+      password: hash,
+      salt: salt,
+      avatar: rest.avatar || null,
+      type: rest.type || 0,
+      resetOtp: resetOtp || null,
+      resetOtpExpireAt: resetOtpExpireAt || null,
+    })
+    return await getUserByEmail(rest.email)
+  } catch (err: any) {
+    console.error('Error creating user:', err.message)
+    return null
+  }
 }
 
 export const isBlockedStatus = (myEmail: string, hisEmail: string) => {
@@ -126,8 +136,19 @@ export async function getFriendROUTE(
 ) {
   try {
     const { fromEmail, toEmail, status } = req.body
-    console.log('getFriendROUTE : ', { fromEmail, toEmail, status })
-
+    const res = await getFriend(fromEmail, toEmail, status)
+    return rep.status(200).send(res)
+  } catch (err: any) {
+    console.log(err.message)
+    return rep.status(500).send({ error: 'Internal Server Error' })
+  }
+}
+export async function getFriend(
+  fromEmail: string,
+  toEmail: string,
+  status: string = 'ACCEPTED'
+) {
+  try {
     const from: any = await getUserByEmail(fromEmail)
     const to: any = await getUserByEmail(toEmail)
     if (!from || !to || !status) return null
@@ -154,7 +175,7 @@ export async function getFriendROUTE(
     LIMIT 1;
   `)
 
-    const data = await sql.all(
+    const data = sql.all(
       to.email,
       from.email,
       from.email,
@@ -171,7 +192,7 @@ export async function getFriendROUTE(
       from.email
     )
 
-    return rep.code(200).send({
+    return {
       id: row.id,
       status: row.status,
       createdAt: row.createdAt,
@@ -190,79 +211,10 @@ export async function getFriendROUTE(
       },
       isBlockedByMe,
       isBlockedByHim,
-    })
+    }
   } catch (err: any) {
-    console.log(err.message)
-    return rep.status(500).send({ error: 'Internal Server Error' })
-  }
-}
-export async function getFriend(
-  fromEmail: string,
-  toEmail: string,
-  status: string = 'ACCEPTED'
-) {
-  const from: any = await getUserByEmail(fromEmail)
-  const to: any = await getUserByEmail(toEmail)
-  if (!from || !to || !status) return null
-
-  const sql = db.prepare(`
-    SELECT
-      FriendRequest.*,
-      UA.email AS userA_email,
-      UA.username AS userA_username,
-      UA.login AS userA_login,
-      UA.avatar AS userA_avatar,
-      UB.email AS userB_email,
-      UB.username AS userB_username,
-      UB.login AS userB_login,
-      UB.avatar AS userB_avatar
-    FROM FriendRequest
-    JOIN User AS UA ON UA.email = FriendRequest.fromEmail
-    JOIN User AS UB ON UB.email = FriendRequest.toEmail
-    WHERE (
-      (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
-      OR (FriendRequest.fromEmail = ? AND FriendRequest.toEmail = ?)
-    )
-    AND status = ?
-    LIMIT 1;
-  `)
-
-  const data = await sql.all(
-    to.email,
-    from.email,
-    from.email,
-    to.email,
-    status.toUpperCase()
-  )
-
-  if (!data.length) return null
-
-  const [row]: any = data
-
-  const { isBlockedByMe, isBlockedByHim } = isBlockedStatus(
-    to.email,
-    from.email
-  )
-
-  return {
-    id: row.id,
-    status: row.status,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    userA: {
-      email: row.userA_email,
-      username: row.userA_username,
-      login: row.userA_login,
-      avatar: row.userA_avatar,
-    },
-    userB: {
-      email: row.userB_email,
-      username: row.userB_username,
-      login: row.userB_login,
-      avatar: row.userB_avatar,
-    },
-    isBlockedByMe,
-    isBlockedByHim,
+    console.log('Error in get Friend : ', err.message)
+    return null
   }
 }
 
@@ -285,7 +237,6 @@ export function selectRandomFriends(email: string) {
       LIMIT 5
     `)
     const data = sql.all(email, email, email)
-    console.log('data : ', data)
 
     return data.map((row: any) => ({
       id: row.id,
@@ -299,14 +250,15 @@ export function selectRandomFriends(email: string) {
       toEmail: null,
       status: null,
     }))
-  } catch (err) {
-    console.log(err)
+  } catch (err: any) {
+    console.log('Error in selectRandomFriends : ', err.message)
     return []
   }
 }
 
 export async function listMyFriends(email: string) {
-  const sql = db.prepare(`
+  try {
+    const sql = db.prepare(`
     SELECT
       fr.*,
       UA.email AS userA_email,
@@ -322,23 +274,26 @@ export async function listMyFriends(email: string) {
     JOIN User AS UB ON UB.email = fr.toEmail
     WHERE (fr.fromEmail = ? OR fr.toEmail = ?) AND fr.status = 'ACCEPTED'
   `)
-  const data = await sql.all(email, email)
-  // Return the other user in each friendship
-  return data.map((row: any) => {
-    const isMeA = row.fromEmail === email
-    const friend = isMeA
-      ? {
-          email: row.userB_email,
-          username: row.userB_username,
-          login: row.userB_login,
-          avatar: row.userB_avatar,
-        }
-      : {
-          email: row.userA_email,
-          username: row.userA_username,
-          login: row.userA_login,
-          avatar: row.userA_avatar,
-        }
-    return friend
-  })
+    const data = await sql.all(email, email)
+    return data.map((row: any) => {
+      const isMeA = row.fromEmail === email
+      const friend = isMeA
+        ? {
+            email: row.userB_email,
+            username: row.userB_username,
+            login: row.userB_login,
+            avatar: row.userB_avatar,
+          }
+        : {
+            email: row.userA_email,
+            username: row.userA_username,
+            login: row.userA_login,
+            avatar: row.userA_avatar,
+          }
+      return friend
+    })
+  } catch (err: any) {
+    console.log('Error in listMyFriends : ', err.message)
+    return []
+  }
 }

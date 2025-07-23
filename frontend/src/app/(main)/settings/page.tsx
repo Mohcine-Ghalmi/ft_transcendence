@@ -313,35 +313,37 @@ const Settings = () => {
           />
           <CustomError message={errors.username} isTouched={errors.username} />
         </div>
-        {user.type !== 2 && (
-          <div className="flex flex-col gap-2">
-            <span>Login</span>
-            <input
-              type="text"
-              placeholder={user.login}
-              onChange={(e) =>
-                setFormData({ ...formData, login: e.target.value })
-              }
-              value={formData.login}
-              className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
-            />
-            <CustomError message={errors.login} isTouched={errors.login} />
-          </div>
-        )}
+        {/* {user.type !== 2 && (
+        )} */}
         {user.type === 0 && (
-          <div className="flex flex-col gap-2">
-            <span>Email</span>
-            <input
-              type="text"
-              placeholder={user.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
-              value={formData.email}
-              className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
-            />
-            <CustomError message={errors.email} isTouched={errors.email} />
-          </div>
+          <>
+            <div className="flex flex-col gap-2">
+              <span>Login</span>
+              <input
+                type="text"
+                placeholder={user.login}
+                onChange={(e) =>
+                  setFormData({ ...formData, login: e.target.value })
+                }
+                value={formData.login}
+                className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
+              />
+              <CustomError message={errors.login} isTouched={errors.login} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <span>Email</span>
+              <input
+                type="text"
+                placeholder={user.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                value={formData.email}
+                className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
+              />
+              <CustomError message={errors.email} isTouched={errors.email} />
+            </div>
+          </>
         )}
         <DragAndDrop
           setFormData={setFormData}
