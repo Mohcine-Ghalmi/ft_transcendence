@@ -8,6 +8,7 @@ import { useGameInvite } from './GameInviteProvider'
 import { PingPongGame } from '../game/PingPongGame'
 import CryptoJS from 'crypto-js'
 import Image from 'next/image'
+import { toast } from 'react-toastify'
 
 export const sendGameInvite = async (playerEmail, socket, user) => {
   if (!socket || !user?.email || !playerEmail) {
@@ -205,10 +206,6 @@ export default function OnlineMatch() {
   const [isHost, setIsHost] = useState(false)
   const [sessionConflict, setSessionConflict] = useState(false)
   const [currentSessionGameId, setCurrentSessionGameId] = useState(null) // Track this session's game
-  const [notification, setNotification] = useState({
-    message: '',
-    type: 'info',
-  })
 
   const { user, onlineUsers } = useAuthStore()
   const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } =
@@ -417,13 +414,6 @@ export default function OnlineMatch() {
     }
   }, [currentPath, gameState, gameId, isHost, socket, user])
 
-  // Helper function to show notifications
-  const showNotification = (message, type = 'info') => {
-    setNotification({ message, type })
-    // Auto-hide after 5 seconds
-    setTimeout(() => setNotification({ message: '', type: 'info' }), 5000)
-  }
-
   // Socket event listeners
   useEffect(() => {
     if (!socket) return
@@ -450,7 +440,7 @@ export default function OnlineMatch() {
           isHost: true,
         })
       } else if (data.status === 'error') {
-        showNotification(data.message, 'error')
+        toast.error(data.message)
         resetGameState()
       }
     }
@@ -511,10 +501,7 @@ export default function OnlineMatch() {
       setWaitTime(0)
       clearCountdown()
 
-      showNotification(
-        `${data.guestLogin || data.guestName} declined your invitation.`,
-        'error'
-      )
+      toast.error(`${data.guestLogin || data.guestName} declined your invitation.`)
 
       resetGameState()
       router.push('/play')
@@ -529,7 +516,7 @@ export default function OnlineMatch() {
       setWaitTime(0)
       clearCountdown()
 
-      showNotification('Game invitation expired.', 'error')
+      toast.error('Game invitation expired.')
       resetGameState()
     }
 
@@ -542,7 +529,7 @@ export default function OnlineMatch() {
       setWaitTime(0)
       clearCountdown()
 
-      showNotification('Game invitation was canceled by host.', 'error')
+      toast.error('Game invitation was canceled by host.')
       resetGameState()
     }
 
@@ -552,14 +539,14 @@ export default function OnlineMatch() {
       if (data.gameId === gameId || data.gameId === currentSessionGameId) {
         // Another session handled this invite
         setSessionConflict(true)
-        showNotification(data.message || 'Invite handled in another session', 'info')
+        toast.info(data.message || 'Invite handled in another session')
         resetGameState()
       }
     }
 
     const handleSessionConflict = (data) => {
       setSessionConflict(true)
-      showNotification('Another session is handling this game', 'warning')
+      toast.warn('Another session is handling this game')
       resetGameState()
     }
 
@@ -572,7 +559,7 @@ export default function OnlineMatch() {
       setWaitTime(0)
       clearCountdown()
 
-      showNotification('Opponent left the game. You win!', 'success')
+      toast.success('Opponent left the game. You win!')
       resetGameState()
 
       if (socket && user?.email) {
@@ -605,7 +592,7 @@ export default function OnlineMatch() {
         ? data.loser || 'Opponent'
         : user?.username || user?.login || 'You'
 
-      showNotification(data.message || 'Game ended.', 'info')
+      toast.info(data.message || 'Game ended.')
       resetGameState()
 
       if (socket && user?.email) {
@@ -636,7 +623,7 @@ export default function OnlineMatch() {
       setWaitTime(0)
       clearCountdown()
 
-      showNotification('Game was canceled.', 'error')
+      toast.error('Game was canceled.')
       resetGameState()
       router.push('/play')
     }
@@ -670,7 +657,7 @@ export default function OnlineMatch() {
       setIsWaitingForResponse(false)
       setWaitTime(0)
       clearCountdown()
-      showNotification('Opponent left the game.', 'error')
+      toast.error('Opponent left the game.')
       resetGameState()
       router.push('/play')
     }
@@ -914,17 +901,6 @@ export default function OnlineMatch() {
       {sessionConflict && (
         <div className="fixed top-4 right-4 bg-yellow-600 text-white p-4 rounded-lg shadow-lg z-50">
           <p>Game is being handled in another session</p>
-        </div>
-      )}
-
-      {/* Show notification */}
-      {notification.message && (
-        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 p-4 rounded-lg shadow-lg z-50 ${
-          notification.type === 'error' ? 'bg-red-600' : 
-          notification.type === 'success' ? 'bg-green-600' : 
-          notification.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
-        } text-white`}>
-          <p>{notification.message}</p>
         </div>
       )}
       

@@ -1,4 +1,3 @@
-// modules/game/game.socket.acceptance.ts
 import { Socket, Server } from 'socket.io'
 import { getUserByEmail } from '../user/user.service'
 import {
@@ -15,7 +14,6 @@ export const handleGameAcceptance: GameSocketHandler = (
   socket: Socket,
   io: Server
 ) => {
-  // Handle accepting game invitations
   socket.on(
     'AcceptGameInvite',
     async (data: { gameId: string; guestEmail: string }) => {
@@ -47,10 +45,10 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // Clean up invitation
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`),
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
+          redis.del(`game_invite:${guestEmail}:${invite.hostEmail}`),
         ])
 
         const [hostUser, guestUser] = await Promise.all([
@@ -156,10 +154,11 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // Clean up invitation
+        // UPDATED: Clean up BOTH directional invitation keys
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), // Host-specific key
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), // Host -> Guest
+          redis.del(`game_invite:${guestEmail}:${invite.hostEmail}`), // Guest -> Host (if exists)
         ])
 
         const guestUser = await getUserByEmail(invite.guestEmail)
