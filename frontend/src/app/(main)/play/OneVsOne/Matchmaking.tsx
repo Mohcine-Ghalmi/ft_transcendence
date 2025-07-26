@@ -1,7 +1,6 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
-// import { getSocketInstance } from "@/(zustand)/useAuthStore";
 import { PingPongGame } from '../game/PingPongGame'
 import { useRouter } from 'next/navigation'
 import { getGameSocketInstance } from '@/(zustand)/useGameStore'
@@ -10,7 +9,52 @@ interface MatchmakingProps {
   onBack: () => void
 }
 
-// Game Result Popup Component
+const SessionConflictModal = ({
+  isVisible,
+  conflictType,
+  onResolve
+}: {
+  isVisible: boolean
+  conflictType: string
+  onResolve: (action: 'force_takeover' | 'cancel') => void
+}) => {
+  if (!isVisible) return null
+
+  const getConflictMessage = () => {
+    switch (conflictType) {
+      case 'already_searching':
+        return 'You are already searching for a match in another tab or session. Only one session can search at a time.'
+      case 'same_game_different_session':
+        return 'This game is already being played from another tab or device.'
+      case 'in_active_game':
+        return 'You have an active game session in another tab.'
+      default:
+        return 'You have a conflicting session.'
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-white mb-4">Session Conflict</h2>
+          <p className="text-gray-300 mb-6">
+            {getConflictMessage()}
+          </p>
+        </div>
+        <div className="flex flex-col space-y-3">
+          <button
+            onClick={() => onResolve('cancel')}
+            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors"
+          >
+            Cancel & Go Back
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const GameResultPopup = ({
   isVisible,
   onComplete,
@@ -19,15 +63,18 @@ const GameResultPopup = ({
   onComplete: () => void
 }) => {
   const [countdown, setCountdown] = useState(3)
+  const [shouldComplete, setShouldComplete] = useState(false)
 
   useEffect(() => {
     if (isVisible) {
       setCountdown(3)
+      setShouldComplete(false)
+      
       const timer = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer)
-            onComplete()
+            setShouldComplete(true)
             return 0
           }
           return prev - 1
@@ -36,7 +83,17 @@ const GameResultPopup = ({
 
       return () => clearInterval(timer)
     }
-  }, [isVisible, onComplete])
+  }, [isVisible])
+
+  useEffect(() => {
+    if (shouldComplete) {
+      const timeoutId = setTimeout(() => {
+        onComplete()
+      }, 0)
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [shouldComplete, onComplete])
 
   if (!isVisible) return null
 
@@ -61,12 +118,8 @@ const GameResultPopup = ({
 
 const MatchmakingStatus = ({
   status,
-  queuePosition,
-  totalInQueue,
 }: {
   status: string
-  queuePosition?: number
-  totalInQueue?: number
 }) => {
   return (
     <div className="text-center py-8">
@@ -74,11 +127,6 @@ const MatchmakingStatus = ({
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
       <p className="text-white text-lg">{status}</p>
-      {/* {queuePosition !== undefined && totalInQueue !== undefined && (
-        <p className="text-gray-400 text-sm mt-2">
-          Position: {queuePosition} / {totalInQueue}
-        </p>
-      )} */}
     </div>
   )
 }
@@ -96,67 +144,60 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
   const [errorMessage, setErrorMessage] = useState('')
   const [showResultPopup, setShowResultPopup] = useState(false)
   const [showCleanupOption, setShowCleanupOption] = useState(false)
+  const [showSessionConflict, setShowSessionConflict] = useState(false)
+  const [sessionConflictType, setSessionConflictType] = useState('')
   const [pendingRedirect, setPendingRedirect] = useState<{
     isWinner: boolean
     winnerName: string
     loserName: string
   } | null>(null)
   const [roomPreparationCountdown, setRoomPreparationCountdown] = useState(5)
+  
+  // Add refs to track component state
+  const isActiveRef = useRef(true)
+  const currentStatusRef = useRef(matchmakingStatus)
+  const sessionIdRef = useRef<string>(Date.now().toString())
 
   const { user } = useAuthStore()
   const socket = getGameSocketInstance()
   const router = useRouter()
 
-  const [currentPath, setCurrentPath] = useState('')
-
+  // Update refs when state changes
   useEffect(() => {
-    // Set initial path
-    if (typeof window !== 'undefined') {
-      setCurrentPath(window.location.pathname)
+    currentStatusRef.current = matchmakingStatus
+  }, [matchmakingStatus])
+
+  // Set component as inactive when unmounting
+  useEffect(() => {
+    return () => {
+      isActiveRef.current = false
     }
   }, [])
 
-  // Handle route changes and page navigation
+  // Enhanced route change handling
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const handleRouteChange = () => {
-      const newPath = window.location.pathname
-
-      // Handle different matchmaking states when player leaves
-      if (currentPath && newPath !== currentPath) {
-        if (matchmakingStatus === 'preparing') {
-          // Player left during room preparation - cancel matchmaking
-          if (socket && user?.email) {
-            socket.emit('LeaveMatchmaking', { email: user.email })
-          }
-        } else if (matchmakingStatus === 'searching') {
-          // Player left during searching - cancel matchmaking
-          if (socket && user?.email) {
-            socket.emit('LeaveMatchmaking', { email: user.email })
-          }
-        } else if (matchmakingStatus === 'in_game' && gameId) {
-          // Player left during game - handle game exit
-          handleGameExit()
-          handleLeaveMatchmaking()
-        }
-      }
-
-      setTimeout(() => setCurrentPath(newPath), 0)
-    }
-
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       // Handle page refresh/close for different matchmaking states
-      if (matchmakingStatus === 'preparing') {
-        // Player leaving during room preparation - cancel matchmaking
+      if (matchmakingStatus === 'preparing' || matchmakingStatus === 'searching') {
+        // Player leaving during matchmaking - cancel matchmaking
         if (socket && user?.email) {
           socket.emit('LeaveMatchmaking', { email: user.email })
         }
-      } else if (matchmakingStatus === 'searching') {
-        // Player leaving during searching - cancel matchmaking
+      } else if (matchmakingStatus === 'waiting_to_start' && gameId) {
+        // Player leaving after match found but before game started
+        e.preventDefault()
+        e.returnValue = 'Leaving now will result in a loss. Are you sure?'
+        
         if (socket && user?.email) {
-          socket.emit('LeaveMatchmaking', { email: user.email })
+          socket.emit('PlayerLeftBeforeGameStart', { 
+            gameId: gameId, 
+            leaver: user.email 
+          })
         }
+        
+        return 'Leaving now will result in a loss. Are you sure?'
       } else if (matchmakingStatus === 'in_game' && gameId) {
         // Show confirmation dialog for active games
         e.preventDefault()
@@ -165,43 +206,17 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
 
         // Emit leave event
         handleGameExit()
-        handleLeaveMatchmaking()
 
         return 'Are you sure you want to leave the game? This will result in a loss.'
       }
     }
 
-    const handlePopState = () => {
-      handleRouteChange()
-    }
-
-    // Listen for route changes
-    window.addEventListener('popstate', handlePopState)
     window.addEventListener('beforeunload', handleBeforeUnload)
 
-    // Also listen for pushState and replaceState (for programmatic navigation)
-    const originalPushState = history.pushState
-    const originalReplaceState = history.replaceState
-
-    history.pushState = function (...args) {
-      originalPushState.apply(history, args)
-      handleRouteChange()
-    }
-
-    history.replaceState = function (...args) {
-      originalReplaceState.apply(history, args)
-      handleRouteChange()
-    }
-
     return () => {
-      window.removeEventListener('popstate', handlePopState)
       window.removeEventListener('beforeunload', handleBeforeUnload)
-
-      // Restore original methods
-      history.pushState = originalPushState
-      history.replaceState = originalReplaceState
     }
-  }, [currentPath, matchmakingStatus, gameId, isHost, socket, user])
+  }, [matchmakingStatus, gameId, socket, user])
 
   // Function to handle game exit (triggered by route change or manual exit)
   const handleGameExit = () => {
@@ -214,45 +229,54 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         })
       } else if (matchmakingStatus === 'searching') {
         socket.emit('LeaveMatchmaking', { email: user.email })
+      } else if (matchmakingStatus === 'waiting_to_start') {
+        // Player left after match found but before game started
+        socket.emit('PlayerLeftBeforeGameStart', { 
+          gameId: gameId, 
+          leaver: user.email 
+        })
       }
     }
   }
 
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      // If we're in a game, notify the server that we're leaving
-      if (socket && gameId && user?.email) {
-        socket.emit('LeaveGame', {
-          gameId,
-          playerEmail: user.email,
-        })
-      }
+  // Handle matchmaking session conflict resolution
+  const handleSessionConflictResolve = (action: 'force_takeover' | 'cancel') => {
+    setShowSessionConflict(false)
+    
+    if (action === 'cancel') {
+      onBack()
+      return
     }
 
-    const handleVisibilityChange = () => {
-      // If page becomes hidden (user switches tabs or minimizes), treat as leaving
-      if (document.hidden && socket && gameId && user?.email) {
-        socket.emit('LeaveGame', {
-          gameId,
-          playerEmail: user.email,
-        })
-      }
+    if (socket && user?.email) {
+      socket.emit('ResolveMatchmakingConflict', {
+        action,
+        email: user.email
+      })
     }
+  }
 
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [socket, gameId, user?.email])
-
-  // Handle result popup completion
+  // Handle result popup completion - ENHANCED
   const handleResultPopupComplete = () => {
+    // Only process if component is still active and we're still in matchmaking context
+    if (!isActiveRef.current) {
+      return
+    }
+
     setShowResultPopup(false)
+    
     if (pendingRedirect) {
       const { isWinner, winnerName, loserName } = pendingRedirect
+      
+      // Clear all matchmaking state before redirecting
+      setMatchmakingStatus('idle')
+      setGameId(null)
+      setMatchData(null)
+      setOpponent(null)
+      setIsHost(false)
+      setPendingRedirect(null)
+      
+      // Navigate to result page
       if (isWinner) {
         router.push(
           `/play/result/win?winner=${encodeURIComponent(
@@ -266,7 +290,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
           )}&loser=${encodeURIComponent(loserName)}`
         )
       }
-      setPendingRedirect(null)
     }
   }
 
@@ -278,7 +301,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
           if (prev <= 1) {
             clearInterval(timer)
             // Start actual matchmaking after countdown
-            if (socket && user?.email) {
+            if (socket && user?.email && isActiveRef.current) {
               socket.emit('JoinMatchmaking', { email: user.email })
               setMatchmakingStatus('searching')
             }
@@ -297,12 +320,15 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
 
     // Start with room preparation phase (5-second delay)
     const startMatchmaking = () => {
+      if (!isActiveRef.current) return
       setMatchmakingStatus('preparing')
       setRoomPreparationCountdown(5)
     }
 
-    // Socket event listeners
+    // Enhanced socket event listeners
     const handleMatchmakingResponse = (data: any) => {
+      if (!isActiveRef.current) return
+
       if (data.status === 'success') {
         if (data.queuePosition) {
           setQueuePosition(data.queuePosition)
@@ -313,20 +339,29 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         setMatchmakingStatus('idle')
         setErrorMessage(data.message || 'Failed to join matchmaking')
 
+        // Handle enhanced session conflicts
+        if (data.sessionConflict || data.conflictType) {
+          setSessionConflictType(data.conflictType || 'unknown')
+          setShowSessionConflict(true)
+          return
+        }
+
         // Show cleanup option if user is already in a game
         if (data.message && data.message.includes('already in a game')) {
           setShowCleanupOption(true)
           // Automatically try to clean up and retry
           setTimeout(() => {
-            if (socket && user?.email) {
+            if (socket && user?.email && isActiveRef.current) {
               socket.emit('CleanupGameData', { email: user.email })
             }
-          }, 0)
+          }, 1000)
         }
       }
     }
 
     const handleQueueStatusResponse = (data: any) => {
+      if (!isActiveRef.current) return
+      
       if (data.status === 'success') {
         setQueuePosition(data.queuePosition || 0)
         setTotalInQueue(data.totalInQueue || 0)
@@ -334,6 +369,8 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     }
 
     const handleMatchFound = (data: any) => {
+      if (!isActiveRef.current) return
+
       // Check if user is being matched with themselves
       if (data.hostEmail === data.guestEmail) {
         setErrorMessage(
@@ -362,23 +399,70 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     }
 
     const handleGameStarting = (data: any) => {
+      if (!isActiveRef.current) return
+      
       setGameId(data.gameId)
       setMatchmakingStatus('in_game')
     }
 
     const handleGameEnded = (data: any) => {
+      // CRITICAL: Only process if component is still active and in game state
+      if (!isActiveRef.current || currentStatusRef.current !== 'in_game') {
+        return
+      }
+
       setShowResultPopup(true)
 
       // Set pending redirect data
       setPendingRedirect({
         isWinner: data.winner === user?.email,
-        winnerName: data.winnerName || 'Winner',
-        loserName: data.loserName || 'Loser',
+        winnerName: data.winnerName || (data.winner === user?.email ? (user?.username || user?.email || 'You') : 'Opponent'),
+        loserName: data.loserName || (data.loser === user?.email ? (user?.username || user?.email || 'You') : 'Opponent'),
       })
     }
 
     const handleMatchmakingPlayerLeft = (data: any) => {
-      setErrorMessage('Opponent disconnected before the game started.')
+      if (!isActiveRef.current) return
+
+      // Handle when opponent leaves before game starts
+      if (data.winner === user?.email) {
+        setShowResultPopup(true)
+        setPendingRedirect({
+          isWinner: true,
+          winnerName: user?.username || user?.email || 'You',
+          loserName: 'Opponent',
+        })
+      } else {
+        setErrorMessage('Opponent disconnected before the game started.')
+        setMatchmakingStatus('idle')
+      }
+      
+      setGameId(null)
+      setMatchData(null)
+      setOpponent(null)
+      setIsHost(false)
+    }
+
+    const handleGameEndedByOpponentLeave = (data: any) => {
+      if (!isActiveRef.current) return
+
+      if (data.winner === user.email) {
+        setShowResultPopup(true)
+        setPendingRedirect({
+          isWinner: true,
+          winnerName: user?.username || user?.email || 'You',
+          loserName: 'Opponent',
+        })
+      } else if (data.leaver === user.email) {
+        setErrorMessage('You left the match and received a loss.')
+        // Navigate back to play page after a delay
+        setTimeout(() => {
+          if (isActiveRef.current) {
+            onBack()
+          }
+        }, 3000)
+      }
+      
       setMatchmakingStatus('idle')
       setGameId(null)
       setMatchData(null)
@@ -387,24 +471,15 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     }
 
     const handleCleanupResponse = (data: any) => {
+      if (!isActiveRef.current) return
+
       if (data.status === 'success') {
         setErrorMessage('')
         setShowCleanupOption(false)
 
-        // Show cleanup details
-        if (data.details && data.details.length > 0) {
-          const details = data.details
-            .map(
-              (d: any) =>
-                `${d.roomKey}: ${d.status || d.error} (${
-                  d.age || 'unknown'
-                } min old)`
-            )
-            .join('\n')
-        }
         // Automatically retry joining matchmaking after cleanup
         setTimeout(() => {
-          if (socket && user?.email) {
+          if (socket && user?.email && isActiveRef.current) {
             startMatchmaking()
           }
         }, 1000)
@@ -413,64 +488,22 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       }
     }
 
-    // Listen for player leaving during countdown
-    socket.on('MatchmakingPlayerLeft', handleMatchmakingPlayerLeft)
+    // Handle matchmaking session conflicts
+    const handleMatchmakingSessionConflict = (data: any) => {
+      if (!isActiveRef.current) return
 
-    // Listen for match expired
-    socket.on('MatchExpired', (data: any) => {
-      setMatchmakingStatus('idle')
-      setGameId(null)
-      setMatchData(null)
-      setOpponent(null)
-      setIsHost(false)
-      setErrorMessage('Match expired. Please try again.')
-
-      // Navigate back to play page after a short delay
-      setTimeout(() => {
-        onBack()
-      }, 2000)
-    })
-
-    // Listen for match declined
-    socket.on('MatchDeclined', (data: any) => {
-      setMatchmakingStatus('idle')
-      setGameId(null)
-      setMatchData(null)
-      setOpponent(null)
-      setIsHost(false)
-      setErrorMessage('Opponent declined the match.')
-
-      // Navigate back to play page after a short delay
-      setTimeout(() => {
-        onBack()
-      }, 2000)
-    })
-
-    // Listen for player ready notification
-    socket.on('PlayerReady', (data: any) => {
-      setErrorMessage('Opponent is ready! Waiting for you to confirm...')
-    })
-
-    // Listen for game ended due to opponent leaving before game start
-    socket.on('GameEndedByOpponentLeave', (data: any) => {
-      if (data.winner === user.email) {
-        setErrorMessage('You win! Opponent left before the game started.')
-      } else if (data.leaver === user.email) {
-        setErrorMessage(
-          'You are already in an active game. Please finish or leave your current game first.'
-        )
+      if (data.type === 'another_session_matched') {
+        setErrorMessage(data.message || 'Match found in another session')
+        setMatchmakingStatus('idle')
+        
+        // Show notification that another session is handling the match
+        setTimeout(() => {
+          if (isActiveRef.current) {
+            setErrorMessage('')
+          }
+        }, 5000)
       }
-      setMatchmakingStatus('idle')
-      setGameId(null)
-      setMatchData(null)
-      setOpponent(null)
-      setIsHost(false)
-
-      // Navigate back to play page after a short delay
-      setTimeout(() => {
-        onBack()
-      }, 2000)
-    })
+    }
 
     // Add event listeners
     socket.on('MatchmakingResponse', handleMatchmakingResponse)
@@ -480,6 +513,43 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     socket.on('GameEnded', handleGameEnded)
     socket.on('CleanupResponse', handleCleanupResponse)
     socket.on('MatchmakingPlayerLeft', handleMatchmakingPlayerLeft)
+    socket.on('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
+    socket.on('MatchmakingSessionConflict', handleMatchmakingSessionConflict)
+
+    // Enhanced event listeners for session conflicts
+    socket.on('MatchExpired', (data: any) => {
+      if (!isActiveRef.current) return
+
+      setMatchmakingStatus('idle')
+      setGameId(null)
+      setMatchData(null)
+      setOpponent(null)
+      setIsHost(false)
+      setErrorMessage('Match expired. Please try again.')
+
+      setTimeout(() => {
+        if (isActiveRef.current) {
+          onBack()
+        }
+      }, 2000)
+    })
+
+    socket.on('MatchDeclined', (data: any) => {
+      if (!isActiveRef.current) return
+
+      setMatchmakingStatus('idle')
+      setGameId(null)
+      setMatchData(null)
+      setOpponent(null)
+      setIsHost(false)
+      setErrorMessage('Opponent declined the match.')
+
+      setTimeout(() => {
+        if (isActiveRef.current) {
+          onBack()
+        }
+      }, 2000)
+    })
 
     // Start matchmaking on mount with room preparation
     startMatchmaking()
@@ -493,89 +563,40 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
       socket.off('GameEnded', handleGameEnded)
       socket.off('CleanupResponse', handleCleanupResponse)
       socket.off('MatchmakingPlayerLeft', handleMatchmakingPlayerLeft)
+      socket.off('GameEndedByOpponentLeave', handleGameEndedByOpponentLeave)
+      socket.off('MatchmakingSessionConflict', handleMatchmakingSessionConflict)
+      socket.off('MatchExpired')
+      socket.off('MatchDeclined')
     }
-  }, [socket, user?.email, router])
-
-  // Handle page refresh and disconnection
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      // If page becomes hidden (user switches tabs or minimizes), don't leave game immediately
-      // Only leave if the page is being unloaded
-      if (document.visibilityState === 'hidden') {
-        // Don't automatically leave - let the user decide
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [])
-
-  // Handle automatic retry for matchmaking
-  useEffect(() => {
-    if (!socket || !user?.email) return
-
-    // Check if user was previously in matchmaking (from localStorage or session)
-    const wasInMatchmaking =
-      sessionStorage.getItem('wasInMatchmaking') === 'true'
-    const lastMatchmakingTime = sessionStorage.getItem('lastMatchmakingTime')
-
-    if (wasInMatchmaking && lastMatchmakingTime) {
-      const timeSinceLastMatchmaking =
-        Date.now() - parseInt(lastMatchmakingTime)
-
-      // If it's been less than 5 minutes, automatically retry
-      if (timeSinceLastMatchmaking < 5 * 60 * 1000) {
-        setMatchmakingStatus('preparing')
-        setRoomPreparationCountdown(5)
-      } else {
-        // Clear old session data
-        sessionStorage.removeItem('wasInMatchmaking')
-        sessionStorage.removeItem('lastMatchmakingTime')
-      }
-    }
-
-    // Store matchmaking state when component mounts
-    sessionStorage.setItem('wasInMatchmaking', 'true')
-    sessionStorage.setItem('lastMatchmakingTime', Date.now().toString())
-
-    return () => {
-      // Clear session data when component unmounts
-      sessionStorage.removeItem('wasInMatchmaking')
-      sessionStorage.removeItem('lastMatchmakingTime')
-    }
-  }, [socket, user?.email])
-
-  // Handle socket reconnection
-  useEffect(() => {
-    if (!socket) return
-
-    const handleConnect = () => {
-      // If user was in matchmaking, retry joining
-      if (user?.email && matchmakingStatus === 'searching') {
-        socket.emit('JoinMatchmaking', { email: user.email })
-      }
-    }
-
-    socket.on('connect', handleConnect)
-
-    return () => {
-      socket.off('connect', handleConnect)
-    }
-  }, [socket, user?.email, matchmakingStatus])
+  }, [socket, user?.email, router, onBack])
 
   const handleLeaveMatchmaking = () => {
-    if (socket && user?.email && matchmakingStatus === 'in_game' && gameId) {
-      // Notify backend that player left before game started
-      socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email })
-    } else if (socket && user?.email) {
-      socket.emit('LeaveMatchmaking', { email: user.email })
+    if (socket && user?.email) {
+      if (matchmakingStatus === 'waiting_to_start' && gameId) {
+        // Notify backend that player left before game started
+        socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email })
+      } else if (matchmakingStatus === 'in_game' && gameId) {
+        // Player left during game
+        socket.emit('LeaveGame', {
+          gameId,
+          playerEmail: user.email,
+        })
+      } else {
+        // Player left during search or preparation
+        socket.emit('LeaveMatchmaking', { email: user.email })
+      }
     }
+    
+    // Clear state and go back
+    setMatchmakingStatus('idle')
+    setGameId(null)
+    setMatchData(null)
+    setOpponent(null)
+    setIsHost(false)
+    
     setTimeout(() => {
       onBack()
-    }, 0)
+    }, 100)
   }
 
   // If in game, show the game component
@@ -619,8 +640,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
             <>
               <MatchmakingStatus
                 status={`Preparing room... (${roomPreparationCountdown}s)`}
-                queuePosition={queuePosition}
-                totalInQueue={totalInQueue}
               />
 
               <div className="mt-8 flex justify-center">
@@ -679,7 +698,10 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
                   </div>
                 </div>
                 <p className="text-gray-300 mb-6">
-                  Game starting in 2 seconds...
+                  Game starting in 3 seconds...
+                </p>
+                <p className="text-yellow-400 text-sm mb-4">
+                  ⚠️ Leaving now will result in a loss!
                 </p>
               </div>
 
@@ -688,23 +710,65 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
                   onClick={handleLeaveMatchmaking}
                   className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg transition-colors"
                 >
-                  Cancel
+                  Leave (Loss)
                 </button>
               </div>
             </>
           )}
 
-          {matchmakingStatus === 'in_game' && gameId && (
-            <PingPongGame
-              player1={user}
-              player2={opponent}
-              onExit={handleLeaveMatchmaking}
-              gameId={gameId}
-              socket={socket}
-            />
+          {errorMessage && (
+            <div className="text-center mb-8">
+              <p className="text-red-400 mb-4">{errorMessage}</p>
+              {showCleanupOption && (
+                <button
+                  onClick={() => {
+                    if (socket && user?.email) {
+                      socket.emit('CleanupGameData', { email: user.email })
+                    }
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors mr-4"
+                >
+                  Clean Up & Retry
+                </button>
+              )}
+              <button
+                onClick={onBack}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                Back
+              </button>
+            </div>
+          )}
+
+          {matchmakingStatus === 'idle' && !errorMessage && (
+            <div className="text-center">
+              <p className="text-gray-300 mb-8">Ready to find an opponent?</p>
+              <button
+                onClick={() => {
+                  setMatchmakingStatus('preparing')
+                  setRoomPreparationCountdown(5)
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg transition-colors"
+              >
+                Start Matchmaking
+              </button>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Game Result Popup */}
+      <GameResultPopup
+        isVisible={showResultPopup}
+        onComplete={handleResultPopupComplete}
+      />
+
+      {/* Session Conflict Modal */}
+      <SessionConflictModal
+        isVisible={showSessionConflict}
+        conflictType={sessionConflictType}
+        onResolve={handleSessionConflictResolve}
+      />
     </div>
   )
 }

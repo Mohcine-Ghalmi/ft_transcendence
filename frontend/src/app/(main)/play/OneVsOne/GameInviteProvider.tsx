@@ -18,9 +18,11 @@ export function GameInviteProvider({ children }) {
   const [isSliding, setIsSliding] = useState({})
   const router = useRouter()
   const { connectSocket } = useGameStore()
+  
   useEffect(() => {
     connectSocket()
   }, [])
+
   useEffect(() => {
     if (!socket || !user?.email) return
 
@@ -62,6 +64,7 @@ export function GameInviteProvider({ children }) {
         }, 300);
       }, 30000);
     }
+
     const handleGameInviteCanceled = (data) => {
       setReceivedInvites(prev => prev.filter(invite => invite.gameId !== data.gameId));
       setIsSliding(prev => {
@@ -71,14 +74,36 @@ export function GameInviteProvider({ children }) {
       });
     }
 
+    // NEW: Handle cleanup event for multi-session sync
+    const handleGameInviteCleanup = (data) => {
+      console.log('Cleaning up invite in inactive session:', data.gameId, data.action);
+      
+      // Remove the invite from this session's UI
+      setReceivedInvites(prev => prev.filter(invite => invite.gameId !== data.gameId));
+      setIsSliding(prev => {
+        const newSliding = { ...prev };
+        delete newSliding[data.gameId];
+        return newSliding;
+      });
+
+      // Optional: Show a brief notification that the invite was handled elsewhere
+      if (data.action === 'accepted') {
+        console.log('Invite was accepted in another session');
+      } else if (data.action === 'declined') {
+        console.log('Invite was declined in another session');
+      }
+    }
+
     // Add event listeners
     socket.on('GameInviteReceived', handleGameInviteReceived)
     socket.on('GameInviteCanceled', handleGameInviteCanceled)
+    socket.on('GameInviteCleanup', handleGameInviteCleanup) // NEW listener
 
     // Cleanup event listeners on unmount
     return () => {
       socket.off('GameInviteReceived', handleGameInviteReceived)
       socket.off('GameInviteCanceled', handleGameInviteCanceled)
+      socket.off('GameInviteCleanup', handleGameInviteCleanup) // NEW cleanup
     }
   }, [socket, user?.email])
 
@@ -89,12 +114,15 @@ export function GameInviteProvider({ children }) {
         gameId: invite.gameId,
         guestEmail: user.email,
       })
+      
+      // Remove from current session immediately
       setReceivedInvites(prev => prev.filter(inv => inv.gameId !== gameId))
       setIsSliding(prev => {
         const newSliding = { ...prev };
         delete newSliding[gameId];
         return newSliding;
       });
+      
       router.push(`/play/game/${invite.gameId}`)
     }
   }
@@ -106,6 +134,8 @@ export function GameInviteProvider({ children }) {
         gameId: invite.gameId,
         guestEmail: user.email,
       })
+      
+      // Remove from current session immediately
       setReceivedInvites(prev => prev.filter(inv => inv.gameId !== gameId))
       setIsSliding(prev => {
         const newSliding = { ...prev };

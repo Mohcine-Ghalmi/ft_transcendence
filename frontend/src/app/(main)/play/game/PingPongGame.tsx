@@ -2,6 +2,7 @@
 import { useAuthStore } from "@/(zustand)/useAuthStore";
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { axiosGameInstance } from "@/(zustand)/useGameStore";
 
 const GAME_RATIO = 16 / 9;
 
@@ -72,12 +73,8 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
   // Function to fetch tournament participant data
   const fetchTournamentParticipant = async (email: string) => {
     try {
-      const response = await fetch(`http://localhost:5007/api/game/tournament-participant?email=${encodeURIComponent(email)}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const result = await response.json();
-      return result.success ? result.data : null;
+      const response = await axiosGameInstance.get(`/api/game/tournament-participant?email=${encodeURIComponent(email)}`);
+      return response.data.success ? response.data.data : null;
     } catch (error) {
       console.error('Error fetching tournament participant data:', error);
       return null;

@@ -24,8 +24,8 @@ export default function GamePage() {
   const [isStartingGame, setIsStartingGame] = useState(false)
   const [currentPath, setCurrentPath] = useState('');
   const [isTournamentMatch, setIsTournamentMatch] = useState(false);
+  const [sessionConflict, setSessionConflict] = useState(false);
   
-  // Use refs to track the latest state in event handlers
   const gameStartedRef = useRef(gameStarted)
   const isLeavingGameRef = useRef(isLeavingGame)
   const isStartingGameRef = useRef(isStartingGame)
@@ -42,17 +42,19 @@ export default function GamePage() {
     isStartingGameRef.current = isStartingGame
   }, [isStartingGame])
 
-  // Check game authorization on mount
   useEffect(() => {
     if (!socket || !gameId || !user?.email) return
-
-    // Emit a check to see if user is authorized for this game
+  
+    socket.emit('CheckGameSession', { 
+      gameId, 
+      playerEmail: user.email 
+    })
+  
     socket.emit('CheckGameAuthorization', { 
       gameId, 
       playerEmail: user.email 
     })
     
-    // Set a timeout for authorization check - extended for tournament matches
     const authTimeout = setTimeout(() => {
       if (!authorizationChecked && !isStartingGameRef.current) {
         setIsAuthorized(false)
@@ -60,11 +62,145 @@ export default function GamePage() {
         setTimeout(() => {router.push("/play")}, 0);
       }
     }, 3000) // 3 second timeout - increased for tournament redirects
-
+  
     return () => {
       clearTimeout(authTimeout)
     }
   }, [socket, gameId, user?.email, authorizationChecked])
+
+  useEffect(() => {
+    if (!socket || !gameId) return
+  
+    // ADD SESSION RESPONSE HANDLER
+    const handleGameSessionResponse = (data: any) => {
+      if (data.status !== 'success' || !data.canPlay) {
+        // IMPORTANT: Mark this session as unauthorized/blocked
+        setIsAuthorized(false)
+        setGameAccepted(false) // Also ensure gameAccepted is false
+        setAuthorizationChecked(true)
+        
+        if (data.sessionConflict) {
+          setSessionConflict(true)
+        }
+        
+        setTimeout(() => {
+          router.push("/play");
+        }, 1000);
+        return
+      }
+    }
+
+    const handleSessionConflict = (data: any) => {
+      console.log('Session conflict detected:', data)
+      setSessionConflict(true)
+      setIsAuthorized(false)
+      setGameAccepted(false)
+      setAuthorizationChecked(true)
+      
+      setTimeout(() => {
+        router.push("/play");
+      }, 2000);
+    }
+  
+    // MODIFY existing GameAuthorizationResponse handler to handle session conflicts:
+    const handleGameAuthorizationResponse = (data: any) => {
+      setAuthorizationChecked(true)
+      
+      if (data.status === 'success' && data.authorized) {
+        setIsAuthorized(true) // This session is now authorized to play
+        
+        if (data.gameStatus === 'canceled' || data.gameStatus === 'completed') {
+          setTimeout(() => {router.push("/play")}, 0);
+          return
+        }
+        
+        // Handle ongoing tournament match
+        if ((data.gameStatus === 'playing' || data.gameStatus === 'accepted' || data.gameStatus === 'waiting') && 
+            (data.isTournament || data.tournamentId) && data.gameRoom) {
+          
+          setIsTournamentMatch(true);
+          setGameAccepted(true); // Mark as accepted - route changes will now trigger leave events
+          
+          if (data.gameStatus === 'playing' || data.gameState) {
+            setGameStarted(true);
+          }
+          
+          setIsHost(data.isHost || data.gameRoom.hostEmail === user?.email);
+          
+          const opponentEmail = data.isHost 
+            ? data.gameRoom.guestEmail 
+            : data.gameRoom.hostEmail;
+          
+          const opponentData = data.opponent || {};
+          setOpponent({
+            email: opponentEmail,
+            username: opponentData.username || opponentData.login || opponentEmail.split('@')[0],
+            avatar: opponentData.avatar,
+            login: opponentData.login || opponentData.username || opponentEmail.split('@')[0]
+          });
+          
+          if (data.gameState || data.gameStatus === 'playing') {
+            setGameData({
+              gameId: data.gameRoom.gameId || gameId,
+              isTournament: data.isTournament || !!data.tournamentId,
+              tournamentId: data.tournamentId,
+              matchId: data.matchId,
+              gameState: data.gameState,
+              players: {
+                host: data.gameRoom.hostEmail,
+                guest: data.gameRoom.guestEmail
+              },
+              hostData: {
+                email: data.gameRoom.hostEmail,
+                username: data.gameRoom.hostEmail.split('@')[0],
+                avatar: user?.avatar,
+                login: data.gameRoom.hostEmail.split('@')[0]
+              },
+              guestData: {
+                email: data.gameRoom.guestEmail,
+                username: data.gameRoom.guestEmail.split('@')[0],
+                avatar: user?.avatar,
+                login: data.gameRoom.guestEmail.split('@')[0]
+              }
+            });
+          }
+          
+          return;
+        }
+        
+      } else {
+        setIsAuthorized(false)
+        setGameAccepted(false)
+        
+        // Handle session conflicts specifically
+        if (data.sessionConflict) {
+          setSessionConflict(true)
+          setTimeout(() => {
+            router.push("/play");
+          }, 1000);
+          return
+        }
+        
+        if (!isStartingGameRef.current) {
+          setTimeout(() => {
+            if (!gameAccepted && !gameStarted) {
+              router.push("/play");
+            }
+          }, 2000);
+        }
+      }
+    }
+
+    socket.on('GameSessionResponse', handleGameSessionResponse)
+    socket.on('GameAuthorizationResponse', handleGameAuthorizationResponse)
+    socket.on('SessionConflict', handleSessionConflict)
+    
+    return () => {
+      socket.off('GameSessionResponse', handleGameSessionResponse)
+      socket.off('GameAuthorizationResponse', handleGameAuthorizationResponse)
+      socket.off('SessionConflict', handleSessionConflict)
+    }
+  }, [socket, gameId, user?.email, router])
 
   useEffect(() => {
     if (!socket || !gameId) return
@@ -560,10 +696,10 @@ export default function GamePage() {
   }
 
   const handleCancelGame = () => {
-    if (socket && gameId && !isLeavingGame) {
-      setTimeout(() => {setIsLeavingGame(true), 0});
+    // Only emit leave events if this session is actually authorized and in the game
+    if (socket && gameId && !isLeavingGame && user?.email && isAuthorized && (gameAccepted || gameStarted)) {
+      setTimeout(() => {setIsLeavingGame(true)}, 0);
       
-      // Include tournament information if this is a tournament match
       const leaveData = {
         gameId, 
         playerEmail: user?.email,
@@ -591,16 +727,16 @@ export default function GamePage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
+  
     const handleRouteChange = () => {
       const newPath = window.location.pathname;
       
       // Handle route changes when player leaves the game page
       if (currentPath && newPath !== currentPath) {
-        if (gameId && socket && user?.email) {
+        if (gameId && socket && user?.email && isAuthorized && (gameAccepted || gameStarted)) {
+          
           handleCancelGame();
           
-          // Player left during active game - mark as lost
           const leaveData = {
             gameId, 
             playerEmail: user.email,
@@ -613,43 +749,23 @@ export default function GamePage() {
           }
           
           socket.emit('LeaveGame', leaveData);
-        } else if (gameAccepted && gameId && socket && user?.email) {
-          // Player left while waiting to start - emit appropriate event for both host and guest
-          const leaveData = {
-            gameId, 
-            playerEmail: user.email,
-            reason: 'player_left_waiting_page'
-          };
           
-          if (isTournamentMatch && gameData?.tournamentId) {
-            (leaveData as any).tournamentId = gameData.tournamentId;
-            (leaveData as any).isTournamentMatch = true;
-          }
-          
-          if (isHost) {
-            // Host leaving - emit both events to ensure guest gets notified
-            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-            socket.emit('LeaveGame', leaveData);
-          } else {
-            socket.emit('LeaveGame', leaveData);
-          }
         }
       }
       
       setTimeout(() => setCurrentPath(newPath), 0);
     };
-
+  
     const handleBeforeUnload = (e) => {
-      // Handle page refresh/close for different game states
-      if (gameId && socket && user?.email) {
-        // Show confirmation dialog for active games
+      // Only show confirmation for sessions that are actually in a game
+      if (gameId && socket && user?.email && isAuthorized && (gameAccepted || gameStarted)) {
+        
         e.preventDefault();
         const message = isTournamentMatch 
           ? 'Are you sure you want to leave the tournament match? You will be eliminated and your opponent will advance.'
           : 'Are you sure you want to leave the game? This will result in a loss.';
         e.returnValue = message;
         
-        // Emit leave event with tournament info
         const leaveData = {
           gameId, 
           playerEmail: user.email,
@@ -662,36 +778,15 @@ export default function GamePage() {
         }
         
         socket.emit('LeaveGame', leaveData);
-        
         return message;
-      } else if (gameAccepted && gameId && socket && user?.email) {
-        // Both host and guest should emit appropriate events when leaving waiting room
-        const leaveData = {
-          gameId, 
-          playerEmail: user.email,
-          reason: 'player_closed_waiting_room'
-        };
         
-        if (isTournamentMatch && gameData?.tournamentId) {
-          (leaveData as any).tournamentId = gameData.tournamentId;
-          (leaveData as any).isTournamentMatch = true;
-        }
-        
-        if (isHost) {
-          // Host leaving - emit both events to ensure guest gets notified
-          socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-          socket.emit('LeaveGame', leaveData);
-        } else {
-          socket.emit('LeaveGame', leaveData);
-        }
       }
     };
-
+  
     const handleVisibilityChange = () => {
-      // Handle when user navigates to another tab or minimizes browser
       if (document.visibilityState === 'hidden') {
-        if (gameId && socket && user?.email) {
-          // Player left during active game - mark as lost
+        // Only emit leave events for authorized sessions actually in game
+        if (gameId && socket && user?.email && isAuthorized && (gameAccepted || gameStarted)) {
           handleCancelGame();
           
           const leaveData = {
@@ -706,55 +801,33 @@ export default function GamePage() {
           }
           
           socket.emit('LeaveGame', leaveData);
-        } else if (gameAccepted && gameId && socket && user?.email) {
-          // Both host and guest should emit appropriate events when leaving waiting room
-          handleCancelGame();
           
-          const leaveData = {
-            gameId, 
-            playerEmail: user.email,
-            reason: 'player_changed_tab_waiting'
-          };
-          
-          if (isTournamentMatch && gameData?.tournamentId) {
-            (leaveData as any).tournamentId = gameData.tournamentId;
-            (leaveData as any).isTournamentMatch = true;
-          }
-          
-          if (isHost) {
-            // Host leaving - emit both events to ensure guest gets notified
-            socket.emit('PlayerLeftBeforeGameStart', { gameId, leaver: user.email });
-            socket.emit('LeaveGame', leaveData);
-          } else {
-            socket.emit('LeaveGame', leaveData);
-          }
         }
       }
     };
-
+  
     const handlePopState = () => {
       handleRouteChange();
     };
-
-    // Listen for route changes
+  
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
+  
     // Also listen for pushState and replaceState (for programmatic navigation)
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
-
+  
     history.pushState = function(...args) {
       originalPushState.apply(history, args);
       handleRouteChange();
     };
-
+  
     history.replaceState = function(...args) {
       originalReplaceState.apply(history, args);
       handleRouteChange();
     };
-
+  
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -762,17 +835,24 @@ export default function GamePage() {
       history.pushState = originalPushState;
       history.replaceState = originalReplaceState;
     };
-  }, [currentPath, gameAccepted, gameId, isHost, socket, user]);
-
-  // Check authorization first - redirect unauthorized users
+  
+  }, [currentPath, gameAccepted, gameStarted, gameId, isHost, socket, user, isAuthorized, isTournamentMatch, gameData?.tournamentId]);
+  
   if (authorizationChecked && !isAuthorized) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-white mb-8">Access Denied</h1>
-          <p className="text-gray-400 mb-4">You don't have permission to access this game.</p>
+          <h1 className="text-4xl font-bold text-white mb-8">
+            {sessionConflict ? "Session Conflict" : "Access Denied"}
+          </h1>
+          <p className="text-gray-400 mb-4">
+            {sessionConflict 
+              ? "This game is already being played from another session." 
+              : "You don't have permission to access this game."
+            }
+          </p>
           <button 
-            onClick={() => window.location.href = '/play'}
+            onClick={() => router.push('/play')}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
           >
             Back to Play

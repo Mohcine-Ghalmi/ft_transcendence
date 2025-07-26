@@ -370,7 +370,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         }
       }, 30000);
     } catch (error) {
-      console.error('[Tournament Invite] Error:', error);
       socket.emit('InviteToTournamentResponse', { status: 'error', message: 'Failed to send tournament invite.' });
     }
   });
@@ -396,7 +395,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const invite = JSON.parse(inviteData);
       if (invite.inviteeEmail !== inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invalid invite.' });
       
-      // Clean up invite
+      // Clean up invite FIRST
       await Promise.all([
         redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
         redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${inviteeEmail}`) // Tournament-specific key
@@ -446,7 +445,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Update tournament in Redis
       await redis.setex(`${TOURNAMENT_PREFIX}${invite.tournamentId}`, 3600, JSON.stringify(tournament));
       
-      // Get all socket IDs for all participants (including the new one)
+      // Get ALL socket IDs for all participants (including the new one)
       const allParticipantEmails = tournament.participants.map(p => p.email);
       const allSocketIds = [];
       
@@ -455,13 +454,28 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         allSocketIds.push(...socketIds);
       }
       
+      // Get host socket IDs specifically
+      const hostSocketIds = await getSocketIds(invite.hostEmail, 'sockets') || [];
+      
+      // Get ALL guest socket IDs to clean up invite from ALL sessions
+      const guestSocketIds = await getSocketIds(inviteeEmail, 'sockets') || [];
+      
       // Emit to ALL participants (including host and new participant)
       io.to(allSocketIds).emit('TournamentInviteAccepted', { 
         inviteId, 
         inviteeEmail,
+        guestEmail: inviteeEmail, // Add this for compatibility
+        guestData: userData, // Add this for compatibility
         tournamentId: invite.tournamentId,
         newParticipant,
         tournament
+      });
+      
+      // IMPORTANT: Clean up the invite from ALL guest sessions
+      io.to(guestSocketIds).emit('TournamentInviteCleanup', {
+        inviteId,
+        action: 'accepted',
+        message: 'Invite accepted in another session'
       });
       
       // Check if tournament is ready to start
@@ -486,8 +500,95 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       });
       
     } catch (error) {
-      console.error('[Tournament] Error accepting tournament invite:', error);
       socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to accept tournament invite.' });
+    }
+  });
+  
+  // Decline tournament invite - UPDATED VERSION
+  socket.on('DeclineTournamentInvite', async (data: { inviteId: string; inviteeEmail: string }) => {
+    try {
+      const { inviteId, inviteeEmail } = data;
+      if (!inviteId || !inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Missing info.' });
+      
+      const inviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`);
+      if (!inviteData) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invite expired.' });
+      const invite = JSON.parse(inviteData);
+      if (invite.inviteeEmail !== inviteeEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invalid invite.' });
+      
+      // Clean up invite FIRST
+      await Promise.all([
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${inviteeEmail}`) // Tournament-specific key
+      ]);
+      
+      // Get host and guest socket IDs
+      const hostSocketIds = await getSocketIds(invite.hostEmail, 'sockets') || [];
+      const guestSocketIds = await getSocketIds(inviteeEmail, 'sockets') || [];
+      
+      // Get user data for notification
+      const guestUser = await getUserByEmail(inviteeEmail);
+      const guestData = guestUser ? ((guestUser as any).toJSON ? (guestUser as any).toJSON() : guestUser) : null;
+      
+      // Notify host of decline
+      io.to(hostSocketIds).emit('TournamentInviteDeclined', { 
+        inviteId, 
+        tournamentId: invite.tournamentId,
+        inviteeEmail,
+        guestEmail: inviteeEmail, // Add for compatibility
+        declinedBy: inviteeEmail,
+        message: 'Tournament invite was declined.' 
+      });
+      
+      // IMPORTANT: Clean up the invite from ALL guest sessions
+      io.to(guestSocketIds).emit('TournamentInviteCleanup', {
+        inviteId,
+        action: 'declined',
+        message: 'Invite declined in another session'
+      });
+      
+      socket.emit('TournamentInviteResponse', { status: 'success', message: 'Tournament invite declined.' });
+    } catch (error) {
+      socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to decline tournament invite.' });
+    }
+  });
+  
+  // Cancel tournament invite - UPDATED VERSION
+  socket.on('CancelTournamentInvite', async (data: { inviteId: string; hostEmail: string }) => {
+    try {
+      const { inviteId, hostEmail } = data;
+      if (!inviteId || !hostEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Missing info.' });
+      
+      const inviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`);
+      if (!inviteData) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'Invite not found or expired.' });
+      const invite = JSON.parse(inviteData);
+      if (invite.hostEmail !== hostEmail) return socket.emit('TournamentInviteResponse', { status: 'error', message: 'You can only cancel your own invites.' });
+      
+      // Clean up invite
+      await Promise.all([
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${invite.inviteeEmail}`) // Tournament-specific key
+      ]);
+      
+      // Get ALL socket IDs for guest to clean up all sessions
+      const guestSocketIds = await getSocketIds(invite.inviteeEmail, 'sockets') || [];
+      
+      // Notify guest of cancellation
+      io.to(guestSocketIds).emit('TournamentInviteCanceled', { 
+        inviteId, 
+        tournamentId: invite.tournamentId,
+        canceledBy: hostEmail 
+      });
+      
+      // IMPORTANT: Clean up invite from ALL guest sessions
+      io.to(guestSocketIds).emit('TournamentInviteCleanup', {
+        inviteId,
+        action: 'canceled',
+        message: 'Invite was canceled by host'
+      });
+      
+      socket.emit('TournamentInviteResponse', { status: 'success', message: 'Invitation canceled.' });
+    } catch (error) {
+      socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to cancel tournament invite.' });
     }
   });
 
@@ -542,14 +643,12 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const { tournamentId, hostEmail } = data;
       
       if (!tournamentId || !hostEmail) {
-        console.error('Missing required data:', { tournamentId, hostEmail });
         return socket.emit('TournamentStartResponse', { status: 'error', message: 'Missing info.' });
       }
       
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
       if (!tournamentData) {
-        console.error('Tournament not found in Redis:', tournamentId);
         return socket.emit('TournamentStartResponse', { status: 'error', message: 'Tournament not found.' });
       }
       
@@ -557,25 +656,16 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       
       // Check if user is the host
       if (tournament.hostEmail !== hostEmail) {
-        console.error('Host email mismatch:', {
-          tournamentHost: tournament.hostEmail,
-          requestingHost: hostEmail
-        });
         return socket.emit('TournamentStartResponse', { status: 'error', message: 'Only the host can start the tournament.' });
       }
       
       // Check if tournament is in lobby state
       if (tournament.status !== 'lobby') {
-        console.error('Tournament not in lobby state:', tournament.status);
         return socket.emit('TournamentStartResponse', { status: 'error', message: 'Tournament is not in lobby state.' });
       }
       
       // Check if tournament is full
       if (tournament.participants.length !== tournament.size) {
-        console.error('Tournament not full:', {
-          current: tournament.participants.length,
-          required: tournament.size
-        });
         return socket.emit('TournamentStartResponse', { status: 'error', message: `Tournament needs ${tournament.size} players to start.` });
       }
       
@@ -630,7 +720,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
 
       
     } catch (error) {
-      console.error('Error in StartTournament:', error);
       socket.emit('TournamentStartResponse', { status: 'error', message: 'Failed to start tournament.' });
     }
   });
@@ -644,14 +733,12 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const { tournamentId, hostEmail, round, notifyCountdown = 10 } = data;
       
       if (!tournamentId || !hostEmail) {
-        console.error('Missing required data for StartCurrentRound:', { tournamentId, hostEmail, round });
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Missing required data.' });
       }
       
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
       if (!tournamentData) {
-        console.error('Tournament not found:', tournamentId);
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Tournament not found.' });
       }
       
@@ -659,10 +746,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       
       // Check if user is the host
       if (tournament.hostEmail !== hostEmail) {
-        console.error('Only host can start rounds:', {
-          tournamentHost: tournament.hostEmail,
-          requestingHost: hostEmail
-        });
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Only the host can start rounds.' });
       }
       
@@ -673,7 +756,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       );
       
       if (currentRoundMatches.length === 0) {
-        console.error('No matches ready to start in round:', currentRound);
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'No matches ready to start in this round.' });
       }
 
@@ -856,7 +938,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         matchCount: currentRoundMatches.length
       });
     } catch (error) {
-      console.error('Error in StartCurrentRound:', error);
       socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Failed to start round.' });
     }
   });
@@ -1025,7 +1106,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       
       socket.emit('JoinTournamentMatchResponse', { status: 'success', message: 'Joined match successfully!' });
     } catch (error) {
-      console.error('Error in JoinTournamentMatch:', error);
       socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Failed to join match.' });
     }
   });
@@ -1038,7 +1118,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const { tournamentId, playerEmail } = data;
       
       if (!tournamentId || !playerEmail) {
-        console.error('Missing join data:', { tournamentId, playerEmail });
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Missing info.' });
       }
       
@@ -1047,7 +1126,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
       if (!tournamentData) {
-        console.error('Tournament not found for join:', tournamentId);
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament not found.' });
       }
       
@@ -1059,11 +1137,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const isHost = tournament.hostEmail === playerEmail;
       
       if (!participant && !isHost) {
-        console.error('Player not in participant list:', {
-          playerEmail,
-          participants: tournament.participants.map(p => p.email),
-          hostEmail: tournament.hostEmail
-        });
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'You are not a participant in this tournament.' });
       }
       
@@ -1082,7 +1155,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       
       // Check if tournament is in a valid state for active participation
       if (tournament.status === 'canceled') {
-        console.error('Tournament was canceled:', tournament.status);
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament was canceled.' });
       }
 
@@ -1122,7 +1194,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
 
       
     } catch (error) {
-      console.error('Error in JoinTournament:', error);
       socket.emit('TournamentJoinResponse', { status: 'error', message: 'Failed to join tournament.' });
     }
   });
@@ -1133,7 +1204,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const { tournamentId, playerEmail } = data;
       
       if (!tournamentId || !playerEmail) {
-        console.error('Missing join data:', { tournamentId, playerEmail });
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Missing info.' });
       }
       
@@ -1149,7 +1219,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
       if (!tournamentData) {
-        console.error('Tournament not found for join:', tournamentId);
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament not found.' });
       }
       
@@ -1239,7 +1308,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       });
       
     } catch (error) {
-      console.error('Error in JoinTournamentAsNewParticipant:', error);
       socket.emit('TournamentJoinResponse', { status: 'error', message: 'Failed to join tournament.' });
     }
   });
@@ -1299,7 +1367,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       });
       
     } catch (error) {
-      console.error('Error in GetTournamentData:', error);
       socket.emit('TournamentDataResponse', { status: 'error', message: 'Failed to get tournament data.' });
     }
   });
@@ -1553,7 +1620,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       });
       
     } catch (error) {
-      console.error('Error cancelling tournament:', error);
       socket.emit('TournamentCancelResponse', { status: 'error', message: 'Failed to cancel tournament.' });
     }
   });
@@ -1728,7 +1794,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       });
       
     } catch (error) {
-      console.error('Error cancelling tournament:', error);
       socket.emit('TournamentCancelResponse', { status: 'error', message: 'Failed to cancel tournament.' });
     }
   });
@@ -1818,7 +1883,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       }
       
     } catch (error) {
-      console.error('Error in ExplicitLeaveTournament:', error);
       socket.emit('ExplicitLeaveTournamentResponse', { status: 'error', message: 'Failed to leave tournament.' });
     }
   });
@@ -1862,7 +1926,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       socket.emit('UserActiveTournaments', { tournaments: activeTournaments });
       
     } catch (error) {
-      console.error('Error getting user active tournaments:', error);
       socket.emit('UserActiveTournaments', { tournaments: [] });
     }
   });
@@ -1900,7 +1963,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       });
       
     } catch (error) {
-      console.error('Error rejoining tournament:', error);
       socket.emit('RejoinTournamentResponse', { status: 'error', message: 'Failed to rejoin tournament.' });
     }
   });

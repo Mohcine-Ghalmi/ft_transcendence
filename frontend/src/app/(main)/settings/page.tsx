@@ -5,6 +5,7 @@ import FA2 from '@/app/(Login)/FA2'
 import Image from 'next/image'
 import { CustomError } from '../../(Login)/SignUp/SingUpPage'
 import { toast } from 'react-toastify'
+import { axiosChatInstance } from '@/(zustand)/useChatStore'
 
 const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
   const { user } = useAuthStore()
@@ -191,7 +192,7 @@ const Settings = () => {
       const formData = new FormData()
       formData.append('file', image)
       try {
-        const res = await axiosInstance.post('/api/chat/postImage', formData)
+        const res = await axiosChatInstance.post('/api/chat/postImage', formData)
         toast.success('Image uploaded successfully')
         return res.data.filename
       } catch (err: any) {

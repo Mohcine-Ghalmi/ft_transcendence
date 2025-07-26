@@ -11,6 +11,7 @@ import CryptoJS from 'crypto-js'
 import { PlayerListItem } from '../../play/OneVsOne/Online'
 import { getGameSocketInstance } from '@/(zustand)/useGameStore'
 import { useTournamentNotifications } from '../../../../utils/tournament/TournamentNotificationProvider';
+import {axiosInstance} from '@/(zustand)/useAuthStore'
 
 interface Player {
   name: string;
@@ -144,7 +145,7 @@ const RoundControls = ({ currentRound, totalRounds, onAdvanceRound, canAdvance }
 
 // Main Tournament Component
 export default function OnlineTournament() {
-  const { user } = useAuthStore();
+  const { user, onlineUsers } = useAuthStore();
   const router = useRouter();
   const { addNotification } = useTournamentNotifications();
   const [tournamentState, setTournamentState] = useState('setup'); // setup, lobby, in_progress
@@ -168,10 +169,6 @@ export default function OnlineTournament() {
   const [tournaments, setTournaments] = useState([]);
   const [friends, setFriends] = useState<Player[]>([]);
   const [invitingPlayers, setInvitingPlayers] = useState(new Set<string>()); // Track multiple inviting players
-  const [invitedPlayer, setInvitedPlayer] = useState<Player | null>(null);
-  const [inviteId, setInviteId] = useState<string | null>(null);
-  const [waitTime, setWaitTime] = useState(30);
-  const [waitingForResponse, setWaitingForResponse] = useState(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const totalRounds = Math.log2(tournamentSize);
@@ -249,37 +246,35 @@ export default function OnlineTournament() {
 
   useEffect(() => {
     async function fetchFriends() {
-      if (!user?.email) return;
+      if (!user?.email) return
 
       try {
-        const res = await fetch(`http://localhost:5005/api/users/friends?email=${user.email}`);
+      const res = await axiosInstance.get(
+        `/api/users/friends?email=${user.email}`
+      )
+      
+      const data = res.data;
 
-        if (!res.ok) {
-          setFriends([]);
-          return;
-        }
-
-        const data = await res.json();
-
-        if (data.friends && Array.isArray(data.friends)) {
-          const formatted = data.friends.map((f, index) => ({
-            id: f.id || `friend-${index}`,
-            name: f.username,
-            avatar: f.avatar,
-            nickname: f.login,
-            GameStatus: 'Available',
-            ...f,
-          }));
-          setFriends(formatted);
-        } else {
-          setFriends([]);
-        }
+      if (data.friends && Array.isArray(data.friends)) {
+        const formatted = data.friends
+        .filter((f) => onlineUsers.includes(f.email)) // Check if user is in onlineUsers
+        .map((f) => ({
+          name: f.username,
+          avatar: f.avatar,
+          nickname: f.login,
+          GameStatus: 'Available',
+          ...f,
+        }))
+        setFriends(formatted)
+      } else {
+        setFriends([])
+      }
       } catch (err) {
-        setFriends([]);
+      setFriends([])
       }
     }
-    fetchFriends();
-  }, [user]);
+    fetchFriends()
+  }, [user])
 
   const getDisplayName = (player: any) => {
     return player?.nickname?.trim() || player?.login || 'Unknown Player';
@@ -374,16 +369,14 @@ export default function OnlineTournament() {
       hostEmail: user.email,
       notifyCountdown: 10
     });
-
-    // Emit to backend to start the round and send notifications to all players
-    socket.emit('StartCurrentRound', {
-      tournamentId,
+    
+    socket.emit('StartCurrentRound', { 
+      tournamentId, 
       hostEmail: user.email,
       notifyCountdown: 10 // 10 second countdown for players to join matches
     });
   };
 
-  // Tournament invite handler (encrypt and emit)
   const handleInvitePlayer = async (player: Player) => {
     if (participants.length >= tournamentSize || !tournamentId || !socket) {
       return;
@@ -416,26 +409,17 @@ export default function OnlineTournament() {
     socket.emit('InviteToTournament', encrypted);
   };
 
-  // Socket event listeners for tournament invite
   useEffect(() => {
     if (!socket) return;
+
     const handleInviteResponse = (data: any) => {
       if (data.status === 'success' && data.type === 'invite_sent') {
         console.log('Tournament invitation sent successfully to:', data.guestData?.email);
       } else if (data.status === 'error') {
         console.error('Tournament invitation error:', data.message);
-
-        // Show error notification
-        // if (typeof showNotification === 'function') {
-        //   showNotification(data.message || 'Failed to send invitation', 'error');
-        // }
-
-        // For now, we can't specifically identify which player failed, so we don't remove from inviting set here
-        // The timeout or success will handle the removal
       }
     };
     const handleInviteAccepted = (data: any) => {
-      // Remove player from inviting set
       if (data.guestData?.email) {
         setInvitingPlayers(prev => {
           const newSet = new Set(prev);
@@ -449,7 +433,6 @@ export default function OnlineTournament() {
       }
     };
     const handleInviteDeclined = (data: any) => {
-      // Remove player from inviting set
       if (data.guestEmail) {
         setInvitingPlayers(prev => {
           const newSet = new Set(prev);
@@ -459,7 +442,6 @@ export default function OnlineTournament() {
       }
     };
     const handleInviteTimeout = (data: any) => {
-      // Remove player from inviting set
       if (data.guestEmail) {
         setInvitingPlayers(prev => {
           const newSet = new Set(prev);
@@ -468,8 +450,8 @@ export default function OnlineTournament() {
         });
       }
     };
+
     const handleInviteCanceled = (data: any) => {
-      // Remove player from inviting set
       if (data.guestEmail) {
         setInvitingPlayers(prev => {
           const newSet = new Set(prev);
@@ -478,33 +460,34 @@ export default function OnlineTournament() {
         });
       }
     };
+
+    const handleInviteCleanup = (data: any) => {
+      console.log('Cleaning up invite in OnlineTournament:', data.guestEmail, data.action);
+      if (data.guestEmail) {
+        setInvitingPlayers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.guestEmail);
+          return newSet;
+        });
+      }
+    };  
+
     socket.on('InviteToTournamentResponse', handleInviteResponse);
     socket.on('TournamentInviteAccepted', handleInviteAccepted);
     socket.on('TournamentInviteDeclined', handleInviteDeclined);
     socket.on('TournamentInviteTimeout', handleInviteTimeout);
     socket.on('TournamentInviteCanceled', handleInviteCanceled);
+    socket.on('TournamentInviteCleanup', handleInviteCleanup);
     return () => {
       socket.off('InviteToTournamentResponse', handleInviteResponse);
       socket.off('TournamentInviteAccepted', handleInviteAccepted);
       socket.off('TournamentInviteDeclined', handleInviteDeclined);
       socket.off('TournamentInviteTimeout', handleInviteTimeout);
       socket.off('TournamentInviteCanceled', handleInviteCanceled);
+      socket.on('TournamentInviteCleanup', handleInviteCleanup);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
-  }, [socket, inviteId, user?.email]);
-
-  // Cancel invite
-  const handleCancelInvite = () => {
-    if (socket && inviteId && user?.email) {
-      socket.emit('CancelTournamentInvite', { inviteId, hostEmail: user.email });
-    }
-    // Clear all inviting players
-    setInvitingPlayers(new Set());
-    setWaitingForResponse(false);
-    setInvitedPlayer(null);
-    setInviteId(null);
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-  };
+  }, [socket, user?.email]);
 
   const leaveTournament = () => {
     if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
