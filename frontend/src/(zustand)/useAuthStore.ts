@@ -9,7 +9,8 @@ import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
 
 const BACK_END = process.env.NEXT_PUBLIC_BACKEND
-const FRON_END = process.env.NEXT_PUBLIC_FRONEND
+const FRONT_END =
+  process.env.NEXT_PUBLIC_FRONTEND || process.env.NEXT_PUBLIC_FRONEND
 
 export const axiosInstance = axios.create({
   baseURL: BACK_END,
@@ -20,7 +21,7 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken')
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -36,12 +37,22 @@ axiosInstance.interceptors.response.use(
       (error.response?.status === 401 ||
         error.status === 401 ||
         error.status === 403) &&
-      window.location.href !== `${FRON_END}/`
+      window.location.href !== `${FRONT_END}/`
     ) {
       const disconnectSocket = useAuthStore.getState().disconnectSocket
       disconnectSocket()
+
+      useAuthStore.setState({
+        user: null,
+        isAuthenticated: false,
+        userDetails: null,
+        notifications: [],
+        onlineUsers: [],
+      })
+
       localStorage.removeItem('accessToken')
-      window.location.href = `${FRON_END}/`
+
+      window.location.href = `${FRONT_END}/`
     }
     return Promise.reject(error)
   }
@@ -106,6 +117,7 @@ interface UserState {
   userDetails: UserDetails | null
   setUserDetails: (data: UserDetails) => void
   getUserDetails: (email: string) => Promise<void>
+  hasStoredToken: () => boolean
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -162,21 +174,30 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
   },
   checkAuth: async () => {
-    return true
-    // set({ isLoading: true })
-    // try {
-    //   const res = await axiosInstance.get('/api/user-service/users/getMe')
-    //   const { user } = res.data
-    //   set({ user, isAuthenticated: true })
-    //   get().connectSocket()
-    //   return true
-    // } catch (err) {
-    //   console.error('Auth check failed:', err)
-    //   set({ user: null, isAuthenticated: false })
-    //   return false
-    // } finally {
-    //   set({ isLoading: false })
-    // }
+    set({ isLoading: true })
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) {
+        set({ user: null, isAuthenticated: false })
+        return false
+      }
+
+      const res = await axiosInstance.get('/api/user-service/users/getMe')
+      const { user } = res.data
+      if (user) {
+        set({ user, isAuthenticated: true })
+        get().connectSocket()
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error('Auth check failed:', err)
+      set({ user: null, isAuthenticated: false })
+      localStorage.removeItem('accessToken')
+      return false
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
   googleLogin: async (data: any): Promise<void> => {
@@ -192,7 +213,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
       if (res?.status === 200) {
         const { accessToken, ...user } = res.data
-        localStorage.setItem('accessToken', accessToken)
         set({ user, isAuthenticated: true })
         toast.success('Login successful!')
       } else {
@@ -215,7 +235,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
       const res = await axiosInstance.post(
-        `/api/user-service/v2/api/users/register`,
+        `/api/user-service/users/register`,
         data
       )
       console.log(res)
@@ -224,11 +244,15 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning('Registration failed')
         return false
       }
-      const { ...user } = res.data
-      // localStorage.setItem('accessToken', accessToken)
+      const { accessToken, ...user } = res.data
+
+      if (accessToken) {
+        localStorage.setItem('accessToken', accessToken)
+      }
+
       set({ user, isAuthenticated: true })
       get().connectSocket()
-      window.location.href = `${FRON_END}/dashboard`
+      window.location.href = `${FRONT_END}/dashboard`
       return true
     } catch (err: any) {
       console.log(err)
@@ -274,31 +298,24 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      // const hasTwoFAres = await axiosInstance.post(
-      //   `/api/users/verify-hasTwoFA`,
-      //   data.email
-      // )
-      // if (hasTwoFAres?.data?.isTwoFAVerified) {
-      //   toast.warning(
-      //     'You have two-factor authentication enabled. Please verify your OTP.'
-      //   )
-      //   return false
-      // }
       const res = await axiosInstance.post(
-        `/api/user-service/v2/api/users/login`,
+        `/api/user-service/users/login`,
         data
       )
       if (!res.data) {
         toast.warning('Login failed')
         return false
       }
-      const { status, ...user } = res.data
+      const { status, accessToken, ...user } = res.data
       if (status) {
+        if (accessToken) {
+          localStorage.setItem('accessToken', accessToken)
+        }
+
         set({ user, isAuthenticated: true })
         get().connectSocket()
-        window.location.href = `${FRON_END}/dashboard`
+        window.location.href = `${FRONT_END}/dashboard`
       } else {
-        console.log(res.data)
         if (res.data.desc === '2FA verification required') {
           get().setHidePopUp(true)
           return false
@@ -323,13 +340,22 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       } else {
         toast.warning(res.data?.message || 'Logout failed')
       }
-      get().disconnectSocket()
     } catch (err) {
       console.error('Logout failed:', err)
       toast.warning('Logout failed')
+    } finally {
+      get().disconnectSocket()
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        userDetails: null,
+        notifications: [],
+        onlineUsers: [],
+      })
+      localStorage.removeItem('accessToken')
+      window.location.href = `${FRONT_END}/`
     }
-    // set({ user: null, isAuthenticated: false, isLoading: false })
-    // signOut({ callbackUrl: `${FRON_END}/` })
   },
 
   connectSocket: () => {
@@ -517,6 +543,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance = null
       set({ socketConnected: false })
     }
+  },
+
+  hasStoredToken: () => {
+    if (typeof window === 'undefined') return false
+    return !!localStorage.getItem('accessToken')
   },
 }))
 

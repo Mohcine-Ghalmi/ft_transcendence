@@ -33,8 +33,6 @@ services:
     image: user-service:v0.1
     container_name: user-service
     restart: unless-stopped
-    ports:
-      - '5005:5005'
     env_file:
       - ./backend/main/.env
     volumes:
@@ -58,8 +56,6 @@ services:
     image: chat-service:v0.1
     container_name: chat-service
     restart: unless-stopped
-    ports:
-      - '5006:5006'
     env_file:
       - ./backend/chat/.env
     volumes:
@@ -83,8 +79,6 @@ services:
     image: game-service:v0.1
     container_name: game-service
     restart: unless-stopped
-    ports:
-      - '5007:5007'
     env_file:
       - ./backend/game/.env
     volumes:
@@ -163,5 +157,5 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: /goinfre/${USER}/sqlite_db
+      device: ../sqlite_db
       o: bind

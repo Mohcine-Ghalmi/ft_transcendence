@@ -13,7 +13,7 @@ import {
   createUserResponseSchema,
 } from './user.schema'
 import { hashPassword, verifyPassword } from '../../utils/hash'
-import { db, server } from '../../app'
+import { db, server, tokenBlacklist } from '../../app'
 import { sendEmailTmp } from '../Mail/mail.controller'
 import {
   resetOtpType,
@@ -176,6 +176,18 @@ export async function logoutUserHandled(
   rep: FastifyReply
 ) {
   try {
+    let token = req.cookies.accessToken
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7)
+      }
+    }
+
+    if (token) {
+      tokenBlacklist.add(token)
+    }
+
     rep.clearCookie('accessToken', { path: '/' })
     return rep.code(200).send({ message: 'Logged out successfully' })
   } catch (err) {
@@ -445,10 +457,14 @@ export async function getMe(
 
     const user: any = await getUserByEmail(email)
 
+    if (!user) {
+      return rep.code(404).send({ error: 'User not found' })
+    }
+
     const { password, salt, ...rest } = user
 
-    const accessToken = server.jwt.sign(rest, { expiresIn: '1d' })
-    return rep.code(200).send({ ...rest, accessToken })
+    // Return user data in the expected format
+    return rep.code(200).send({ user: rest })
   } catch (err) {
     console.log(err)
     rep.code(500).send({ status: false, message: 'Internal Server Error' })

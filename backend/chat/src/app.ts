@@ -78,6 +78,7 @@ declare module 'fastify' {
 }
 
 export const db = initializeDatabase()
+export const tokenBlacklist = new Set<string | undefined>()
 
 server.decorate(
   'authenticate',
@@ -96,6 +97,14 @@ server.decorate(
         return rep.code(401).send({
           error: 'Authentication required',
           message: 'No token provided',
+        })
+      }
+
+      if (tokenBlacklist.has(token)) {
+        rep.clearCookie('accessToken')
+        return rep.code(401).send({
+          error: 'Token revoked',
+          message: 'This token has been invalidated',
         })
       }
 
@@ -149,7 +158,22 @@ async function startServer() {
     })
 
     await server.register(cors, {
-      origin: process.env.FRONT_END_URL,
+      origin: (origin: string | undefined, cb: any) => {
+        const allowedOrigins = [
+          process.env.FRONT_END_URL,
+          process.env.MAIN_BACKEND_URL,
+          process.env.GAME_BACKEND_URL,
+          'http://nginx',
+          'https://nginx',
+          'http://frontend:3000',
+        ].filter(Boolean) as string[]
+
+        if (!origin || allowedOrigins.includes(origin)) {
+          cb(null, true)
+        } else {
+          cb(new Error('Not allowed'), false)
+        }
+      },
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true,

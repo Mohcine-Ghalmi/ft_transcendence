@@ -17,12 +17,17 @@ import { useAuthStore } from '@/(zustand)/useAuthStore'
 export default function PingPongDashboard() {
   const { getRandomFriendsSuggestions } = useSearchStore()
   const { getUserDetails, userDetails, user } = useAuthStore()
+
   const total = userDetails?.wins + userDetails?.losses
   const winRate = total ? ((userDetails?.wins / total) * 100).toFixed(1) : 0
+
   useEffect(() => {
-    getUserDetails(user.email)
-    getRandomFriendsSuggestions()
-  }, [])
+    if (user?.email) {
+      getUserDetails(user.email)
+      getRandomFriendsSuggestions()
+    }
+  }, [user?.email])
+
   return (
     <div className="h-full text-white">
       {/* Main Dashboard Content */}

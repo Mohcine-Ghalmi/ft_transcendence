@@ -9,8 +9,8 @@ import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
 import { useAuthStore } from './useAuthStore'
 
-const BACK_END = 'http://localhost:5007'
-const FRON_END = process.env.NEXT_PUBLIC_FRONEND
+const BACK_END = 'http://game-service:5007'
+const FRONT_END = process.env.NEXT_PUBLIC_FRONEND
 
 export const axiosGameInstance = axios.create({
   baseURL: `${BACK_END}`,
@@ -37,12 +37,12 @@ axiosGameInstance.interceptors.response.use(
       (error.response?.status === 401 ||
         error.status === 401 ||
         error.status === 403) &&
-      window.location.href !== `${FRON_END}/`
+      window.location.href !== `${FRONT_END}/`
     ) {
       const disconnectSocket = useAuthStore.getState().disconnectSocket
       disconnectSocket()
       localStorage.removeItem('accessToken')
-      window.location.href = `${FRON_END}/`
+      window.location.href = `${FRONT_END}/`
     }
     return Promise.reject(error)
   }

@@ -112,6 +112,9 @@ async function registerPlugins() {
         process.env.FRONT_END_URL,
         process.env.CHAT_BACKEND_URL,
         process.env.GAME_BACKEND_URL,
+        'http://nginx',
+        'https://nginx',
+        'http://frontend:3000',
       ].filter(Boolean) as string[]
 
       if (!origin || allowedOrigins.includes(origin)) {
@@ -163,7 +166,7 @@ async function registerPlugins() {
       },
     },
     startRedirectPath: '/login/42',
-    callbackUri: 'http://localhost:5005/login/42/callback',
+    callbackUri: 'https://localhost/api/user-service/login/42/callback',
   })
   await server.register(fastifyOauth2, {
     name: 'googleOAuth2',
@@ -176,7 +179,7 @@ async function registerPlugins() {
       auth: fastifyOauth2.GOOGLE_CONFIGURATION,
     },
     startRedirectPath: '/login/google',
-    callbackUri: 'http://localhost:5005/login/google/callback',
+    callbackUri: 'https://localhost/api/user-service/login/google/callback',
   })
 
   await server.register(rateLimit, {
@@ -205,6 +208,14 @@ server.decorate(
         return rep.code(401).send({
           error: 'Authentication required',
           message: 'No token provided',
+        })
+      }
+
+      if (tokenBlacklist.has(token)) {
+        rep.clearCookie('accessToken')
+        return rep.code(401).send({
+          error: 'Token revoked',
+          message: 'This token has been invalidated',
         })
       }
 

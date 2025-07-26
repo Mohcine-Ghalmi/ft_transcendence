@@ -39,16 +39,31 @@ export async function downloadAndSaveImage(imageUrl: string, filename: string) {
 //   picture: 'https://lh3.googleusercontent.com/a/ACg8ocJURU_hS6TmyQWN0Bhdy0ZjPb_0OZK1BJ-pipO1JHwABItAWeY3=s96-c'
 // }
 
-export const signJWT = (user: any, rep: FastifyReply) => {
-  const accessToken = server.jwt.sign(user, { expiresIn: '1d' })
-  rep.setCookie('accessToken', accessToken, {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
-    path: '/',
-    domain: 'localhost',
-    maxAge: 60 * 60 * 24,
-  })
+export const signJWT = (
+  user: any,
+  rep: FastifyReply,
+  setCookie: boolean = true
+) => {
+  const payload = {
+    // id: user.id,
+    // email: user.email,
+    // username: user.username,
+    ...user,
+    iat: Math.floor(Date.now() / 1000),
+  }
+
+  const accessToken = server.jwt.sign(payload, { expiresIn: '15m' })
+
+  if (setCookie) {
+    rep.setCookie('accessToken', accessToken, {
+      httpOnly: false,
+      secure: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000,
+    })
+  }
+
   return accessToken
 }
 
@@ -99,7 +114,10 @@ async function googleRegister(req: FastifyRequest, rep: FastifyReply) {
     }
     const { password, salt, ...userWithoutPassword } = existingUser as any
     const accessToken = signJWT(userWithoutPassword, rep)
-    return rep.redirect(`${process.env.FRONT_END_URL}/dashboard`)
+
+    return rep.redirect(
+      `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
+    )
   } catch (err: any) {
     console.log('Google OAuth error:', err)
     return rep.redirect(
@@ -147,7 +165,10 @@ export async function fortyTwoRegister(req: FastifyRequest, rep: FastifyReply) {
     }
     const { password, salt, ...userWithoutPassword } = existingUser as any
     const accessToken = signJWT(userWithoutPassword, rep)
-    return rep.redirect(`${process.env.FRONT_END_URL}/dashboard`)
+
+    return rep.redirect(
+      `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
+    )
   } catch (err: any) {
     console.log('42 OAuth error:', err)
     return rep.code(500).send({
