@@ -9,7 +9,7 @@ import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
 import { useAuthStore } from './useAuthStore'
 
-const BACK_END = 'http://game-service:5007'
+const BACK_END = 'http://localhost:5007'
 const FRONT_END = process.env.NEXT_PUBLIC_FRONEND
 
 export const axiosGameInstance = axios.create({

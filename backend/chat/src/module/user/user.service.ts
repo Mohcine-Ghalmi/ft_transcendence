@@ -1,7 +1,12 @@
+/*
+curl -X POST http://user-service:5005/api/user-service/users/getUserByEmail \
+     -H "Content-Type: application/json" \
+     -d '{"email": "test@gmail.com"}'
+*/
 import axios from 'axios'
 
 export const axiosMainInstance = axios.create({
-  baseURL: 'http://user-service:5005/api/user-service/users',
+  baseURL: `http://localhost:5005/api/user-service/users`,
   withCredentials: true,
 })
 

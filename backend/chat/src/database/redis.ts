@@ -7,8 +7,8 @@ const redis = new Redis({
   enableReadyCheck: false,
   maxRetriesPerRequest: 10,
   lazyConnect: true,
-  connectTimeout: 10000,
-  commandTimeout: 5000,
+  connectTimeout: 100,
+  commandTimeout: 500,
 })
 
 redis.on('connect', () => {

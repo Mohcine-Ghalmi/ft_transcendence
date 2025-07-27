@@ -235,7 +235,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
       const res = await axiosInstance.post(
-        `/api/user-service/users/register`,
+        `/api/user-service/v2/api/users/register`,
         data
       )
       console.log(res)
@@ -299,9 +299,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
       const res = await axiosInstance.post(
-        `/api/user-service/users/login`,
+        `/api/user-service/v2/api/users/login`,
         data
       )
+      console.log(res.data)
+
       if (!res.data) {
         toast.warning('Login failed')
         return false
@@ -325,6 +327,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
       return true
     } catch (err: any) {
+      console.log(err)
       toast.warning(err.response?.data?.message || err.message)
       return false
     } finally {

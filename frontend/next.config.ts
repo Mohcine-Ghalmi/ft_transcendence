@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/images/:path*',
-        destination: 'https://localhost/images/:path*',
+        destination: 'http://localhost:5005/images/:path*',
       },
     ]
   },

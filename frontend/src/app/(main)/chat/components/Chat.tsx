@@ -314,8 +314,7 @@ const Chat = () => {
     const formData = new FormData()
     formData.append('file', image)
     try {
-      const res = await axiosChatInstance.post('/api/chat/postImage', formData)
-      // toast.success('Image uploaded successfully')
+      const res = await axiosChatInstance.post('/postImage', formData)
       setImage(null)
       return res.data.filename
     } catch (err: any) {

@@ -7,7 +7,7 @@ import axios from 'axios'
 
 const FRONT_END =
   process.env.NEXT_PUBLIC_FRONTEND || process.env.NEXT_PUBLIC_FRONEND
-const BACK_END = process.env.NEXT_PUBLIC_BACKEND || 'https://localhost'
+const BACK_END = 'http://localhost:5006'
 
 export const axiosChatInstance = axios.create({
   baseURL: `${BACK_END}/api/chat-service`,
@@ -227,13 +227,9 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
 
-    console.log('Chat socket: Attempting to connect to:', BACK_END)
-    console.log('Chat socket: Using path: /chat/socket.io')
-
-    chatSocket = io(BACK_END, {
+    chatSocket = io(`${BACK_END}/chat`, {
       withCredentials: true,
       reconnection: false,
-      path: '/chat/socket.io',
       query: { cryptedMail },
     })
     set({ isChatSocketConnected: true })
