@@ -394,7 +394,42 @@ export const getActiveInvitations = (userEmail: string) => {
   return userInvitations
 }
 
-// Function to clean up all invitations for a user (useful on logout)
+// NEW: Clean up stale invitations on server
+export const cleanupStaleInvitations = (socket: any, userEmail: string) => {
+  if (!socket || !userEmail) return
+
+  socket.emit('CleanupStaleInvitations', { userEmail })
+  
+  // Also force clear local cache
+  forceClearInvitationCache()
+}
+
+// NEW: Initialize invitation system (call this when user enters play page)
+export const initializeInvitationSystem = (socket: any, userEmail: string) => {
+  if (!socket || !userEmail) return
+
+  console.log('Initializing invitation system for user:', userEmail)
+  
+  // Setup event handlers
+  setupGlobalEventHandlers(socket)
+  setupGameStateCleanup(socket)
+  
+  // Clean up any stale data
+  cleanupStaleInvitations(socket, userEmail)
+  
+  // Set up periodic cleanup
+  const cleanupInterval = setInterval(() => {
+    clearStaleInvitations()
+  }, 30000) // Every 30 seconds
+  
+  // Return cleanup function
+  return () => {
+    clearInterval(cleanupInterval)
+    forceClearInvitationCache()
+  }
+}
+
+// Function to clean up all invitations for a user (useful on logout) all invitations for a user (useful on logout)
 export const cleanupAllInvitations = (userEmail: string) => {
   const toDelete = []
   for (const [gameId, invitation] of activeInvitations.entries()) {
