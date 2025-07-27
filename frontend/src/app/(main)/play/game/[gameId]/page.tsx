@@ -799,18 +799,17 @@ export default function GamePage() {
         <div className="text-center">
           <h1 className="text-4xl font-bold text-white mb-8">Access Denied</h1>
           <p className="text-gray-400 mb-4">You don't have permission to access this game.</p>
-          <button 
+          {/* <button 
             onClick={() => window.location.href = '/play'}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
           >
             Back to Play
-          </button>
+          </button> */}
         </div>
       </div>
     )
   }
 
-  // Show loading while checking authorization
   if (!authorizationChecked) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
