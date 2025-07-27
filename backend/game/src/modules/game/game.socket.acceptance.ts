@@ -1,4 +1,4 @@
-// Enhanced game.socket.acceptance.ts with host status validation
+// Enhanced game.socket.acceptance.ts with multiple invitations cleanup
 
 import { Socket, Server } from 'socket.io'
 import { getUserByEmail } from '../user/user.service'
@@ -78,6 +78,49 @@ async function isUserInActiveGame(userEmail: string): Promise<{
   }
 }
 
+// NEW: Helper function to clean up all other invitations from the same host
+async function cleanupOtherHostInvitations(hostEmail: string, acceptedGameId: string): Promise<string[]> {
+  try {
+    const allInviteKeys = await redis.keys('game_invite:*');
+    const cleanedInvitations: string[] = [];
+    
+    for (const key of allInviteKeys) {
+      // Skip the accepted invitation
+      if (key === `game_invite:${acceptedGameId}`) {
+        continue;
+      }
+      
+      const inviteData = await redis.get(key);
+      if (inviteData) {
+        try {
+          const invite: GameInviteData = JSON.parse(inviteData);
+          
+          // If this invitation is from the same host but different game
+          if (invite.hostEmail === hostEmail && invite.gameId !== acceptedGameId) {
+            // Clean up this invitation
+            await Promise.all([
+              redis.del(key),
+              redis.del(`game_invite:${invite.hostEmail}:${invite.guestEmail}`)
+            ]);
+            
+            cleanedInvitations.push(invite.guestEmail);
+            
+            console.log(`Cleaned up invitation from ${hostEmail} to ${invite.guestEmail} (Game: ${invite.gameId})`);
+          }
+        } catch (parseError) {
+          // Clean up corrupted invitation data
+          await redis.del(key);
+        }
+      }
+    }
+    
+    return cleanedInvitations;
+  } catch (error) {
+    console.error('Error cleaning up other host invitations:', error);
+    return [];
+  }
+}
+
 export const handleGameAcceptance: GameSocketHandler = (
   socket: Socket,
   io: Server
@@ -113,7 +156,7 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // NEW: Check if the host (sender) is currently in an active game
+        // Check if the host (sender) is currently in an active game
         const hostGameStatus = await isUserInActiveGame(invite.hostEmail);
         if (hostGameStatus.isInGame) {
           // Clean up the expired invitation since host is unavailable
@@ -132,7 +175,7 @@ export const handleGameAcceptance: GameSocketHandler = (
           });
         }
 
-        // NEW: Check if the guest (acceptor) is currently in an active game
+        // Check if the guest (acceptor) is currently in an active game
         const guestGameStatus = await isUserInActiveGame(guestEmail);
         if (guestGameStatus.isInGame) {
           // Clean up the invitation
@@ -161,7 +204,10 @@ export const handleGameAcceptance: GameSocketHandler = (
           });
         }
 
-        // IMPORTANT: Clean up invitation data IMMEDIATELY to prevent double processing
+        // NEW: Clean up ALL other invitations from the same host
+        const cleanedGuestEmails = await cleanupOtherHostInvitations(invite.hostEmail, gameId);
+        
+        // IMPORTANT: Clean up this invitation data IMMEDIATELY to prevent double processing
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
           redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
@@ -228,6 +274,28 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
+        // NEW: Notify all other invited users that the host is no longer available
+        for (const otherGuestEmail of cleanedGuestEmails) {
+          const otherGuestSocketIds = (await getSocketIds(otherGuestEmail, 'sockets')) || [];
+          if (otherGuestSocketIds.length > 0) {
+            io.to(otherGuestSocketIds).emit('GameInviteHostUnavailable', {
+              hostEmail: host.email,
+              hostName: host.username || host.login,
+              acceptedByEmail: guest.email,
+              acceptedByName: guest.username || guest.login,
+              message: `${host.username || host.login} is now playing with ${guest.username || guest.login}`,
+              reason: 'host_accepted_other_invitation'
+            });
+            
+            // Also send cleanup event
+            io.to(otherGuestSocketIds).emit('GameInviteCleanup', {
+              gameId: 'multiple', // Special indicator for multiple cleanup
+              action: 'host_unavailable',
+              message: 'Host accepted another invitation'
+            });
+          }
+        }
+
         // Clean up invitations from other guest sessions (if any)
         const otherGuestSockets = guestSocketIds.filter(socketId => socketId !== socket.id)
         if (otherGuestSockets.length > 0) {
@@ -237,6 +305,8 @@ export const handleGameAcceptance: GameSocketHandler = (
             message: 'Invite accepted in another session'
           })
         }
+
+        console.log(`Game accepted: ${host.email} vs ${guest.email}. Cleaned up ${cleanedGuestEmails.length} other invitations.`);
 
       } catch (error) {
         console.error('Error accepting game invite:', error);
