@@ -145,14 +145,23 @@ const WaitingPage = ({
   )
 }
 
-const WaitingForResponseModal = ({ currentUser, invitedPlayer, waitTime, onCancel }) => {
+const WaitingForResponseModal = ({
+  currentUser,
+  invitedPlayer,
+  waitTime,
+  onCancel,
+}) => {
   return (
     <div className="flex flex-row items-center justify-center">
       <div className="max-w-7xl mx-auto text-center">
         <h2 className="text-3xl font-semibold text-white mb-12"></h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12 md:mb-20">
           {/* Player 1 - Current User (Host) */}
-          <PlayerCard player={currentUser} playerNumber={1} onAddPlayer={() => {}} />
+          <PlayerCard
+            player={currentUser}
+            playerNumber={1}
+            onAddPlayer={() => {}}
+          />
 
           {/* Player 2 - Waiting for Response */}
           <div className="flex items-center">
@@ -247,18 +256,12 @@ export default function OnlineMatch() {
 
   // UPDATED: Helper function to handle guest leaving during waiting phase
   const handleGuestLeaveWaiting = () => {
-    if (
-      !isHost &&
-      gameId &&
-      receivedInvite &&
-      socket &&
-      user?.email
-    ) {
+    if (!isHost && gameId && receivedInvite && socket && user?.email) {
       // Guest is leaving while waiting to respond to invite
-      socket.emit('DeclineGameInvite', { 
-        gameId, 
+      socket.emit('DeclineGameInvite', {
+        gameId,
         guestEmail: user.email,
-        reason: 'guest_left_page'
+        reason: 'guest_left_page',
       })
     }
   }
@@ -682,7 +685,7 @@ export default function OnlineMatch() {
       if (data.status === 'success') {
         if (!isHost) {
           const targetPath = `/play/game/${gameId}`
-          window.location.href = targetPath
+          router.push(targetPath)
         } else {
           setShowGame(true)
         }
@@ -776,7 +779,14 @@ export default function OnlineMatch() {
         })
       }
       // ADDED: Handle guest leaving during waiting phase
-      if (document.hidden && !isHost && gameId && receivedInvite && socket && user?.email) {
+      if (
+        document.hidden &&
+        !isHost &&
+        gameId &&
+        receivedInvite &&
+        socket &&
+        user?.email
+      ) {
         handleGuestLeaveWaiting()
       }
     }
@@ -876,6 +886,9 @@ export default function OnlineMatch() {
   )
 
   const handleInvite = async (player) => {
+    console.log('payer : ', player)
+    console.log('Inviting player:', socket?.connected)
+
     if (!socket) {
       return
     }

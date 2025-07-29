@@ -7,6 +7,7 @@ import { jwtDecode } from 'jwt-decode'
 import CryptoJs from 'crypto-js'
 import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
+import { useGameStore } from './useGameStore'
 
 const BACK_END = process.env.NEXT_PUBLIC_BACKEND
 const FRONT_END =
@@ -374,6 +375,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
     const onConnect = () => {
       set({ socketConnected: true })
+      useGameStore.getState().connectSocket()
     }
 
     const onOnlineUsers = (onlineUsers: string[]) => {

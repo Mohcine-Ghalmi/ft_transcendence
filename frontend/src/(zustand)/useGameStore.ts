@@ -60,8 +60,11 @@ export const useGameStore = create<UserState>()((set, get) => ({
   socketConnected: false,
 
   connectSocket: () => {
+    console.log('Connecting to game socket... : ', gameSocketInstance)
+
     if (gameSocketInstance?.connected) return
     const { user } = useAuthStore.getState()
+    console.log('user in connectSocket : ', user)
 
     if (!user) return
 
@@ -76,6 +79,8 @@ export const useGameStore = create<UserState>()((set, get) => ({
       user.email,
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
+    console.log('cryptedMail : ', cryptedMail)
+
     gameSocketInstance = io(BACK_END, {
       withCredentials: true,
       reconnection: false,
