@@ -16,6 +16,7 @@ export function TournamentInviteProvider({ children }) {
   const socket = getGameSocketInstance();
   const [receivedInvites, setReceivedInvites] = useState([]);
   const [isSliding, setIsSliding] = useState({});
+  const [sessionConflicts, setSessionConflicts] = useState(new Set()); // Track conflicts
   const router = useRouter();
 
   useEffect(() => {
@@ -86,10 +87,11 @@ export function TournamentInviteProvider({ children }) {
         return newSliding;
       });
       
-      // Only navigate if this is the invited player (not the host)
+      // ✨ CRITICAL: Only navigate if this is the session that should redirect
+      // Check if this session should redirect based on the redirectToLobby flag
       if (data.inviteeEmail === user.email || data.guestEmail === user.email) {
-        console.log('Navigating to tournament:', data.tournamentId);
-        router.push(`/play/tournament/${data.tournamentId}`);
+        console.log('Invite accepted in this session - should redirect');
+        // Navigation will be handled by the TournamentInviteResponse event
       }
     };
 
@@ -105,18 +107,22 @@ export function TournamentInviteProvider({ children }) {
 
     const handleTournamentInviteResponse = (data) => {
       console.log('Tournament invite response:', data);
-      // This handles the response when the current user accepts an invite
-      if (data.status === 'success' && data.tournamentId) {
+      
+      // ✨ CRITICAL: Only redirect if this session should redirect
+      if (data.status === 'success' && data.redirectToLobby && data.tournamentId) {
+        console.log('This session should redirect to tournament lobby');
         setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
         setIsSliding(prev => {
           const newSliding = { ...prev };
           delete newSliding[data.inviteId];
           return newSliding;
         });
-        // Redirect to tournament lobby immediately with shorter timeout for better UX
+        
+        // Redirect to tournament lobby with shorter timeout for better UX
         setTimeout(() => {
           router.push(`/play/tournament/${data.tournamentId}`);
         }, 300);
+        
       } else if (data.status === 'error') {
         setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
         setIsSliding(prev => {
@@ -133,7 +139,36 @@ export function TournamentInviteProvider({ children }) {
       setReceivedInvites(prev => prev.filter(invite => invite.tournamentId !== data.tournamentId));
     };
 
-    // NEW: Handle cleanup from other sessions
+    // ✨ NEW: Handle session conflicts
+    const handleTournamentSessionConflict = (data) => {
+      console.log('Tournament session conflict:', data.type, data.message);
+      
+      if (data.type === 'another_session_joined' || data.type === 'match_starting_elsewhere') {
+        // Another session is handling the tournament, this session should stay idle
+        setSessionConflicts(prev => new Set([...prev, data.tournamentId]));
+        
+        // Show a subtle notification that tournament is active elsewhere
+        // You might want to show a toast or status message here
+        console.log(`Tournament ${data.tournamentId} is active in another session`);
+      }
+    };
+
+    // ✨ NEW: Handle session takeover notifications
+    const handleTournamentSessionTakenOver = (data) => {
+      console.log('Tournament session taken over:', data.tournamentId);
+      
+      // Remove from conflicts as this session is no longer active
+      setSessionConflicts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(data.tournamentId);
+        return newSet;
+      });
+      
+      // You might want to show a notification that the session was taken over
+      console.log('Tournament session was taken over by another browser/tab');
+    };
+
+    // Handle cleanup from other sessions
     const handleTournamentInviteCleanup = (data) => {
       console.log('Cleaning up tournament invite in inactive session:', data.inviteId, data.action);
       
@@ -147,7 +182,6 @@ export function TournamentInviteProvider({ children }) {
       // Optional: Show a brief notification that the invite was handled elsewhere
       if (data.action === 'accepted') {
         console.log('Tournament invite was accepted in another session');
-        // You could show a toast notification here
       } else if (data.action === 'declined') {
         console.log('Tournament invite was declined in another session');
       } else if (data.action === 'canceled') {
@@ -165,7 +199,9 @@ export function TournamentInviteProvider({ children }) {
     socket.on("TournamentInviteDeclined", handleTournamentInviteDeclined);
     socket.on("TournamentInviteResponse", handleTournamentInviteResponse);
     socket.on("TournamentCancelled", handleTournamentCancelled);
-    socket.on("TournamentInviteCleanup", handleTournamentInviteCleanup); // NEW listener
+    socket.on("TournamentInviteCleanup", handleTournamentInviteCleanup);
+    socket.on("TournamentSessionConflict", handleTournamentSessionConflict);
+    socket.on("TournamentSessionTakenOver", handleTournamentSessionTakenOver);
 
     // Cleanup event listeners on unmount
     return () => {
@@ -176,7 +212,9 @@ export function TournamentInviteProvider({ children }) {
       socket.off("TournamentInviteDeclined", handleTournamentInviteDeclined);
       socket.off("TournamentInviteResponse", handleTournamentInviteResponse);
       socket.off("TournamentCancelled", handleTournamentCancelled);
-      socket.off("TournamentInviteCleanup", handleTournamentInviteCleanup); // NEW cleanup
+      socket.off("TournamentInviteCleanup", handleTournamentInviteCleanup);
+      socket.off("TournamentSessionConflict", handleTournamentSessionConflict);
+      socket.off("TournamentSessionTakenOver", handleTournamentSessionTakenOver);
     };
   }, [socket, user?.email, router]);
 
@@ -225,7 +263,7 @@ export function TournamentInviteProvider({ children }) {
     });
   };
   
-  // Helper functions for compatibility with OnlineTournament component
+  // Helper functions for compatibility
   const hasPendingInviteWith = (email) => {
     return receivedInvites.some(invite => invite.hostData?.email === email);
   };
@@ -234,8 +272,23 @@ export function TournamentInviteProvider({ children }) {
     return receivedInvites;
   };
 
+  // Check if a tournament is in conflict (active in another session)
+  const isTournamentInConflict = (tournamentId) => {
+    return sessionConflicts.has(tournamentId);
+  };
+
   return (
-    <TournamentInviteContext.Provider value={{ socket, receivedInvites, acceptInvite, declineInvite, clearInvite, hasPendingInviteWith, getPendingInvites }}>
+    <TournamentInviteContext.Provider value={{ 
+      socket, 
+      receivedInvites, 
+      acceptInvite, 
+      declineInvite, 
+      clearInvite, 
+      hasPendingInviteWith, 
+      getPendingInvites,
+      isTournamentInConflict,
+      sessionConflicts
+    }}>
       {children}
       {receivedInvites.map((invite, index) => (
         <div 
