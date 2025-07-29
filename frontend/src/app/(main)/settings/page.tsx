@@ -192,7 +192,7 @@ const Settings = () => {
       const formData = new FormData()
       formData.append('file', image)
       try {
-        const res = await axiosChatInstance.post('/api/chat/postImage', formData)
+        const res = await axiosChatInstance.post('/postImage', formData)
         toast.success('Image uploaded successfully')
         return res.data.filename
       } catch (err: any) {
@@ -209,7 +209,7 @@ const Settings = () => {
           return
         }
       }
-      const res = await axiosInstance.post('/api/users/updateUserData', {
+      const res = await axiosInstance.post('/users/updateUserData', {
         username: formData.username,
         email: formData.email,
         login: formData.login,

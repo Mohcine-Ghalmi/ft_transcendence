@@ -19,7 +19,7 @@ const Card = ({ number, text }) => {
   )
 }
 
-const TopProfile = ({ user }) => {
+export const TopProfile = ({ user }) => {
   const {
     user: me,
     isLoading: isBlocking,
@@ -120,11 +120,11 @@ const TopProfile = ({ user }) => {
   )
 }
 
-const MatchHistory = ({ user }) => {
+export const MatchHistory = ({ user }) => {
   return <div>MatchHistory</div>
 }
 
-const State = ({ user }) => {
+export const State = ({ user }) => {
   const { userDetails } = useAuthStore()
   const total = userDetails?.wins + userDetails?.losses
   const winRate = total ? ((userDetails?.wins / total) * 100).toFixed(1) : 0
@@ -148,7 +148,7 @@ const State = ({ user }) => {
   )
 }
 
-const Level = ({ user }) => {
+export const Level = ({ user }) => {
   const width = 100
   const [progress, setProgress] = useState(0)
   const { userDetails } = useAuthStore()
@@ -181,38 +181,6 @@ const Level = ({ user }) => {
     </div>
   )
 }
-
-// export const Profile = ({ user }) => {
-//   const [isSelected, setIsSelected] = useState(false)
-//   return (
-//     <div className="w-[80%] h-[90vh] mt-15">
-//       <TopProfile user={user} />
-//       <Level user={user} />
-//       {/* select */}
-//       <div className="mt-10 flex items-center gap-6 my-4">
-//         <button
-//           onClick={() => setIsSelected(false)}
-//           className={`${
-//             !isSelected && 'border-white'
-//           } border-b border-transparent text-xl p-6 duration-75`}
-//         >
-//           State
-//         </button>
-//         <button
-//           onClick={() => setIsSelected(true)}
-//           className={`${
-//             isSelected && 'border-white'
-//           } border-b border-transparent text-xl p-6 duration-75`}
-//         >
-//           Match History
-//         </button>
-//       </div>
-//       <div className=" flex flex-col items-center justify-center w-full">
-//         {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
-//       </div>
-//     </div>
-//   )
-// }
 
 export default function Page() {
   const { user: me, getUser, getUserDetails, userDetails } = useAuthStore()

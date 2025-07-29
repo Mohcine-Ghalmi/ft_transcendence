@@ -11,9 +11,7 @@ const Page = () => {
 
   const getQr = async () => {
     try {
-      const res = await axiosInstance.get(
-        `/api/user-service/2fa/generateQRCode`
-      )
+      const res = await axiosInstance.get(`/2fa/generateQRCode`)
       setQrCode(res.data.qrCode)
       setSecret(res.data.secret)
     } catch (err) {
@@ -33,13 +31,10 @@ const Page = () => {
       return
     }
     try {
-      const res = await axiosInstance.post(
-        `/api/user-service/2fa/verifyQRCode`,
-        {
-          secret,
-          token: token.trim(),
-        }
-      )
+      const res = await axiosInstance.post(`/2fa/verifyQRCode`, {
+        secret,
+        token: token.trim(),
+      })
 
       if (res.data.verified) {
         toast.success('2FA enabled successfully')
@@ -55,9 +50,7 @@ const Page = () => {
 
   const handleDisableTwoFA = async () => {
     try {
-      const res = await axiosInstance.post(
-        `/api/user-service/2fa/disableQRCode`
-      )
+      const res = await axiosInstance.post(`/2fa/disableQRCode`)
       if (res.data.success) {
         toast.success('2FA disabled successfully')
         setUser2FAStatus(false)

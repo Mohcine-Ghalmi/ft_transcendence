@@ -37,7 +37,7 @@ export const useSearchStore = create<useSearch>((set, get) => ({
   getRandomFriendsSuggestions: async () => {
     try {
       const { user } = useAuthStore.getState()
-      const res = await axiosInstance.post('/api/users/getRandomFriends', {
+      const res = await axiosInstance.post('/users/getRandomFriends', {
         email: user.email,
       })
       set({ randomFriendsSuggestions: res.data.friends })

@@ -459,8 +459,9 @@ export default function OnlineMatch() {
         clearCountdown()
 
         // Check if we're the host (we have isHostNotification flag OR we were in waiting_response state)
-        const isCurrentSessionHost = data.isHostNotification || gameState === 'waiting_response'
-        
+        const isCurrentSessionHost =
+          data.isHostNotification || gameState === 'waiting_response'
+
         if (isCurrentSessionHost) {
           // We are the host - use guest data
           setIsHost(true)
@@ -493,7 +494,7 @@ export default function OnlineMatch() {
     }
 
     const handleGameInviteDeclined = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
+      if (!isThisSessionEvent(data.gameId)) return
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -501,15 +502,17 @@ export default function OnlineMatch() {
       setWaitTime(0)
       clearCountdown()
 
-      toast.error(`${data.guestLogin || data.guestName} declined your invitation.`)
+      toast.error(
+        `${data.guestLogin || data.guestName} declined your invitation.`
+      )
 
       resetGameState()
       router.push('/play')
     }
 
     const handleGameInviteTimeout = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
-      
+      if (!isThisSessionEvent(data.gameId)) return
+
       setIsInviting(false)
       setInvitedPlayer(null)
       setIsWaitingForResponse(false)
@@ -521,7 +524,7 @@ export default function OnlineMatch() {
     }
 
     const handleGameInviteCanceled = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
+      if (!isThisSessionEvent(data.gameId)) return
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -551,7 +554,7 @@ export default function OnlineMatch() {
     }
 
     const handlePlayerLeft = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
+      if (!isThisSessionEvent(data.gameId)) return
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -576,7 +579,7 @@ export default function OnlineMatch() {
     }
 
     const handleGameEnded = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
+      if (!isThisSessionEvent(data.gameId)) return
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -615,7 +618,7 @@ export default function OnlineMatch() {
     }
 
     const handleGameCanceled = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
+      if (!isThisSessionEvent(data.gameId)) return
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -629,7 +632,7 @@ export default function OnlineMatch() {
     }
 
     const handleGameStartResponse = (data) => {
-      if (!isThisSessionEvent(gameId)) return;
+      if (!isThisSessionEvent(gameId)) return
 
       if (data.status === 'success') {
         if (!isHost) {
@@ -642,7 +645,7 @@ export default function OnlineMatch() {
     }
 
     const handleGameStarted = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
+      if (!isThisSessionEvent(data.gameId)) return
 
       if (data.gameId === gameId) {
         setGameState('in_game')
@@ -650,7 +653,7 @@ export default function OnlineMatch() {
     }
 
     const handleGameEndedByOpponentLeave = (data) => {
-      if (!isThisSessionEvent(data.gameId)) return;
+      if (!isThisSessionEvent(data.gameId)) return
 
       setIsInviting(false)
       setInvitedPlayer(null)
@@ -761,7 +764,7 @@ export default function OnlineMatch() {
 
       try {
         const res = await axiosInstance.get(
-          `/api/users/friends?email=${user.email}`
+          `/users/friends?email=${user.email}`
         )
 
         const data = res.data
@@ -903,7 +906,7 @@ export default function OnlineMatch() {
           <p>Game is being handled in another session</p>
         </div>
       )}
-      
+
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-7xl">

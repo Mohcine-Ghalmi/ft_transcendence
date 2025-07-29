@@ -54,7 +54,7 @@ export default function VerifyOtp({ email }) {
     setTimeout(async () => {
       if (!email) return
       try {
-        const res = await axiosInstance.post('/api/users/verify-otp', {
+        const res = await axiosInstance.post('/verify-otp', {
           otp,
           email,
         })

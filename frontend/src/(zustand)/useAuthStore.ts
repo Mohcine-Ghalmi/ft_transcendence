@@ -13,7 +13,7 @@ const FRONT_END =
   process.env.NEXT_PUBLIC_FRONTEND || process.env.NEXT_PUBLIC_FRONEND
 
 export const axiosInstance = axios.create({
-  baseURL: BACK_END,
+  baseURL: `${BACK_END}/api/user-service`,
   withCredentials: true,
 })
 
@@ -101,7 +101,7 @@ interface UserState {
   logout: () => Promise<void>
   connectSocket: () => void
   disconnectSocket: () => void
-  googleLogin: (data: any) => Promise<void>
+  // googleLogin: (data: any) => Promise<void>
   notifications: any
   setNotifations: (data: any) => void
   seachedUsers: any
@@ -137,12 +137,9 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   getUserDetails: async (email: string) => {
     try {
-      const res = await axiosInstance.post(
-        '/api/user-service/users/getUserDetails',
-        {
-          email,
-        }
-      )
+      const res = await axiosInstance.post('/users/getUserDetails', {
+        email,
+      })
       const data: UserDetails = res.data
       get().setUserDetails(data)
     } catch (err) {
@@ -165,7 +162,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
   getUser: async () => {
     try {
-      const res = await axiosInstance.get('/api/user-service/users/me')
+      const res = await axiosInstance.get('/users/me')
       get().setUser(res.data.user)
     } catch (err) {
       get().setUser(null)
@@ -182,7 +179,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         return false
       }
 
-      const res = await axiosInstance.get('/api/user-service/users/getMe')
+      const res = await axiosInstance.get('/users/getMe')
       const { user } = res.data
       if (user) {
         set({ user, isAuthenticated: true })
@@ -200,32 +197,32 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
   },
 
-  googleLogin: async (data: any): Promise<void> => {
-    if (get().user) return Promise.resolve()
-    set({ isLoading: true })
+  // googleLogin: async (data: any): Promise<void> => {
+  //   if (get().user) return Promise.resolve()
+  //   set({ isLoading: true })
 
-    try {
-      const byte = CryptoJs.AES.encrypt(
-        JSON.stringify(data),
-        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-      )
-      const res = await axios.post(`/api/login`, data)
+  //   try {
+  //     const byte = CryptoJs.AES.encrypt(
+  //       JSON.stringify(data),
+  //       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
+  //     )
+  //     const res = await axios.post(`/api/login`, data)
 
-      if (res?.status === 200) {
-        const { accessToken, ...user } = res.data
-        set({ user, isAuthenticated: true })
-        toast.success('Login successful!')
-      } else {
-        toast.warning(res.data?.message || 'Login failed')
-      }
-    } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || err.message || 'Login failed'
-      toast.error(errorMessage)
-    } finally {
-      set({ isLoading: false })
-    }
-  },
+  //     if (res?.status === 200) {
+  //       const { accessToken, ...user } = res.data
+  //       set({ user, isAuthenticated: true })
+  //       toast.success('Login successful!')
+  //     } else {
+  //       toast.warning(res.data?.message || 'Login failed')
+  //     }
+  //   } catch (err: any) {
+  //     const errorMessage =
+  //       err.response?.data?.message || err.message || 'Login failed'
+  //     toast.error(errorMessage)
+  //   } finally {
+  //     set({ isLoading: false })
+  //   }
+  // },
 
   register: async (data: any) => {
     set({ isLoading: true })
@@ -234,10 +231,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(
-        `/api/user-service/v2/api/users/register`,
-        data
-      )
+      const res = await axiosInstance.post(`/v2/api/users/register`, data)
       console.log(res)
 
       if (!res.data) {
@@ -270,10 +264,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   }) => {
     set({ isLoading: true })
     try {
-      const res = await axiosInstance.post(
-        `/api/user-service/users/changePassword`,
-        data
-      )
+      const res = await axiosInstance.post(`/users/changePassword`, data)
       if (res?.status === 200) {
         toast.success('Password changed successfully!')
         return true
@@ -298,10 +289,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      const res = await axiosInstance.post(
-        `/api/user-service/v2/api/users/login`,
-        data
-      )
+      const res = await axiosInstance.post(`/v2/api/users/login`, data)
       console.log(res.data)
 
       if (!res.data) {
@@ -337,7 +325,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   logout: async () => {
     try {
-      const res = await axiosInstance.post(`/api/user-service/users/logout`)
+      const res = await axiosInstance.post(`/users/logout`)
       if (res?.status === 200) {
         toast.success('Logout successful!')
       } else {
@@ -399,6 +387,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     const onConnectError = (err: Error) => {
       console.log('Socket connection error:', err.message)
       set({ socketConnected: false })
+      get().logout()
     }
 
     const onNewNotification = (notifications: any) => {
@@ -554,5 +543,4 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 }))
 
-// Export socket instance for direct access if needed
 export const getSocketInstance = () => socketInstance

@@ -22,6 +22,57 @@ export async function cleanupStaleSocketsOnStartup() {
   }
 }
 
+async function checkSocketConnection(socket: any) {
+  if (!socket || !socket.handshake || !socket.handshake.query) {
+    return null
+  }
+  const key = process.env.ENCRYPTION_KEY || ''
+  if (!key) {
+    socket.emit('error-in-connection', {
+      status: 'error',
+      message: 'ENCRYPTION_KEY is not set in environment variables',
+    })
+    socket.disconnect(true)
+    return null
+  }
+  let userEmail: string = ''
+  try {
+    const cryptedMail = socket.handshake.query.cryptedMail
+
+    userEmail = CryptoJS.AES.decrypt(cryptedMail as string, key).toString(
+      CryptoJS.enc.Utf8
+    )
+    console.log('userEmail : ', userEmail)
+
+    if (!userEmail) {
+      socket.emit('error-in-connection', {
+        status: 'error',
+        message: 'Invalid email format',
+      })
+      socket.disconnect(true)
+      return null
+    }
+    const me = await getUserByEmail(userEmail)
+    console.log('me : ', me)
+
+    if (!me) {
+      socket.emit('error-in-connection', {
+        status: 'error',
+        message: 'User not found',
+      })
+      socket.disconnect(true)
+      return null
+    }
+    return me
+  } catch (err) {
+    socket.emit('error-in-connection', {
+      status: 'error',
+      message: 'Invalid email format',
+    })
+    socket.disconnect(true)
+    return null
+  }
+}
 export async function setupSocketIO(server: FastifyInstance) {
   // the game server running on :5007
   const subClient = redis.duplicate()
@@ -39,38 +90,20 @@ export async function setupSocketIO(server: FastifyInstance) {
   io.adapter(createAdapter(redis, subClient))
 
   io.on('connection', async (socket) => {
-    const key = process.env.ENCRYPTION_KEY || ''
     try {
-      const cryptedMail = socket.handshake.query.cryptedMail
+      const me: any | null = await checkSocketConnection(socket)
 
-      const userEmail = CryptoJS.AES.decrypt(
-        cryptedMail as string,
-        key
-      ).toString(CryptoJS.enc.Utf8)
+      if (!me) return
 
-      if (userEmail) {
-        const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
-        const me: any = await getUserByEmail(email)
-        if (!me) {
-          return socket.emit('error-in-connection', {
-            status: 'error',
-            message: 'User not found',
-          })
-        }
-
-        addSocketId(email, socket.id, 'sockets')
-
-        // Store user email on socket for later use
-        ;(socket as any).userEmail = email
-        socket.data = { userEmail: email }
-      }
+      addSocketId(me.email, socket.id, 'sockets')
+      ;(socket as any).userEmail = me.email
+      socket.data = { userEmail: me.email }
 
       handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {
-        if (userEmail) {
-          const email = Array.isArray(userEmail) ? userEmail[0] : userEmail
-          removeSocketId(email, socket.id, 'sockets')
+        if (me.userEmail) {
+          removeSocketId(me.email, socket.id, 'sockets')
         }
       })
     } catch (error) {

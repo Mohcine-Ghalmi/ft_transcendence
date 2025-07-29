@@ -159,5 +159,5 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: ../sqlite_db
+      device: /goinfre/${USER}/sqlite_db
       o: bind

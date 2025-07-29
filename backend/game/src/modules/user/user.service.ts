@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 export const axiosMainInstance = axios.create({
-  baseURL: `${process.env.MAIN_BACKEND_URL}/users`,
+  baseURL: `http://localhost:5005/api/user-service/users`,
   withCredentials: true,
 })
 
