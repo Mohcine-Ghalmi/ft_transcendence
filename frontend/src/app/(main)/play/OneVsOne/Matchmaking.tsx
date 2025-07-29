@@ -455,7 +455,6 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
         })
       } else if (data.leaver === user.email) {
         setErrorMessage('You left the match and received a loss.')
-        // Navigate back to play page after a delay
         setTimeout(() => {
           if (isActiveRef.current) {
             onBack()

@@ -99,7 +99,6 @@ async function processGameDisconnect(userEmail: string, io: Server) {
 
   // If game is in progress, mark the other player as winner and save to match history
   if (gameRoom.status === 'in_progress') {
-    console.log(`[Disconnect] Processing game forfeit for ${userEmail} in game ${currentGameId}`);
     
     // Mark game as being processed
     processingGames.add(currentGameId);
@@ -156,7 +155,6 @@ async function processGameDisconnect(userEmail: string, io: Server) {
     
   } else if (gameRoom.status === 'accepted') {
     // Game was accepted but not started yet - mark as canceled
-    console.log(`[Disconnect] Canceling accepted game ${currentGameId} due to player disconnect`);
     
     processingGames.add(currentGameId);
     

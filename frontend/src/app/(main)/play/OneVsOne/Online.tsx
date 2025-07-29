@@ -145,20 +145,20 @@ const WaitingPage = ({
   )
 }
 
-const WaitingForResponseModal = ({ player, waitTime, onCancel }) => {
+const WaitingForResponseModal = ({ currentUser, invitedPlayer, waitTime, onCancel }) => {
   return (
     <div className="flex flex-row items-center justify-center">
       <div className="max-w-7xl mx-auto text-center">
         <h2 className="text-3xl font-semibold text-white mb-12"></h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 md:gap-80 mb-12 md:mb-20">
-          {/* Player 1 */}
-          <PlayerCard player={player} playerNumber={1} onAddPlayer={() => {}} />
+          {/* Player 1 - Current User (Host) */}
+          <PlayerCard player={currentUser} playerNumber={1} onAddPlayer={() => {}} />
 
           {/* Player 2 - Waiting for Response */}
           <div className="flex items-center">
             <div className="flex flex-col items-center">
               <p className="text-white text-lg mb-8">
-                Waiting for {player?.name} to respond...
+                Waiting for {invitedPlayer?.name} to respond...
               </p>
 
               {/* Progress Bar */}
@@ -245,6 +245,24 @@ export default function OnlineMatch() {
     }
   }
 
+  // UPDATED: Helper function to handle guest leaving during waiting phase
+  const handleGuestLeaveWaiting = () => {
+    if (
+      !isHost &&
+      gameId &&
+      receivedInvite &&
+      socket &&
+      user?.email
+    ) {
+      // Guest is leaving while waiting to respond to invite
+      socket.emit('DeclineGameInvite', { 
+        gameId, 
+        guestEmail: user.email,
+        reason: 'guest_left_page'
+      })
+    }
+  }
+
   // Helper function to check if this session should handle the event
   const isThisSessionEvent = (eventGameId) => {
     return currentSessionGameId === eventGameId || gameId === eventGameId
@@ -281,7 +299,7 @@ export default function OnlineMatch() {
     return () => clearTimeout(timeoutId)
   }, [])
 
-  // Handle route changes and page navigation
+  // UPDATED: Handle route changes and page navigation with guest handling
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -315,6 +333,15 @@ export default function OnlineMatch() {
             gameId,
             hostEmail: user.email,
           })
+        } else if (
+          // ADDED: Handle guest leaving during waiting phase
+          !isHost &&
+          gameId &&
+          receivedInvite &&
+          socket &&
+          user?.email
+        ) {
+          handleGuestLeaveWaiting()
         }
       }
 
@@ -349,6 +376,15 @@ export default function OnlineMatch() {
           gameId,
           hostEmail: user.email,
         })
+      } else if (
+        // ADDED: Handle guest leaving during waiting phase
+        !isHost &&
+        gameId &&
+        receivedInvite &&
+        socket &&
+        user?.email
+      ) {
+        handleGuestLeaveWaiting()
       }
     }
 
@@ -379,6 +415,15 @@ export default function OnlineMatch() {
             gameId,
             hostEmail: user.email,
           })
+        } else if (
+          // ADDED: Handle guest leaving during waiting phase
+          !isHost &&
+          gameId &&
+          receivedInvite &&
+          socket &&
+          user?.email
+        ) {
+          handleGuestLeaveWaiting()
         }
       }
     }
@@ -412,7 +457,7 @@ export default function OnlineMatch() {
       history.pushState = originalPushState
       history.replaceState = originalReplaceState
     }
-  }, [currentPath, gameState, gameId, isHost, socket, user])
+  }, [currentPath, gameState, gameId, isHost, socket, user, receivedInvite]) // UPDATED: Added receivedInvite dependency
 
   // Socket event listeners
   useEffect(() => {
@@ -716,6 +761,10 @@ export default function OnlineMatch() {
           playerEmail: user.email,
         })
       }
+      // ADDED: Handle guest leaving during waiting phase
+      if (!isHost && gameId && receivedInvite && socket && user?.email) {
+        handleGuestLeaveWaiting()
+      }
     }
 
     const handleVisibilityChange = () => {
@@ -726,6 +775,10 @@ export default function OnlineMatch() {
           playerEmail: user.email,
         })
       }
+      // ADDED: Handle guest leaving during waiting phase
+      if (document.hidden && !isHost && gameId && receivedInvite && socket && user?.email) {
+        handleGuestLeaveWaiting()
+      }
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -735,7 +788,7 @@ export default function OnlineMatch() {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [socket, gameId, user?.email])
+  }, [socket, gameId, user?.email, isHost, receivedInvite]) // UPDATED: Added isHost and receivedInvite dependencies
 
   // Handle accepting invite from context
   useEffect(() => {
@@ -978,7 +1031,8 @@ export default function OnlineMatch() {
             ) : (
               // Match Queue / Waiting for Response Interface
               <WaitingForResponseModal
-                player={invitedPlayer}
+                currentUser={user}
+                invitedPlayer={invitedPlayer}
                 waitTime={waitTime}
                 onCancel={handleCancelInvite}
               />

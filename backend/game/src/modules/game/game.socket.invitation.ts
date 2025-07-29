@@ -1,3 +1,5 @@
+// Enhanced game.socket.invitation.ts with validation support
+
 import { Socket, Server } from 'socket.io'
 import CryptoJS from 'crypto-js'
 import crypto from 'crypto'
@@ -16,6 +18,33 @@ export const handleGameInvitation: GameSocketHandler = (
   socket: Socket,
   io: Server
 ) => {
+  // NEW: Validate invitation status
+  socket.on('ValidateInvitation', async (data: { inviteKey: string }) => {
+    try {
+      const { inviteKey } = data
+      if (!inviteKey) {
+        return socket.emit('InvitationValidation', { inviteKey, isValid: false })
+      }
+
+      // Check if there's an active invitation with this key
+      const [hostEmail, guestEmail] = inviteKey.split(':')
+      if (!hostEmail || !guestEmail) {
+        return socket.emit('InvitationValidation', { inviteKey, isValid: false })
+      }
+
+      // Check Redis for any active invitations between these users
+      const hostToGuestInvite = await redis.get(`game_invite:${hostEmail}:${guestEmail}`)
+      const guestToHostInvite = await redis.get(`game_invite:${guestEmail}:${hostEmail}`)
+      
+      const isValid = !!(hostToGuestInvite || guestToHostInvite)
+      
+      socket.emit('InvitationValidation', { inviteKey, isValid })
+    } catch (error) {
+      console.error('Error validating invitation:', error)
+      socket.emit('InvitationValidation', { inviteKey: data.inviteKey, isValid: false })
+    }
+  })
+
   socket.on('InviteToGame', async (encryptedData: string) => {
     try {
       const key = process.env.ENCRYPTION_KEY
@@ -78,20 +107,39 @@ export const handleGameInvitation: GameSocketHandler = (
         })
       }
 
+      // NEW: Clean up any stale invitations first
       const existingGameInvite = await redis.get(`game_invite:${myEmail}:${invitedUserEmail}`)
       if (existingGameInvite) {
-        return socket.emit('InviteToGameResponse', {
-          status: 'error',
-          message: `You already sent an invitation to ${guest.username}.`,
-        })
+        // Check if the actual invitation data still exists
+        const gameId = existingGameInvite
+        const inviteData = await redis.get(`game_invite:${gameId}`)
+        
+        if (!inviteData) {
+          // Stale reference, clean it up
+          await redis.del(`game_invite:${myEmail}:${invitedUserEmail}`)
+        } else {
+          return socket.emit('InviteToGameResponse', {
+            status: 'error',
+            message: `You already sent an invitation to ${guest.username}.`,
+          })
+        }
       }
 
       const reverseGameInvite = await redis.get(`game_invite:${invitedUserEmail}:${myEmail}`)
       if (reverseGameInvite) {
-        return socket.emit('InviteToGameResponse', {
-          status: 'error',
-          message: `${guest.username} has already sent you an invitation. Please check your notifications.`,
-        })
+        // Check if the actual invitation data still exists
+        const gameId = reverseGameInvite
+        const inviteData = await redis.get(`game_invite:${gameId}`)
+        
+        if (!inviteData) {
+          // Stale reference, clean it up
+          await redis.del(`game_invite:${invitedUserEmail}:${myEmail}`)
+        } else {
+          return socket.emit('InviteToGameResponse', {
+            status: 'error',
+            message: `${guest.username} has already sent you an invitation. Please check your notifications.`,
+          })
+        }
       }
 
       const guestSocketIds =
@@ -102,6 +150,7 @@ export const handleGameInvitation: GameSocketHandler = (
           message: `${guest.username} is not online.`,
         })
       }
+      
       const gameId = crypto.randomUUID()
       const inviteData: GameInviteData = {
         gameId,
@@ -222,4 +271,58 @@ export const handleGameInvitation: GameSocketHandler = (
       }
     }
   )
+
+  // NEW: Clean up stale invitations endpoint
+  socket.on('CleanupStaleInvitations', async (data: { userEmail: string }) => {
+    try {
+      const { userEmail } = data
+      if (!userEmail) return
+
+      // Find all invitation keys involving this user
+      const allInviteKeys = await redis.keys('game_invite:*')
+      let cleanedCount = 0
+
+      for (const key of allInviteKeys) {
+        if (key.includes(userEmail)) {
+          const inviteData = await redis.get(key)
+          
+          if (!inviteData) {
+            // Key exists but no data, clean it up
+            await redis.del(key)
+            cleanedCount++
+          } else {
+            try {
+              const parsedData = JSON.parse(inviteData)
+              // Check if it's a valid game invite or just a reference key
+              if (!parsedData.gameId && !parsedData.hostEmail) {
+                // This is a reference key, check if the actual invitation exists
+                const actualInvite = await redis.get(`game_invite:${inviteData}`)
+                if (!actualInvite) {
+                  await redis.del(key)
+                  cleanedCount++
+                }
+              }
+            } catch (parseError) {
+              // Corrupted data, clean it up
+              await redis.del(key)
+              cleanedCount++
+            }
+          }
+        }
+      }
+
+      console.log(`Cleaned up ${cleanedCount} stale invitations for user: ${userEmail}`)
+      
+      socket.emit('StaleInvitationsCleanup', {
+        status: 'success',
+        cleanedCount
+      })
+    } catch (error) {
+      console.error('Error cleaning up stale invitations:', error)
+      socket.emit('StaleInvitationsCleanup', {
+        status: 'error',
+        message: 'Failed to cleanup stale invitations'
+      })
+    }
+  })
 }
