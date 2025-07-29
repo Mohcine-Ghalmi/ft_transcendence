@@ -216,6 +216,43 @@ export const TournamentNotificationProvider = () => {
       }
     };
 
+    // const handleTournamentSessionConflict = (data: any) => {
+    //   if (data.type === 'another_session_joined' || data.type === 'tournament_active_elsewhere') {
+    //     addNotification({
+    //       type: 'session_conflict', // Add 'session_conflict' to the type definition
+    //       title: 'Tournament Session Conflict',
+    //       message: data.message || 'Tournament is active in another session.',
+    //       tournamentId: data.tournamentId,
+    //       autoClose: false,
+    //       conflictType: data.type
+    //     });
+    //   }
+    // };
+    
+    const handleTournamentSessionTakenOver = (data: any) => {
+      addNotification({
+        type: 'tournament_info',
+        title: 'Session Taken Over',
+        message: data.message || 'Your tournament session was taken over by another browser/tab.',
+        autoClose: true,
+        duration: 5000
+      });
+    };
+    
+    const handleTournamentSessionConflictResolved = (data: any) => {
+      if (data.status === 'success' && data.action === 'takeover_completed') {
+        // Clear conflict notifications and refresh the page or redirect
+        clearAllNotifications();
+        addNotification({
+          type: 'tournament_info',
+          title: 'Session Taken Over',
+          message: 'Successfully took over tournament session.',
+          autoClose: true,
+          duration: 3000
+        });
+      }
+    };
+
     const handleTournamentBracketReady = (data: any) => {
       addNotification({
         type: 'bracket_ready',
@@ -253,12 +290,20 @@ export const TournamentNotificationProvider = () => {
     socket.on('GlobalMatchStartingSoon', handleMatchStartingSoon);
     socket.on('GlobalTournamentBracketReady', handleTournamentBracketReady);
     socket.on('GlobalTournamentNotification', handleGlobalTournamentNotification);
+    // socket.on('TournamentSessionConflict', handleTournamentSessionConflict);
+    socket.on('TournamentSessionTakenOver', handleTournamentSessionTakenOver);
+    socket.on('TournamentSessionConflictResolved', handleTournamentSessionConflictResolved);
+
 
     return () => {
       socket.off('GlobalTournamentStarted', handleTournamentStarted);
       socket.off('GlobalMatchStartingSoon', handleMatchStartingSoon);
       socket.off('GlobalTournamentBracketReady', handleTournamentBracketReady);
       socket.off('GlobalTournamentNotification', handleGlobalTournamentNotification);
+      // socket.off('TournamentSessionConflict', handleTournamentSessionConflict);
+      socket.off('TournamentSessionTakenOver', handleTournamentSessionTakenOver);
+      socket.off('TournamentSessionConflictResolved', handleTournamentSessionConflictResolved);
+
     };
   }, [socket, user?.email]);
 
