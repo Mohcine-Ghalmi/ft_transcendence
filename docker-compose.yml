@@ -47,7 +47,7 @@ services:
   #   networks:
   #     - ft_transcendence
   #   healthcheck:
-  #     test: ['CMD', 'curl', '-f', 'http://localhost:5005/healthcheck']
+  #     test: ['CMD', 'curl', '-f', 'http://user-service:5005/healthcheck']
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3
@@ -70,59 +70,59 @@ services:
   #   networks:
   #     - ft_transcendence
   #   healthcheck:
-  #     test: ['CMD', 'curl', '-f', 'http://localhost:5006/healthcheck']
+  #     test: ['CMD', 'curl', '-f', 'http://chat-service:5006/healthcheck']
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3
   #     start_period: 40s
 
   # game-service:
-  #   build: ./backend/game
-  #   image: game-service:v0.1
-  #   container_name: game-service
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./backend/game/.env
-  #   volumes:
-  #     - sqlite_storage:/db
-  #   depends_on:
-  #     sqlite:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - ft_transcendence
-  #   healthcheck:
-  #     test: ['CMD', 'curl', '-f', 'http://localhost:5007/healthcheck']
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
+    # build: ./backend/game
+    # image: game-service:v0.1
+    # container_name: game-service
+    # restart: unless-stopped
+    # env_file:
+    #   - ./backend/game/.env
+    # volumes:
+    #   - sqlite_storage:/db
+    # depends_on:
+    #   sqlite:
+    #     condition: service_healthy
+    #   redis:
+    #     condition: service_healthy
+    # networks:
+    #   - ft_transcendence
+    # healthcheck:
+    #   test: ['CMD', 'curl', '-f', 'http://game-service:5007/healthcheck']
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
 
   # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   image: frontend:v0.1
-  #   container_name: frontend
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./frontend/.env
-  #   healthcheck:
-  #     test: ['CMD', 'curl', '-f', 'http://frontend:3000']
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
-  #   depends_on:
-  #     user-service:
-  #       condition: service_healthy
-  #     game-service:
-  #       condition: service_healthy
-  #     chat-service:
-  #       condition: service_healthy
-  #   networks:
-  #     - ft_transcendence
+    # build:
+    #   context: ./frontend
+    #   dockerfile: Dockerfile
+    # image: frontend:v0.1
+    # container_name: frontend
+    # restart: unless-stopped
+    # env_file:
+    #   - ./frontend/.env
+    # healthcheck:
+    #   test: ['CMD', 'curl', '-f', 'http://frontend:3000']
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+    # depends_on:
+    #   user-service:
+    #     condition: service_healthy
+    #   game-service:
+    #     condition: service_healthy
+    #   chat-service:
+    #     condition: service_healthy
+    # networks:
+    #   - ft_transcendence
 
   # nginx:
   #   build: ./nginx

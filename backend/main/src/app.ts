@@ -166,7 +166,7 @@ async function registerPlugins() {
       },
     },
     startRedirectPath: '/login/42',
-    callbackUri: 'https://localhost/api/user-service/login/42/callback',
+    callbackUri: 'http://localhost:5005/login/42/callback',
   })
   await server.register(fastifyOauth2, {
     name: 'googleOAuth2',
@@ -179,7 +179,7 @@ async function registerPlugins() {
       auth: fastifyOauth2.GOOGLE_CONFIGURATION,
     },
     startRedirectPath: '/login/google',
-    callbackUri: 'https://localhost/api/user-service/login/google/callback',
+    callbackUri: 'http://localhost:5005/login/google/callback',
   })
 
   await server.register(rateLimit, {

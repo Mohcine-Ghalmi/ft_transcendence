@@ -5,12 +5,10 @@ import { toast } from 'react-toastify'
 import CryptoJs from 'crypto-js'
 import axios from 'axios'
 
-const FRONT_END =
-  process.env.NEXT_PUBLIC_FRONTEND || process.env.NEXT_PUBLIC_FRONEND
-const BACK_END = 'http://localhost:5006'
+const FRONT_END = process.env.NEXT_PUBLIC_FRONTEND
 
 export const axiosChatInstance = axios.create({
-  baseURL: `${BACK_END}/api/chat-service`,
+  baseURL: `/api/chat-service`,
   withCredentials: true,
 })
 
@@ -227,7 +225,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
 
-    chatSocket = io(`${BACK_END}/chat`, {
+    chatSocket = io(`http://localhost:5006/chat`, {
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },

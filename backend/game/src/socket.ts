@@ -95,6 +95,8 @@ export async function setupSocketIO(server: FastifyInstance) {
 
       if (!me) return
 
+      console.log('me : ', me)
+
       addSocketId(me.email, socket.id, 'sockets')
       ;(socket as any).userEmail = me.email
       socket.data = { userEmail: me.email }

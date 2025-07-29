@@ -453,6 +453,8 @@ export async function getMe(
   rep: FastifyReply
 ) {
   try {
+    console.log('req.user : ', req.user)
+
     const { email }: any = req.user
 
     const user: any = await getUserByEmail(email)
