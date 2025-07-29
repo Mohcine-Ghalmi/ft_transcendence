@@ -133,6 +133,7 @@ export async function setupSocketIO(server: FastifyInstance) {
       const me: any | null = await checkSocketConnection(socket)
 
       if (!me) return
+      console.log('User connected:', me)
 
       addSocketId(me.email, socket.id, 'sockets')
 

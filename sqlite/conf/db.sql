@@ -45,8 +45,8 @@ CREATE TABLE  FriendRequest (
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (fromEmail, toEmail),
 
-  FOREIGN KEY (fromEmail) REFERENCES User (email) ON DELETE CASCADE,
-  FOREIGN KEY (toEmail) REFERENCES User (email) ON DELETE CASCADE
+  FOREIGN KEY (fromEmail) REFERENCES User (email) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (toEmail) REFERENCES User (email) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE "Block" (
@@ -66,7 +66,7 @@ CREATE TABLE "Notifications" (
     "content" TEXT NOT NULL,
     "isRead" BOOLEAN DEFAULT FALSE,
     "createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY ("userEmail") REFERENCES "User" ("email") ON DELETE CASCADE
+    FOREIGN KEY ("userEmail") REFERENCES "User" ("email") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE "match_history" (
@@ -84,8 +84,8 @@ CREATE TABLE "match_history" (
     "game_mode" TEXT NOT NULL DEFAULT '1v1',
     "status" TEXT NOT NULL DEFAULT 'completed',
     "created_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY ("player1_email") REFERENCES "User" ("email") ON DELETE CASCADE,
-    FOREIGN KEY ("player2_email") REFERENCES "User" ("email") ON DELETE CASCADE,
-    FOREIGN KEY ("winner") REFERENCES "User" ("email") ON DELETE CASCADE,
-    FOREIGN KEY ("loser") REFERENCES "User" ("email") ON DELETE CASCADE
+    FOREIGN KEY ("player1_email") REFERENCES "User" ("email") ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY ("player2_email") REFERENCES "User" ("email") ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY ("winner") REFERENCES "User" ("email") ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY ("loser") REFERENCES "User" ("email") ON DELETE CASCADE ON UPDATE CASCADE
 );

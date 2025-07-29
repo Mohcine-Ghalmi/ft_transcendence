@@ -530,7 +530,7 @@ export async function updateUserData(
 ) {
   try {
     const { email: currentEmail, avatar: oldAvatar }: any = req.user
-    const { login, email: newEmail, username, avatar, type } = req.body
+    const { login, username, avatar, type } = req.body
 
     if (!login || !username) {
       return rep.code(400).send({
@@ -556,14 +556,14 @@ export async function updateUserData(
     if (type === 0) {
       if (avatar) {
         const sql = db.prepare(
-          `UPDATE User SET login = ?, username = ?, avatar = ?, email = ? WHERE email = ?`
+          `UPDATE User SET login = ?, username = ?, avatar = ? WHERE email = ?`
         )
-        sql.run(login, username, avatar, newEmail, currentEmail)
+        sql.run(login, username, avatar, currentEmail)
       } else {
         const sql = db.prepare(
-          `UPDATE User SET login = ?, username = ?, email = ? WHERE email = ?`
+          `UPDATE User SET login = ?, username = ? WHERE email = ?`
         )
-        sql.run(login, username, newEmail, currentEmail)
+        sql.run(login, username, currentEmail)
       }
     } else if (type === 2) {
       if (avatar) {
@@ -594,7 +594,7 @@ export async function updateUserData(
       })
     }
 
-    const user: any = await getUserByEmail(newEmail)
+    const user: any = await getUserByEmail(currentEmail)
     if (!user) {
       return rep.code(404).send({ status: false, message: 'User not found' })
     }
