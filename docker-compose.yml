@@ -20,8 +20,8 @@ services:
     image: redis:v0.1
     container_name: redis
     restart: always
-    ports:
-      - '7001:6379'
+    # ports:
+    #   - '7001:6379'
     networks:
       - ft_transcendence
     healthcheck:
@@ -30,125 +30,119 @@ services:
       timeout: 5s
       retries: 3
 
-  # user-service:
-  #   build: ./backend/main
-  #   image: user-service:v0.1
-  #   container_name: user-service
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./backend/main/.env
-  #   volumes:
-  #     - sqlite_storage:/db
-  #   depends_on:
-  #     sqlite:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - ft_transcendence
-  #   healthcheck:
-  #     test: ['CMD', 'curl', '-f', 'http://user-service:5005/healthcheck']
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
+  user-service:
+    build: ./backend/main
+    image: user-service:v0.1
+    container_name: user-service
+    restart: unless-stopped
+    env_file:
+      - ./backend/main/.env
+    volumes:
+      - sqlite_storage:/db
+    depends_on:
+      sqlite:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ft_transcendence
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://user-service:5005/healthcheck']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # chat-service:
-  #   build: ./backend/chat
-  #   image: chat-service:v0.1
-  #   container_name: chat-service
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./backend/chat/.env
-  #   volumes:
-  #     - sqlite_storage:/db
-  #   depends_on:
-  #     sqlite:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - ft_transcendence
-  #   healthcheck:
-  #     test: ['CMD', 'curl', '-f', 'http://chat-service:5006/healthcheck']
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
+  chat-service:
+    build: ./backend/chat
+    image: chat-service:v0.1
+    container_name: chat-service
+    restart: unless-stopped
+    env_file:
+      - ./backend/chat/.env
+    volumes:
+      - sqlite_storage:/db
+    depends_on:
+      sqlite:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ft_transcendence
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://chat-service:5006/healthcheck']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # game-service:
-    # build: ./backend/game
-    # image: game-service:v0.1
-    # container_name: game-service
-    # restart: unless-stopped
-    # env_file:
-    #   - ./backend/game/.env
-    # volumes:
-    #   - sqlite_storage:/db
-    # depends_on:
-    #   sqlite:
-    #     condition: service_healthy
-    #   redis:
-    #     condition: service_healthy
-    # networks:
-    #   - ft_transcendence
-    # healthcheck:
-    #   test: ['CMD', 'curl', '-f', 'http://game-service:5007/healthcheck']
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 40s
+  game-service:
+    build: ./backend/game
+    image: game-service:v0.1
+    container_name: game-service
+    restart: unless-stopped
+    env_file:
+      - ./backend/game/.env
+    volumes:
+      - sqlite_storage:/db
+    depends_on:
+      sqlite:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ft_transcendence
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://game-service:5007/healthcheck']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # frontend:
-    # build:
-    #   context: ./frontend
-    #   dockerfile: Dockerfile
-    # image: frontend:v0.1
-    # container_name: frontend
-    # restart: unless-stopped
-    # env_file:
-    #   - ./frontend/.env
-    # healthcheck:
-    #   test: ['CMD', 'curl', '-f', 'http://frontend:3000']
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 40s
-    # depends_on:
-    #   user-service:
-    #     condition: service_healthy
-    #   game-service:
-    #     condition: service_healthy
-    #   chat-service:
-    #     condition: service_healthy
-    # networks:
-    #   - ft_transcendence
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: frontend:v0.1
+    container_name: frontend
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://frontend:3000']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      user-service:
+        condition: service_healthy
+      game-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+    networks:
+      - ft_transcendence
 
-  # nginx:
-  #   build: ./nginx
-  #   image: nginx:v0.1
-  #   container_name: nginx
-  #   restart: unless-stopped
-  #   ports:
-  #     - '80:80'
-  #     - '443:443'
-  #   depends_on:
-  #     frontend:
-  #       condition: service_healthy
-  #     user-service:
-  #       condition: service_healthy
-  #     game-service:
-  #       condition: service_healthy
-  #     chat-service:
-  #       condition: service_healthy
-  #   networks:
-  #     - ft_transcendence
-  # healthcheck:
-  #   test: ['CMD', 'curl', '-f', 'http://backend/health']
-  #   interval: 30s
-  #   timeout: 10s
-  #   retries: 3
-  #   start_period: 40s
+  nginx:
+    build: ./nginx
+    image: nginx:v0.1
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    depends_on:
+      frontend:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      game-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+    networks:
+      - ft_transcendence
 
 networks:
   ft_transcendence:

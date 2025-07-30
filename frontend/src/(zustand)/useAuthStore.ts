@@ -270,9 +270,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
       const { status, accessToken, ...user } = res.data
       if (status) {
-        if (accessToken) {
-          localStorage.setItem('accessToken', accessToken)
-        }
+        localStorage.setItem('accessToken', accessToken)
 
         set({ user, isAuthenticated: true })
         get().connectSocket()
@@ -339,7 +337,9 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       user.email,
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
-    socketInstance = io('http://localhost:5005', {
+
+    socketInstance = io('/', {
+      path: '/user-service/socket.io',
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },

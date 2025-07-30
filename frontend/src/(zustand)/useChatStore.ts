@@ -225,11 +225,13 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
 
-    chatSocket = io(`http://localhost:5006/chat`, {
+    chatSocket = io('/chat', {
+      path: '/chat-service/socket.io',
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },
     })
+
     set({ isChatSocketConnected: true })
 
     const onMessagesSeenUpdate = (data: any) => {

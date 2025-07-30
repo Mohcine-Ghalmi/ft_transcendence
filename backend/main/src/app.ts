@@ -112,6 +112,8 @@ async function registerPlugins() {
         process.env.FRONT_END_URL,
         process.env.CHAT_BACKEND_URL,
         process.env.GAME_BACKEND_URL,
+        'http://chat-service:5006',
+        'http://game-service:5007',
         'http://nginx',
         'https://nginx',
         'http://frontend:3000',
@@ -133,7 +135,8 @@ async function registerPlugins() {
   })
 
   await server.register(fastifyStatic, {
-    root: path.resolve(process.cwd(), '../uploads'),
+    // root: path.resolve(process.cwd(), '../uploads'),
+    root: path.resolve(process.cwd(), '/media'),
     prefix: '/images/',
     decorateReply: false,
   })
