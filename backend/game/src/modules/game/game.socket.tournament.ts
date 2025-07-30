@@ -841,6 +841,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
     try {
       const { tournamentId, hostEmail, round, notifyCountdown = 10 } = data;
       
+      console.log(`🎮 StartCurrentRound called:`, { tournamentId, hostEmail, round, notifyCountdown });
+      
       if (!tournamentId || !hostEmail) {
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Missing required data.' });
       }
@@ -864,36 +866,122 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         match.round === currentRound && match.state === 'waiting' && match.player1 && match.player2
       );
       
+      console.log(`🎯 Found ${currentRoundMatches.length} matches to start in round ${currentRound}`);
+      
       if (currentRoundMatches.length === 0) {
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'No matches ready to start in this round.' });
       }
 
-      // Send notifications to all players in these matches with countdown
+      // Send notifications to BOTH active sessions AND all user sessions as fallback
       for (const match of currentRoundMatches) {
         if (!match.player1 || !match.player2) continue;
         
-        // Get socket IDs for both players
-        const player1Sockets = await getSocketIds(match.player1.email, 'sockets') || [];
-        const player2Sockets = await getSocketIds(match.player2.email, 'sockets') || [];
-        
-        // Send global notification to both players
-        const allSockets = [...player1Sockets, ...player2Sockets];
-        
-        allSockets.forEach(socketId => {
-          io.to(socketId).emit('GlobalTournamentNotification', {
-            type: 'match_starting',
-            title: 'Round Starting!',
-            message: `Round ${currentRound + 1} match will begin in ${notifyCountdown} seconds!`,
-            countdown: notifyCountdown,
-            tournamentId: tournamentId,
-            matchId: match.id,
-            autoClose: false,
-            timestamp: Date.now()
-          });
+        console.log(`🔔 Processing match notifications for:`, {
+          player1: match.player1.email,
+          player2: match.player2.email,
+          matchId: match.id
         });
-        // Auto-start the game after countdown - no manual join required
+        
+        // ✨ APPROACH 1: Try active tournament sessions first
+        const player1ActiveSession = getActiveTournamentSession(tournamentId, match.player1.email);
+        const player2ActiveSession = getActiveTournamentSession(tournamentId, match.player2.email);
+        
+        console.log(`🎯 Active sessions:`, {
+          player1: player1ActiveSession,
+          player2: player2ActiveSession
+        });
+        
+        // ✨ APPROACH 2: Get ALL user sessions as fallback
+        const player1AllSockets = await getSocketIds(match.player1.email, 'sockets') || [];
+        const player2AllSockets = await getSocketIds(match.player2.email, 'sockets') || [];
+        
+        console.log(`📡 All user sockets:`, {
+          player1Sockets: player1AllSockets,
+          player2Sockets: player2AllSockets
+        });
+        
+        // ✨ APPROACH 3: Use tournament room as additional fallback
+        const tournamentRoom = `tournament:${tournamentId}`;
+        
+        // Create notification data
+        const notificationData = {
+          type: 'match_starting',
+          title: 'Your Match is Starting!',
+          message: `Your tournament match will begin in ${notifyCountdown} seconds!`,
+          countdown: notifyCountdown,
+          tournamentId: tournamentId,
+          matchId: match.id,
+          autoClose: false,
+          timestamp: Date.now()
+        };
+        
+        // Send to Player 1
+        let player1Notified = false;
+        if (player1ActiveSession) {
+          console.log(`📤 Sending to Player 1 active session: ${player1ActiveSession}`);
+          io.to(player1ActiveSession).emit('GlobalTournamentNotification', {
+            ...notificationData,
+            playerEmail: match.player1.email
+          });
+          player1Notified = true;
+        }
+        
+        // Fallback: Send to ALL Player 1 sessions if active session failed
+        if (!player1Notified && player1AllSockets.length > 0) {
+          console.log(`📤 Fallback: Sending to ALL Player 1 sessions:`, player1AllSockets);
+          player1AllSockets.forEach(socketId => {
+            io.to(socketId).emit('GlobalTournamentNotification', {
+              ...notificationData,
+              playerEmail: match.player1?.email
+            });
+          });
+          player1Notified = true;
+        }
+        
+        // Send to Player 2
+        let player2Notified = false;
+        if (player2ActiveSession) {
+          console.log(`📤 Sending to Player 2 active session: ${player2ActiveSession}`);
+          io.to(player2ActiveSession).emit('GlobalTournamentNotification', {
+            ...notificationData,
+            playerEmail: match.player2.email
+          });
+          player2Notified = true;
+        }
+        
+        // Fallback: Send to ALL Player 2 sessions if active session failed
+        if (!player2Notified && player2AllSockets.length > 0) {
+          console.log(`📤 Fallback: Sending to ALL Player 2 sessions:`, player2AllSockets);
+          player2AllSockets.forEach(socketId => {
+            io.to(socketId).emit('GlobalTournamentNotification', {
+              ...notificationData,
+              playerEmail: match.player2?.email
+            });
+          });
+          player2Notified = true;
+        }
+        
+        // ✨ ADDITIONAL FALLBACK: Broadcast to tournament room
+        console.log(`📤 Broadcasting to tournament room: ${tournamentRoom}`);
+        io.to(tournamentRoom).emit('TournamentMatchCountdown', {
+          ...notificationData,
+          match: {
+            id: match.id,
+            player1: match.player1,
+            player2: match.player2
+          }
+        });
+        
+        console.log(`✅ Notifications sent for match ${match.id}:`, {
+          player1Notified,
+          player2Notified
+        });
+
+        // Auto-start the game after countdown
         setTimeout(async () => {
           try {
+            console.log(`⏰ Countdown finished for match ${match.id}, starting game...`);
+            
             // Get updated tournament data
             const updatedTournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
             if (!updatedTournamentData) return;
@@ -918,11 +1006,10 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
                 matchId: match.id
               };
               
-              // Save game room
+              // Save game room and initialize game state
               await redis.setex(`gameRoom:${gameRoomId}`, 3600, JSON.stringify(gameRoom));
               gameRooms.set(gameRoomId, gameRoom);
               
-              // Initialize game state
               const gameState = {
                 gameId: gameRoomId,
                 ballX: 440,
@@ -962,15 +1049,24 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
               const player1Data = getPlayerData(player1User);
               const player2Data = getPlayerData(player2User);
               
-              // Get socket IDs for both players
-              const player1Sockets = await getSocketIds(match.player1!.email, 'sockets') || [];
-              const player2Sockets = await getSocketIds(match.player2!.email, 'sockets') || [];
-              const allSockets = [...player1Sockets, ...player2Sockets];
+              // ✨ Use the same multi-approach for game redirection
+              const currentPlayer1ActiveSession = getActiveTournamentSession(tournamentId, match.player1!.email);
+              const currentPlayer2ActiveSession = getActiveTournamentSession(tournamentId, match.player2!.email);
               
-              // Send game events to redirect players immediately
-              allSockets.forEach(socketId => {
-                const isPlayer1 = player1Sockets.includes(socketId);
-                
+              const currentPlayer1AllSockets = await getSocketIds(match.player1!.email, 'sockets') || [];
+              const currentPlayer2AllSockets = await getSocketIds(match.player2!.email, 'sockets') || [];
+              
+              console.log(`🎮 Redirecting to game ${gameRoomId}:`, {
+                player1ActiveSession: currentPlayer1ActiveSession,
+                player2ActiveSession: currentPlayer2ActiveSession,
+                player1AllSockets: currentPlayer1AllSockets,
+                player2AllSockets: currentPlayer2AllSockets
+              });
+              
+              // Redirect Player 1
+              const socketsToRedirectP1 = currentPlayer1ActiveSession ? [currentPlayer1ActiveSession] : currentPlayer1AllSockets;
+              socketsToRedirectP1.forEach(socketId => {
+                console.log(`🎮 Redirecting Player 1 socket ${socketId} to game`);
                 io.to(socketId).emit('MatchFound', {
                   gameId: gameRoomId,
                   hostEmail: match.player1!.email,
@@ -982,7 +1078,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
                   isTournament: true,
                   tournamentId: tournamentId,
                   matchId: match.id,
-                  playerPosition: isPlayer1 ? 'player1' : 'player2'
+                  playerPosition: 'player1'
                 });
                 
                 io.to(socketId).emit('GameStarting', {
@@ -995,14 +1091,46 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
                   isTournament: true,
                   tournamentId: tournamentId,
                   matchId: match.id,
-                  playerPosition: isPlayer1 ? 'player1' : 'player2'
+                  playerPosition: 'player1'
+                });
+              });
+              
+              // Redirect Player 2
+              const socketsToRedirectP2 = currentPlayer2ActiveSession ? [currentPlayer2ActiveSession] : currentPlayer2AllSockets;
+              socketsToRedirectP2.forEach(socketId => {
+                console.log(`🎮 Redirecting Player 2 socket ${socketId} to game`);
+                io.to(socketId).emit('MatchFound', {
+                  gameId: gameRoomId,
+                  hostEmail: match.player1!.email,
+                  guestEmail: match.player2!.email,
+                  hostData: player1Data,
+                  guestData: player2Data,
+                  status: 'match_found',
+                  message: 'Tournament match starting now!',
+                  isTournament: true,
+                  tournamentId: tournamentId,
+                  matchId: match.id,
+                  playerPosition: 'player2'
+                });
+                
+                io.to(socketId).emit('GameStarting', {
+                  gameId: gameRoomId,
+                  hostEmail: match.player1!.email,
+                  guestEmail: match.player2!.email,
+                  hostData: player1Data,
+                  guestData: player2Data,
+                  startedAt: gameRoom.startedAt,
+                  isTournament: true,
+                  tournamentId: tournamentId,
+                  matchId: match.id,
+                  playerPosition: 'player2'
                 });
               });
               
               // Send GameStarted after a brief delay
               setTimeout(() => {
-                allSockets.forEach(socketId => {
-                  const isPlayer1 = player1Sockets.includes(socketId);
+                [...socketsToRedirectP1, ...socketsToRedirectP2].forEach(socketId => {
+                  const isPlayer1 = socketsToRedirectP1.includes(socketId);
                   
                   io.to(socketId).emit('GameStarted', {
                     gameId: gameRoomId,
@@ -1024,7 +1152,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
               }, 100);
               
               // Notify tournament participants
-              const tournamentRoom = `tournament:${tournamentId}`;
               io.to(tournamentRoom).emit('TournamentMatchStarted', {
                 tournamentId: tournamentId,
                 match: updatedMatch,
@@ -1041,11 +1168,12 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Send success response to host
       socket.emit('StartCurrentRoundResponse', { 
         status: 'success', 
-        message: `Round ${currentRound + 1} will auto-start in ${notifyCountdown} seconds. Players will be automatically redirected.`,
+        message: `Round ${currentRound + 1} will auto-start in ${notifyCountdown} seconds. Players will be notified via multiple channels.`,
         round: currentRound,
         matchCount: currentRoundMatches.length
       });
     } catch (error) {
+      console.error('Error in StartCurrentRound:', error);
       socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Failed to start round.' });
     }
   });
@@ -1118,27 +1246,35 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Missing required data.' });
       }
       
+      const activeSession = getActiveTournamentSession(tournamentId, playerEmail);
+      if (!activeSession || activeSession !== socket.id) {
+        return socket.emit('JoinTournamentMatchResponse', { 
+          status: 'error', 
+          message: 'This tournament is active in another session. Please use the active session to join matches.',
+          sessionConflict: true
+        });
+      }
+      
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
-      if (!tournamentData) {
-        return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Tournament not found.' });
-      }
-      
-      const tournament: Tournament = JSON.parse(tournamentData);
-      const match = tournament.matches.find(m => m.id === matchId);
-      
-      if (!match) {
-        return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Match not found.' });
-      }
+    if (!tournamentData) {
+      return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Tournament not found.' });
+    }
+    
+    const tournament: Tournament = JSON.parse(tournamentData);
+    const match = tournament.matches.find(m => m.id === matchId);
+    
+    if (!match) {
+      return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Match not found.' });
+    }
       
       // Check if player is part of this match
       const isPlayer1 = match.player1?.email === playerEmail;
       const isPlayer2 = match.player2?.email === playerEmail;
-      
       if (!isPlayer1 && !isPlayer2) {
         return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Player not in this match.' });
       }
-      
+        
       // If match hasn't started yet, create the game room
       if (match.state === 'waiting') {
         // Create game room ID
@@ -1324,17 +1460,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       if (tournament.status === 'canceled') {
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament was canceled.' });
       }
-
-
-      
-      // Join the socket to the tournament room for real-time updates
       const tournamentRoom = `tournament:${tournamentId}`;
       socket.join(tournamentRoom);
-
-
-
-      
-      // Send tournament data to the joining player
       socket.emit('TournamentJoinResponse', { 
         status: 'success', 
         tournament,
@@ -1345,10 +1472,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
           ) : null
       });
 
-
-      
-      // Notify all OTHER participants in the tournament room that this player joined
-      // Only notify if participant exists (not for host viewing completed tournaments)
       if (participant) {
         socket.to(tournamentRoom).emit('TournamentPlayerJoined', {
           tournamentId,

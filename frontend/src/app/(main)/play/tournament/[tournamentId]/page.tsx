@@ -767,20 +767,13 @@ export default function TournamentGamePage() {
   // ✨ NEW: Session conflict resolution UI
   if (sessionConflict && conflictType === 'tournament_active_elsewhere') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
+      <div className="flex items-center justify-center min-h-screen ">
         <div className="text-center max-w-md">
           <h2 className="text-white text-2xl font-bold mb-4">Tournament Session Conflict</h2>
           <p className="text-gray-300 mb-6">
             This tournament is already active in another browser or tab. 
-            You can take over the session or view in read-only mode.
           </p>
           <div className="space-y-3">
-            <button
-              onClick={() => handleResolveSessionConflict('force_takeover')}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
-            >
-              Take Over Tournament Session
-            </button>
             <button
               onClick={() => router.push('/play')}
               className="w-full bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition-colors"
