@@ -18,7 +18,6 @@ export const generateUniqueFilename = (originalFilename: string) => {
 export async function downloadAndSaveImage(imageUrl: string, filename: string) {
   const response = await axios.get(imageUrl, { responseType: 'stream' })
   const filepath = path.join(__dirname, '../../../../uploads', filename)
-  console.log('filepath : ', filepath)
 
   const writer = fs.createWriteStream(filepath)
   response.data.pipe(writer)
@@ -52,7 +51,7 @@ export const signJWT = (
     iat: Math.floor(Date.now() / 1000),
   }
 
-  const accessToken = server.jwt.sign(payload, { expiresIn: '15m' })
+  const accessToken = server.jwt.sign(payload, { expiresIn: '1hr' })
 
   if (setCookie) {
     rep.setCookie('accessToken', accessToken, {
@@ -60,7 +59,7 @@ export const signJWT = (
       secure: false,
       sameSite: 'lax',
       path: '/',
-      maxAge: 15 * 60 * 1000,
+      maxAge: 60 * 60 * 1000,
     })
   }
 
@@ -119,14 +118,10 @@ async function googleRegister(req: FastifyRequest, rep: FastifyReply) {
       `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
     )
   } catch (err: any) {
-    console.log('Google OAuth error:', err)
+    console.log('Google OAuth error:', err.message)
     return rep.redirect(
       `${process.env.FRONT_END_URL}?error=${encodeURIComponent(err.message)}`
     )
-    // return rep.code(500).send({
-    //   error: 'Authentication failed',
-    //   message: err?.message || 'An error occurred during Google login',
-    // })
   }
 }
 
@@ -170,11 +165,10 @@ export async function fortyTwoRegister(req: FastifyRequest, rep: FastifyReply) {
       `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
     )
   } catch (err: any) {
-    console.log('42 OAuth error:', err)
-    return rep.code(500).send({
-      error: 'Authentication failed',
-      message: err?.message || 'An error occurred during 42 login',
-    })
+    console.log('42 OAuth error:', err.message)
+    return rep.redirect(
+      `${process.env.FRONT_END_URL}?error=${encodeURIComponent(err.message)}`
+    )
   }
 }
 
@@ -186,6 +180,7 @@ export async function registerHandler(
 ) {
   try {
     const body = req.body
+    console.log('Registering user:', body)
 
     const newUser = await getUserByEmail(body.email)
     if (newUser)
@@ -198,10 +193,12 @@ export async function registerHandler(
     const { password, salt, ...tmp } = user as any
     const accessToken = signJWT(tmp, rep)
     return rep.code(201).send({ ...tmp, accessToken })
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.log(err)
 
-    return rep.code(500).send({ message: 'Internal server error' })
+    return rep
+      .code(500)
+      .send({ message: err.message || 'Internal server error' })
   }
 }
 

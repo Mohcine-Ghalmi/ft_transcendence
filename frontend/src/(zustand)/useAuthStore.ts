@@ -9,12 +9,10 @@ import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
 import { useGameStore } from './useGameStore'
 
-const BACK_END = process.env.NEXT_PUBLIC_BACKEND
-const FRONT_END =
-  process.env.NEXT_PUBLIC_FRONTEND || process.env.NEXT_PUBLIC_FRONEND
+const FRONT_END = process.env.NEXT_PUBLIC_FRONTEND
 
 export const axiosInstance = axios.create({
-  baseURL: `${BACK_END}/api/user-service`,
+  baseURL: `/api/user-service`,
   withCredentials: true,
 })
 
@@ -198,33 +196,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
   },
 
-  // googleLogin: async (data: any): Promise<void> => {
-  //   if (get().user) return Promise.resolve()
-  //   set({ isLoading: true })
-
-  //   try {
-  //     const byte = CryptoJs.AES.encrypt(
-  //       JSON.stringify(data),
-  //       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-  //     )
-  //     const res = await axios.post(`/api/login`, data)
-
-  //     if (res?.status === 200) {
-  //       const { accessToken, ...user } = res.data
-  //       set({ user, isAuthenticated: true })
-  //       toast.success('Login successful!')
-  //     } else {
-  //       toast.warning(res.data?.message || 'Login failed')
-  //     }
-  //   } catch (err: any) {
-  //     const errorMessage =
-  //       err.response?.data?.message || err.message || 'Login failed'
-  //     toast.error(errorMessage)
-  //   } finally {
-  //     set({ isLoading: false })
-  //   }
-  // },
-
   register: async (data: any) => {
     set({ isLoading: true })
     try {
@@ -299,9 +270,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
       const { status, accessToken, ...user } = res.data
       if (status) {
-        if (accessToken) {
-          localStorage.setItem('accessToken', accessToken)
-        }
+        localStorage.setItem('accessToken', accessToken)
 
         set({ user, isAuthenticated: true })
         get().connectSocket()
@@ -361,13 +330,16 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.off('disconnect')
       socketInstance.off('connect_error')
       socketInstance.off('getOnlineUsers')
+      useGameStore.getState().disconnectSocket()
       socketInstance.disconnect()
     }
     const cryptedMail = CryptoJs.AES.encrypt(
       user.email,
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
-    socketInstance = io(BACK_END, {
+
+    socketInstance = io('/', {
+      path: '/user-service/socket.io',
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },
@@ -521,6 +493,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   disconnectSocket: () => {
+    useGameStore.getState().disconnectSocket()
     if (socketInstance) {
       socketInstance.off('connect')
       socketInstance.off('disconnect')

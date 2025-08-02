@@ -9,11 +9,11 @@ import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
 import { useAuthStore } from './useAuthStore'
 
-const BACK_END = 'http://localhost:5007'
-const FRONT_END = process.env.NEXT_PUBLIC_FRONEND
+const FRONT_END = process.env.NEXT_PUBLIC_FRONTEND
 
 export const axiosGameInstance = axios.create({
-  baseURL: `${BACK_END}`,
+  // baseURL: `${BACK_END}`,
+  baseURL: '/api/game-service',
   withCredentials: true,
 })
 
@@ -81,7 +81,8 @@ export const useGameStore = create<UserState>()((set, get) => ({
     )
     console.log('cryptedMail : ', cryptedMail)
 
-    gameSocketInstance = io(BACK_END, {
+    gameSocketInstance = io('/', {
+      path: '/game-service/socket.io',
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },
