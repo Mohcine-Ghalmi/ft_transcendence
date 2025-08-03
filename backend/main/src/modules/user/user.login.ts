@@ -8,6 +8,7 @@ import crypto from 'crypto'
 import path from 'path'
 import axios from 'axios'
 import fs from 'fs'
+const { pipeline } = require('stream/promises')
 
 export const generateUniqueFilename = (originalFilename: string) => {
   const timestamp = Date.now()
@@ -17,7 +18,7 @@ export const generateUniqueFilename = (originalFilename: string) => {
 }
 export async function downloadAndSaveImage(imageUrl: string, filename: string) {
   const response = await axios.get(imageUrl, { responseType: 'stream' })
-  const filepath = path.join(__dirname, '../../../../uploads', filename)
+  const filepath = path.join(process.cwd(), '../media', filename)
 
   const writer = fs.createWriteStream(filepath)
   response.data.pipe(writer)
@@ -28,15 +29,53 @@ export async function downloadAndSaveImage(imageUrl: string, filename: string) {
   })
 }
 
-// {
-//   id: '116279595096157558841',
-//   email: 'cbamiixsimo@gmail.com',
-//   verified_email: true,
-//   name: 'med sarda',
-//   given_name: 'med',
-//   family_name: 'sarda',
-//   picture: 'https://lh3.googleusercontent.com/a/ACg8ocJURU_hS6TmyQWN0Bhdy0ZjPb_0OZK1BJ-pipO1JHwABItAWeY3=s96-c'
-// }
+export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    if (!request.isMultipart()) {
+      return reply
+        .status(400)
+        .send({ status: false, message: 'Request is not multipart' })
+    }
+
+    const data = await request.file()
+
+    if (!data) {
+      return reply
+        .status(400)
+        .send({ status: false, message: 'No file provided' })
+    }
+
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    ]
+    if (!allowedMimeTypes.includes(data.mimetype)) {
+      return reply.status(400).send({
+        status: false,
+        message: 'Only JPEG, PNG, GIF and WebP images are allowed',
+      })
+    }
+
+    const filename = generateUniqueFilename(data.filename)
+
+    const filepath = path.join(process.cwd(), '../media', filename)
+    console.log('filepath : ', filepath)
+
+    await pipeline(data.file, fs.createWriteStream(filepath))
+
+    return {
+      success: true,
+      filename,
+    }
+  } catch (err) {
+    request.log.error(err)
+    return reply
+      .status(500)
+      .send({ status: false, message: 'Failed to upload image' })
+  }
+}
 
 export const signJWT = (
   user: any,

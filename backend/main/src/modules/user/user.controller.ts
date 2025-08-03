@@ -544,7 +544,7 @@ export async function updateUserData(
     /// /goinfre/msarda/tmp/uploads
     if (avatar && oldAvatar !== 'default.avif') {
       try {
-        const filePath = path.join(__dirname, '../../../uploads', oldAvatar)
+        const filePath = path.join(__dirname, '../media', oldAvatar)
         console.log('Deleting file at:', filePath)
         await fsPromises.access(filePath)
         await fsPromises.unlink(filePath)

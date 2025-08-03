@@ -377,6 +377,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
           })
           break
         case 'friend_request':
+          console.log(
+            'searchedUsersGlobal : ',
+            useSearchStore.getState().searchedUsersGlobal
+          )
+
           const friendNotification = {
             message: notifications.message,
             type: 'friend_request',

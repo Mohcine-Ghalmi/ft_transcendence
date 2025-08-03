@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation'
 import { useChatStore } from '@/(zustand)/useChatStore'
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 
-export const useFriend = (user) => {
+export const useFriend = ({ user }) => {
   const [status, setStatus] = useState('')
   const { user: me } = useAuthStore()
   const { setSelectedConversationId } = useChatStore()

@@ -25,6 +25,7 @@ import {
   getIsBlockedROUTE,
   getFriendROUTE,
 } from './user.service'
+import { hostImages } from './user.login'
 
 async function userRoutes(server: FastifyInstance) {
   // microservices routes
@@ -131,6 +132,13 @@ async function userRoutes(server: FastifyInstance) {
       preHandler: [server.authenticate],
     },
     getLoggedInUser
+  )
+  server.post(
+    '/postImage',
+    {
+      preHandler: [server.authenticate],
+    },
+    hostImages
   )
   server.get('/users', getAllUsersData)
 

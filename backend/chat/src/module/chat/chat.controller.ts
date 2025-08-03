@@ -263,19 +263,6 @@ export const generateUniqueFilename = (originalFilename: string) => {
   return `${timestamp}-${randomString}${extension}`
 }
 
-export async function downloadAndSaveImage(imageUrl: string, filename: string) {
-  const response = await axios.get(imageUrl, { responseType: 'stream' })
-  const filepath = path.join(__dirname, '../../../../uploads', filename)
-  console.log('filepath : ', filepath)
-
-  const writer = fs.createWriteStream(filepath)
-  response.data.pipe(writer)
-
-  return new Promise((resolve, reject) => {
-    writer.on('finish', resolve)
-    writer.on('error', reject)
-  })
-}
 
 export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
   try {

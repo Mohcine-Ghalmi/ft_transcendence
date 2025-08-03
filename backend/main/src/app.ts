@@ -135,7 +135,6 @@ async function registerPlugins() {
   })
 
   await server.register(fastifyStatic, {
-    // root: path.resolve(process.cwd(), '../uploads'),
     root: path.resolve(process.cwd(), '/media'),
     prefix: '/images/',
     decorateReply: false,

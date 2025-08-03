@@ -186,7 +186,7 @@ const Settings = () => {
       const formData = new FormData()
       formData.append('file', image)
       try {
-        const res = await axiosChatInstance.post('/postImage', formData)
+        const res = await axiosInstance.post('/users/postImage', formData)
         toast.success('Image uploaded successfully')
         return res.data.filename
       } catch (err: any) {
