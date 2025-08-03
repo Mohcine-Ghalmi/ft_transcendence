@@ -218,7 +218,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
       set({ user, isAuthenticated: true })
       get().connectSocket()
-      window.location.href = `${FRONT_END}/dashboard`
       return true
     } catch (err: any) {
       console.log(err)
@@ -264,26 +263,16 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       const res = await axiosInstance.post(`/v2/api/users/login`, data)
       console.log(res.data)
 
-      if (!res.data) {
-        toast.warning('Login failed')
-        return false
-      }
       const { status, accessToken, ...user } = res.data
-      if (status) {
+      if (!status) {
+        get().setHidePopUp(true)
+        return false
+      } else if (status) {
         localStorage.setItem('accessToken', accessToken)
-
         set({ user, isAuthenticated: true })
         get().connectSocket()
-        window.location.href = `${FRONT_END}/dashboard`
-      } else {
-        if (res.data.desc === '2FA verification required') {
-          get().setHidePopUp(true)
-          return false
-        }
-        return false
+        return true
       }
-
-      return true
     } catch (err: any) {
       console.log(err)
       toast.warning(err.response?.data?.message || err.message)

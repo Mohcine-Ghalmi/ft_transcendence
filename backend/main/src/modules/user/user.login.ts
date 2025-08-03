@@ -218,13 +218,6 @@ export async function loginHandler(
       .code(401)
       .send({ message: 'This Email is signed in with another method' })
 
-  if (user.isTwoFAVerified) {
-    return rep.code(200).send({
-      status: false,
-      message: 'Please verify your 2FA code first',
-      desc: '2FA verification required',
-    })
-  }
   const correctPassword = verifyPassword(
     body.password,
     user.salt,
@@ -232,6 +225,13 @@ export async function loginHandler(
   )
 
   if (correctPassword) {
+    if (user.isTwoFAVerified) {
+      return rep.code(200).send({
+        status: false,
+        message: 'Please verify your 2FA code first',
+        desc: '2FA verification required',
+      })
+    }
     const { password, salt, ...rest } = user
 
     const accessToken = signJWT(rest, rep)
