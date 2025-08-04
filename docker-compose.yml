@@ -108,6 +108,10 @@ services:
     restart: unless-stopped
     env_file:
       - ./frontend/.env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://frontend:3000']
       interval: 30s
