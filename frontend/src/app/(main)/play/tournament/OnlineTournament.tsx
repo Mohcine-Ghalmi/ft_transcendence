@@ -25,7 +25,7 @@ interface OnlinePlayModeProps {
   onInvitePlayer: (player: Player) => void
   pendingInvites: Map<string, any>
   sentInvites: Map<string, any>
-  partcipants: any[]
+  participants: any[]
 }
 
 const OnlinePlayMode = ({
