@@ -59,12 +59,12 @@ async function checkSocketConnection(socket: any) {
       return null
     }
     return me
-  } catch (err) {
-    console.log('Error decrypting email:', err)
+  } catch (err : any) {
+    console.log('Error decrypting email:', err.message)
 
     socket.emit('error-in-connection', {
       status: 'error',
-      message: 'Invalid email format',
+      message: err.message || 'Invalid email format',
     })
     socket.disconnect(true)
     return null
@@ -319,9 +319,12 @@ export function setupChatNamespace(chatNamespace: Namespace) {
             message: newMessage.message || 'sent you a new message',
           })
         }
-      } catch (error) {
-        console.error('Error in sendMessage:', error)
-        return socket.emit('failedToSendMessage', 'Internal server error')
+      } catch (error: any) {
+        console.error('Error in sendMessage:', error.message)
+        return socket.emit(
+          'failedToSendMessage',
+          error.message || 'Internal server error'
+        )
       }
     })
 

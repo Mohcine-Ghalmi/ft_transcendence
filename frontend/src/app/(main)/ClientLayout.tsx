@@ -91,7 +91,7 @@ export default function ClientLayout({
 
   return (
     <>
-      <ToastContainer theme="dark" stacked hideProgressBar />
+      <ToastContainer theme="dark" stacked hideProgressBar limit={1} />
       <Header />
       {!socketConnected ? (
         <ConnectingLoading text="Please wait while we connect to the server..." />

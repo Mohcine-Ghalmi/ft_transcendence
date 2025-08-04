@@ -290,9 +290,8 @@ async function startServer() {
     })
 
     setupSocketIO(server)
-  } catch (error) {
-    server.log.error(error)
-    console.error('Failed to start server:', error)
+  } catch (error: any) {
+    server.log.error(error.message || error)
     process.exit(1)
   }
 }

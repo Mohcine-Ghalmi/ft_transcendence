@@ -14,7 +14,6 @@ export const StatisticsChart = ({
 
   useEffect(() => {
     if (userDetails) {
-      console.log('userDetails.chartData:', userDetails.chartData)
       setChartData(userDetails.chartData || [])
     }
   }, [userDetails])

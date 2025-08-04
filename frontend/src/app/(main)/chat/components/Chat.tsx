@@ -393,8 +393,6 @@ const Chat = () => {
   }
 
   useEffect(() => {
-    console.log('Chat isChatSocketConnected : ', isChatSocketConnected)
-
     const onFailedToSendMessage = (err) => {
       toast.error(err)
       setIsLoading(false)

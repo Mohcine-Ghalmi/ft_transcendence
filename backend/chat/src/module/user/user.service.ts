@@ -4,6 +4,7 @@ curl -X POST http://user-service:5005/api/user-service/users/getUserByEmail \
      -d '{"email": "test@gmail.com"}'
 */
 import axios from 'axios'
+import server from '../../app'
 
 export const axiosMainInstance = axios.create({
   baseURL: `http://user-service:5005/api/user-service/users`,
@@ -17,8 +18,8 @@ export async function getUserByEmail(email: string) {
     })
     return res.data || null
   } catch (err: any) {
-    console.error('Error fetching user by email:', err.message)
-    return null
+    server.log.error(`Error fetching user by email: ${err.message}`)
+    throw new Error(`Error fetching user by email: ${err.message}`)
   }
 }
 
@@ -27,8 +28,7 @@ export async function getUserById(id: number) {
     const res = await axiosMainInstance.post(`/getUserById`, { id })
     return res.data || null
   } catch (err: any) {
-    console.error('Error fetching user by ID:', err.message)
-    return null
+    throw new Error(`Error fetching user by ID: ${err.message}`)
   }
 }
 
@@ -38,8 +38,8 @@ export const getIsBlocked = async (myEmail: string) => {
       myEmail,
     })
     return res.data || null
-  } catch (err) {
-    console.log(err)
+  } catch (err: any) {
+    server.log.error(`Error fetching blocked list: ${err.message}`)
     return null
   }
 }
@@ -56,8 +56,8 @@ export async function getFriend(
     })
     return res.data || null
   } catch (err: any) {
-    console.error('Error fetching friend:', err.message)
-    return null
+    server.log.error(`Error fetching friend: ${err.message}`)
+    throw new Error(`Error fetching friend: ${err.message}`)
   }
 }
 

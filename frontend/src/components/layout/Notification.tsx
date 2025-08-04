@@ -12,7 +12,6 @@ export const NotificationItem = ({
   notification: AppNotification | any
   onAction: (id: number, action: string) => void
 }) => {
-  console.log('notification : ', notification)
   const [acceptBtn, setAcceptBtn] = useState('Accept')
 
   const getNotificationIcon = (type: string) => {
@@ -159,7 +158,6 @@ export const NotificationDropdown = ({
   useEffect(() => {
     if (!notifications) return
     setUnreadCount(notifications.length)
-    console.log('Notifications updated:', notifications)
   }, [notifications])
   const handleLogout = async () => {
     await logout()
@@ -197,7 +195,6 @@ export const NotificationDropdown = ({
         router.push(`/chat`)
         break
       default:
-        console.log('Unknown action:', action)
         break
     }
   }
