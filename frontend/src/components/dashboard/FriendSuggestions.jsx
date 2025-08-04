@@ -1,5 +1,5 @@
 'use client'
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useSearchStore } from '../../(zustand)/useSearchStore'
 import { useAuthStore } from '../../(zustand)/useAuthStore'
 import { useRouter } from 'next/navigation'
@@ -8,20 +8,17 @@ import { useFriend } from '../../utils/useFriend'
 const Friend = ({ user }) => {
   const { onlineUsers } = useAuthStore()
   const router = useRouter()
-
   const {
     handleFriendAction,
     getButtonText,
     isButtonDisabled,
     handleChatWithUser,
-  } = useFriend(user)
-
-  if (!user) return null
+  } = useFriend({ ...user })
 
   return (
     <div
       key={user.id}
-      onClick={() => router.push(`/profile/${user.login}`)}
+      // onClick={() => router.push(`/profile/${user.login}`)}
       className="flex items-center gap-2 flex-shrink-0 hover:bg-gray-900 cursor-pointer duration-500 p-2 rounded-2xl"
     >
       <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600">
