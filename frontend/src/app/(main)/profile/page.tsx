@@ -20,7 +20,7 @@ const Card = ({ number, text }) => {
   )
 }
 
-export const TopProfile = ({ user }) => {
+const TopProfile = ({ user }) => {
   const {
     user: me,
     isLoading: isBlocking,
@@ -121,7 +121,7 @@ export const TopProfile = ({ user }) => {
   )
 }
 
-export const State = ({ user }) => {
+const State = ({ user }) => {
   const { userDetails } = useAuthStore()
   const total = userDetails?.wins + userDetails?.losses
   const winRate = total ? ((userDetails?.wins / total) * 100).toFixed(1) : 0
@@ -145,7 +145,7 @@ export const State = ({ user }) => {
   )
 }
 
-export const Level = ({ user }) => {
+const Level = ({ user }) => {
   const width = 100
   const [progress, setProgress] = useState(0)
   const { userDetails } = useAuthStore()

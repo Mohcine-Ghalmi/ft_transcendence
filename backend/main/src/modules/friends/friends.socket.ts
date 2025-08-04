@@ -72,9 +72,10 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
         io.to(userSockets).emit('newNotification', {
           type: 'friend_request',
           message: `You Recieved A friend request from ${me.login}`,
+          desc: 'PENDING',
           senderEmail: myEmail,
         })
-    } catch (err) {
+    } catch (err) {``
       console.log('addFriend : ', err)
       socket.emit('friendResponse', {
         status: 'success',
@@ -103,7 +104,7 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
         })
         const userSockets = await getSocketIds(inviter, 'sockets')
         if (userSockets)
-          io.to(userSockets).emit('friendResponse', {
+          io.to(userSockets).emit('newNotification', {
             status: 'success',
             message: `${myEmail} Accept Your Friend Request`,
             desc: 'ACCEPTED',
