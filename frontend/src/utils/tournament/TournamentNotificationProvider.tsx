@@ -234,7 +234,7 @@ export const TournamentNotificationProvider = () => {
             title: 'Match in Another Session',
             message: 'Your tournament match is starting in another browser/tab.',
             autoClose: true,
-            duration: 5000,
+            duration: 2000,
             isActiveSession: false
           });
         } else if (data.type === 'match_started_elsewhere') {
@@ -243,7 +243,7 @@ export const TournamentNotificationProvider = () => {
             title: 'Match Started Elsewhere',
             message: 'Your tournament match has started in another browser/tab.',
             autoClose: true,
-            duration: 5000,
+            duration: 2000,
             isActiveSession: false
           });
         }

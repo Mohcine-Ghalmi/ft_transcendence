@@ -25,22 +25,27 @@ interface OnlinePlayModeProps {
   onInvitePlayer: (player: Player) => void
   pendingInvites: Map<string, any>
   sentInvites: Map<string, any>
+  partcipants: any[]
 }
 
 const OnlinePlayMode = ({
   onInvitePlayer,
   pendingInvites,
   sentInvites,
+  participants,
   friends,
   invitingPlayers,
 }: OnlinePlayModeProps & {
   friends: Player[]
   invitingPlayers: Set<string>
+  participants: any[] // Added participants property here
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
+  const participantEmails = new Set(participants.map(p => p.email || p.id))
   // Use the same filtering logic as OneVsOne
   const filteredPlayers = friends.filter((player) =>
-    player.name.toLowerCase().includes(searchQuery.toLowerCase())
+    player.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+    !participantEmails.has(player.email)
   )
   return (
     <div className="bg-[#0f1419] rounded-lg p-6 border border-[#2a2f3a]">
@@ -186,6 +191,7 @@ export default function OnlineTournament() {
             avatar: user.avatar,
             nickname: user.nickname,
             isHost: true,
+            email: user.email,
           },
         ]
       : []
@@ -430,10 +436,17 @@ export default function OnlineTournament() {
   }
 
   const handleInvitePlayer = async (player: Player) => {
+    const isAlreadyParticipant = participants.some(p => 
+      p.email === player.email || p.id === player.email
+    )
     if (participants.length >= tournamentSize || !tournamentId || !socket) {
       return
     }
 
+    if (isAlreadyParticipant) {
+      console.log('Player is already a participant:', player.email)
+      return
+    }
     // Add this player to the inviting set
     setInvitingPlayers((prev) => new Set([...prev, player.email]))
 
@@ -577,6 +590,7 @@ export default function OnlineTournament() {
             avatar: user.avatar,
             nickname: user.nickname,
             isHost: true,
+            email: user.email,
           },
         ])
         setMatches([])
@@ -600,6 +614,7 @@ export default function OnlineTournament() {
         avatar: user.avatar,
         nickname: user.nickname,
         isHost: true,
+        email: user.email,
       },
     ])
     setMatches([])
@@ -862,6 +877,7 @@ export default function OnlineTournament() {
                   avatar: user.avatar,
                   nickname: user.nickname,
                   isHost: true,
+                  email: user.email,
                 },
               ]
             : []
@@ -883,6 +899,7 @@ export default function OnlineTournament() {
                   avatar: user.avatar,
                   nickname: user.nickname,
                   isHost: true,
+                  email: user.email,
                 },
               ]
             : []
@@ -1237,6 +1254,7 @@ export default function OnlineTournament() {
                   onInvitePlayer={handleInvitePlayer}
                   pendingInvites={pendingInvites}
                   sentInvites={sentInvites}
+                  participants={participants}
                   friends={friends}
                   invitingPlayers={invitingPlayers}
                 />
