@@ -27,6 +27,151 @@ import { getUserByEmail, getFriend } from '../user/user.service'
 const TOURNAMENT_PREFIX = 'tournament:';
 const TOURNAMENT_INVITE_PREFIX = 'tournament_invite:';
 
+// Helper function to handle participant disconnections
+async function handleParticipantDisconnect(tournamentId: string, tournament: Tournament, disconnectedUserEmail: string, io: Server) {
+  try {
+    console.log(`🔌 Participant ${disconnectedUserEmail} disconnected from tournament ${tournamentId}`);
+    
+    // Only handle disconnects for tournaments in progress
+    if (tournament.status !== 'in_progress') {
+      return;
+    }
+    
+    // Find if the disconnected user is in an active match
+    const activeMatch = tournament.matches.find(match => 
+      (match.player1?.email === disconnectedUserEmail || match.player2?.email === disconnectedUserEmail) &&
+      (match.state === 'in_progress' || match.state === 'waiting')
+    );
+    
+    if (!activeMatch) {
+      console.log(`No active match found for disconnected user ${disconnectedUserEmail}`);
+      return;
+    }
+    
+    // Use the existing forfeit handler from tournament events
+    const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
+    const { 
+      updatedTournament, 
+      affectedMatch, 
+      forfeitedPlayer, 
+      advancingPlayer 
+    } = handleTournamentPlayerForfeit(tournament, disconnectedUserEmail);
+    
+    // Update tournament in Redis
+    await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(updatedTournament));
+    
+    // Get all participant socket IDs for notifications
+    const allParticipantEmails = updatedTournament.participants.map(p => p.email);
+    const allSocketIds = [];
+    
+    for (const email of allParticipantEmails) {
+      const socketIds = await getSocketIds(email, 'sockets') || [];
+      allSocketIds.push(...socketIds);
+    }
+    
+    // Send tournament player forfeited notification (reusing existing event)
+    io.to(allSocketIds).emit('TournamentPlayerForfeited', {
+      tournamentId,
+      forfeitedPlayer,
+      advancingPlayer,
+      affectedMatch,
+      tournament: updatedTournament,
+      reason: 'disconnect',
+      message: `${forfeitedPlayer?.nickname} has disconnected. ${advancingPlayer?.nickname} advances to the next round.`
+    });
+    
+    // Check if tournament is complete after this disconnect
+    const totalRounds = Math.log2(updatedTournament.size);
+    const finalMatch = updatedTournament.matches.find(m => m.round === totalRounds - 1);
+    
+    if (finalMatch && 
+        (finalMatch.state === 'player1_win' || finalMatch.state === 'player2_win') && 
+        finalMatch.winner) {
+      // Tournament is complete
+      updatedTournament.status = 'completed';
+      updatedTournament.endedAt = Date.now();
+      updatedTournament.winner = finalMatch.winner;
+      
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(updatedTournament));
+      
+      io.to(allSocketIds).emit('TournamentCompleted', {
+        tournamentId,
+        tournament: updatedTournament,
+        winnerEmail: finalMatch.winner.email,
+        winner: finalMatch.winner,
+        message: `Tournament completed! ${finalMatch.winner.nickname} is the champion!`
+      });
+    }
+    
+    console.log(`✅ Handled disconnect for ${disconnectedUserEmail}, ${advancingPlayer?.email} advanced`);
+    
+  } catch (error) {
+    console.error(`Error handling participant disconnect in tournament ${tournamentId}:`, error);
+  }
+}
+
+// Helper function to handle host disconnections
+async function handleHostDisconnect(tournamentId: string, tournament: Tournament, io: Server) {
+  try {
+    console.log(`🚫 Host ${tournament.hostEmail} disconnected from tournament ${tournamentId}`);
+    
+    // Only cancel if tournament is in lobby or early stage
+    if (tournament.status === 'lobby' || tournament.status === 'in_progress') {
+      // Get all participant emails for notification
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      // Update tournament status
+      tournament.status = 'canceled';
+      tournament.endedAt = Date.now();
+      
+      // Save the canceled tournament state briefly for records
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 300, JSON.stringify(tournament));
+      
+      // Notify all participants using the existing event structure
+      io.to(allSocketIds).emit('TournamentCanceled', {
+        tournamentId,
+        tournament: {
+          ...tournament,
+          status: 'canceled',
+          endedAt: Date.now(),
+        },
+        reason: 'Host disconnected',
+        message: 'Tournament has been canceled because the host disconnected.'
+      });
+      
+      // Redirect all participants to play page
+      io.to(allSocketIds).emit('RedirectToPlay', {
+        message: 'Tournament canceled due to host disconnection.'
+      });
+      
+      // Clean up tournament from active list after a delay
+      setTimeout(async () => {
+        try {
+          await redis.del(`${TOURNAMENT_PREFIX}${tournamentId}`);
+          cleanupTournamentSessions(tournamentId);
+        } catch (error) {
+          console.error(`Error cleaning up canceled tournament ${tournamentId}:`, error);
+        }
+      }, 2000);
+      
+      // Emit updated tournament list to all clients
+      const updatedTournaments = await getAllActiveTournaments();
+      io.emit('TournamentList', updatedTournaments);
+      
+      console.log(`✅ Tournament ${tournamentId} canceled due to host disconnect`);
+    }
+  } catch (error) {
+    console.error(`Error handling host disconnect for tournament ${tournamentId}:`, error);
+  }
+}
+
+
 // Helper function to create tournament bracket
 function createTournamentBracket(participants: TournamentParticipant[], size: number): TournamentMatch[] {
   const matches: TournamentMatch[] = [];
@@ -1222,10 +1367,29 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
 
   socket.on('disconnect', async () => {
     try {
+      console.log(`🔌 Socket disconnected: ${socket.id}`);
+      
       // Clean up any tournament sessions for this socket
       for (const [tournamentId, userSessions] of tournamentActiveSessions.entries()) {
         for (const [userEmail, socketId] of userSessions.entries()) {
           if (socketId === socket.id) {
+            console.log(`🔌 Processing disconnect for user ${userEmail} in tournament ${tournamentId}`);
+            
+            // Get tournament data
+            const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+            if (tournamentData) {
+              const tournament: Tournament = JSON.parse(tournamentData);
+              
+              // Check if disconnecting user is the host
+              if (tournament.hostEmail === userEmail) {
+                await handleHostDisconnect(tournamentId, tournament, io);
+              } else {
+                // Check if user is in an active match
+                await handleParticipantDisconnect(tournamentId, tournament, userEmail, io);
+              }
+            }
+            
+            // Clean up session tracking
             removeActiveTournamentSession(tournamentId, userEmail);
             console.log(`🔌 Cleaned up tournament session on disconnect: ${userEmail} from ${tournamentId}`);
             break;
@@ -1236,6 +1400,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       console.error('Error cleaning up tournament sessions on disconnect:', error);
     }
   });
+  
+  
 
   // Handle player response to match notification
   socket.on('JoinTournamentMatch', async (data: { tournamentId: string; matchId: string; playerEmail: string }) => {
