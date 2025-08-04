@@ -1,5 +1,3 @@
-// Enhanced game.socket.invitation.ts with validation support
-
 import { Socket, Server } from 'socket.io'
 import CryptoJS from 'crypto-js'
 import crypto from 'crypto'
@@ -40,7 +38,6 @@ export const handleGameInvitation: GameSocketHandler = (
       
       socket.emit('InvitationValidation', { inviteKey, isValid })
     } catch (error) {
-      console.error('Error validating invitation:', error)
       socket.emit('InvitationValidation', { inviteKey: data.inviteKey, isValid: false })
     }
   })
@@ -121,6 +118,9 @@ export const handleGameInvitation: GameSocketHandler = (
           return socket.emit('InviteToGameResponse', {
             status: 'error',
             message: `You already sent an invitation to ${guest.username}.`,
+            gameId: gameId, // ADD THIS - include the original gameId from Redis
+            guestEmail: guest.email, // ADD THIS - help client matching
+            type: 'duplicate_invitation' // ADD THIS - identify the error type
           })
         }
       }
@@ -138,6 +138,9 @@ export const handleGameInvitation: GameSocketHandler = (
           return socket.emit('InviteToGameResponse', {
             status: 'error',
             message: `${guest.username} has already sent you an invitation. Please check your notifications.`,
+            gameId: gameId, // ADD THIS
+            guestEmail: guest.email, // ADD THIS  
+            type: 'reverse_duplicate_invitation' // ADD THIS
           })
         }
       }
@@ -311,14 +314,12 @@ export const handleGameInvitation: GameSocketHandler = (
         }
       }
 
-      console.log(`Cleaned up ${cleanedCount} stale invitations for user: ${userEmail}`)
       
       socket.emit('StaleInvitationsCleanup', {
         status: 'success',
         cleanedCount
       })
     } catch (error) {
-      console.error('Error cleaning up stale invitations:', error)
       socket.emit('StaleInvitationsCleanup', {
         status: 'error',
         message: 'Failed to cleanup stale invitations'

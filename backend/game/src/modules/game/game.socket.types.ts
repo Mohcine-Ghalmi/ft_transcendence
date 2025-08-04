@@ -14,7 +14,6 @@ export function setActiveTournamentSession(tournamentId: string, userEmail: stri
     tournamentActiveSessions.set(tournamentId, new Map());
   }
   tournamentActiveSessions.get(tournamentId)!.set(userEmail, socketId);
-  console.log(`🎯 Set active tournament session: ${userEmail} -> ${socketId} for tournament ${tournamentId}`);
 }
 
 // Helper function to get active tournament session for a user
@@ -28,13 +27,11 @@ export function removeActiveTournamentSession(tournamentId: string, userEmail: s
   if (tournamentActiveSessions.get(tournamentId)?.size === 0) {
     tournamentActiveSessions.delete(tournamentId);
   }
-  console.log(`🗑️ Removed active tournament session for ${userEmail} from tournament ${tournamentId}`);
 }
 
 // Helper function to cleanup tournament sessions when tournament ends
 export function cleanupTournamentSessions(tournamentId: string) {
   tournamentActiveSessions.delete(tournamentId);
-  console.log(`🧹 Cleaned up all tournament sessions for tournament ${tournamentId}`);
 }
 
 // Enhanced function to emit to only active tournament sessions
@@ -68,7 +65,6 @@ export async function emitToActiveTournamentSessions(
   }
 
   if (activeSocketIds.length > 0) {
-    console.log(`📡 Emitting ${event} to ${activeSocketIds.length} active tournament sessions`);
     io.to(activeSocketIds).emit(event, data);
   }
 }
@@ -87,7 +83,6 @@ export async function emitToActiveUserSession(
     // Verify the socket is still connected
     const userSockets = await getSocketIds(userEmail, 'sockets') || [];
     if (userSockets.includes(activeSocketId)) {
-      console.log(`📡 Emitting ${event} to active session ${activeSocketId} for user ${userEmail}`);
       io.to(activeSocketId).emit(event, data);
       return true;
     } else {

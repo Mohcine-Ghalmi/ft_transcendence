@@ -9,6 +9,7 @@ import { PingPongGame } from '../game/PingPongGame'
 import CryptoJS from 'crypto-js'
 import Image from 'next/image'
 import { toast } from 'react-toastify'
+import { getInvitedPlayersEmails } from '@/utils/challengeUtils'
 
 export const sendGameInvite = async (playerEmail, socket, user) => {
   if (!socket || !user?.email || !playerEmail) {
@@ -880,10 +881,28 @@ export default function OnlineMatch() {
       countdownIntervalRef.current = null
     }
   }
+  const [invitedPlayersEmails, setInvitedPlayersEmails] = useState([])
 
-  const filteredPlayers = friends.filter((player) =>
-    player.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  useEffect(() => {
+    if (!user?.email) return
+    
+    const updateInvitedPlayers = () => {
+      const invited = getInvitedPlayersEmails(user.email)
+      setInvitedPlayersEmails(invited)
+    }
+    
+    updateInvitedPlayers()
+    const interval = setInterval(updateInvitedPlayers, 1000)
+    
+    return () => clearInterval(interval)
+  }, [user?.email])
+  
+  const filteredPlayers = friends.filter((player) => {
+    const invitedPlayersEmails = getInvitedPlayersEmails(user?.email);
+    const matchesSearch = player.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const isNotInvited = !invitedPlayersEmails.includes(player.email)
+    return matchesSearch && isNotInvited
+  })
 
   const handleInvite = async (player) => {
     console.log('payer : ', player)

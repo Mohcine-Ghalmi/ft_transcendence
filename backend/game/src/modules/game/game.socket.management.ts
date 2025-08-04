@@ -1,4 +1,4 @@
-  import { Socket, Server } from 'socket.io'
+import { Socket, Server } from 'socket.io'
 import redis, { getSocketIds } from '../../database/redis'
 import {
   activeGames,

@@ -1,5 +1,3 @@
-// Enhanced game.socket.acceptance.ts with comprehensive invitation cleanup
-
 import { Socket, Server } from 'socket.io'
 import { getUserByEmail } from '../user/user.service'
 import {
