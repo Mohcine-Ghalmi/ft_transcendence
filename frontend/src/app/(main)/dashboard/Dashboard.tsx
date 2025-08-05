@@ -1,18 +1,14 @@
 'use client'
-import {
-  matchHistory,
-  friends,
-  friendSuggestions,
-} from '../../../data/mockData'
+import { friends, friendSuggestions } from '../../../data/mockData'
 import { ProfileSection } from '../../../components/dashboard/ProfileSection'
 import { GameModeCards } from '../../../components/dashboard/GameModeCards'
-import { MatchHistory } from '../../../components/dashboard/MatchHistory'
 import { FriendsSection } from '../../../components/dashboard/FriendsSection'
 import { FriendSuggestions } from '../../../components/dashboard/FriendSuggestions'
 import { StatisticsChart } from '../../../components/dashboard/StatisticsChart'
 import { useEffect } from 'react'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { MatchHistory } from '../../../components/dashboard/MatchHistory'
 
 export default function PingPongDashboard() {
   const { getRandomFriendsSuggestions } = useSearchStore()
@@ -38,7 +34,7 @@ export default function PingPongDashboard() {
             <ProfileSection />
             <GameModeCards />
             <div className="flex xl:flex-row flex-col w-full gap-4">
-              <MatchHistory matchHistory={matchHistory} />
+              <MatchHistory />
               <FriendSuggestions />
             </div>
             <FriendsSection />

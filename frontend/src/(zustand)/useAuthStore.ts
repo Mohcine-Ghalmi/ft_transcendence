@@ -377,15 +377,51 @@ export const useAuthStore = create<UserState>()((set, get) => ({
           })
           break
         case 'friend_request':
-          console.log(
-            'searchedUsersGlobal : ',
-            useSearchStore.getState().searchedUsersGlobal
-          )
-
           const friendNotification = {
             message: notifications.message,
             type: 'friend_request',
+            desc: notifications?.desc,
             senderEmail: notifications.senderEmail,
+          }
+          console.log('friendNotification : ', friendNotification)
+
+          if (friendNotification?.desc) {
+            const {
+              searchedUsersGlobal,
+              setSearchedUsersGlobal,
+              randomFriendsSuggestions,
+              setRandomFriendsSuggestion,
+            } = useSearchStore.getState()
+
+            const updatedUsers =
+              searchedUsersGlobal.length > 0
+                ? searchedUsersGlobal.map((tmp) =>
+                    tmp.email === friendNotification.senderEmail
+                      ? {
+                          ...tmp,
+                          status: friendNotification.desc,
+                          fromEmail: friendNotification.senderEmail,
+                        }
+                      : tmp
+                  )
+                : []
+            const updatedUsersRandom =
+              randomFriendsSuggestions.length > 0
+                ? randomFriendsSuggestions.map((tmp) =>
+                    tmp.email === friendNotification.senderEmail
+                      ? {
+                          ...tmp,
+                          status: friendNotification.desc,
+                          fromEmail: friendNotification.senderEmail,
+                        }
+                      : tmp
+                  )
+                : []
+            console.log('searchedUsersGlobal : ', searchedUsersGlobal)
+
+            console.log('updatedUsers : ', updatedUsers)
+            setRandomFriendsSuggestion(updatedUsersRandom)
+            setSearchedUsersGlobal(updatedUsers)
           }
 
           set({
@@ -406,21 +442,30 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning(data.message)
       } else {
         if (data?.desc) {
-          const { searchedUsersGlobal, setSearchedUsersGlobal } =
-            useSearchStore.getState()
-          const { randomFriendsSuggestions, setRandomFriendsSuggestion } =
-            useSearchStore.getState()
+          const {
+            searchedUsersGlobal,
+            setSearchedUsersGlobal,
+            randomFriendsSuggestions,
+            setRandomFriendsSuggestion,
+          } = useSearchStore.getState()
 
-          const updatedUsers = searchedUsersGlobal.map((tmp) =>
-            tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-              : tmp
-          )
-          const updatedUsersRandom = randomFriendsSuggestions.map((tmp) =>
-            tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-              : tmp
-          )
+          const updatedUsers =
+            searchedUsersGlobal.length > 0
+              ? searchedUsersGlobal.map((tmp) =>
+                  tmp.email === data.hisEmail
+                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+                    : tmp
+                )
+              : []
+
+          const updatedUsersRandom =
+            randomFriendsSuggestions.length > 0
+              ? randomFriendsSuggestions.map((tmp) =>
+                  tmp.email === data.hisEmail
+                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+                    : tmp
+                )
+              : []
           console.log('searchedUsersGlobal : ', searchedUsersGlobal)
 
           console.log('updatedUsers : ', updatedUsers)

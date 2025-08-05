@@ -2,7 +2,7 @@
 import { Namespace, Socket } from 'socket.io'
 import { addSocketId, removeSocketId, getSocketIds } from '../../database/redis'
 import { addMessage, getConversations } from './chat.controller'
-import { db } from '../../app'
+import server, { db } from '../../app'
 import CryptoJs from 'crypto-js'
 import { io } from '../../socket'
 import { getFriend, getUserById, getUserByEmail } from '../user/user.service'
@@ -20,7 +20,6 @@ async function checkSocketConnection(socket: any) {
     return null
   }
   const key = process.env.ENCRYPTION_KEY || ''
-  console.log('ENCRYPTION_KEY:', key)
 
   if (!key) {
     socket.emit('error-in-connection', {
@@ -32,12 +31,10 @@ async function checkSocketConnection(socket: any) {
   }
   try {
     const cryptedMail = socket.handshake.query.cryptedMail
-    console.log('cryptedMail:', cryptedMail)
 
     const userEmail = CryptoJs.AES.decrypt(cryptedMail as string, key).toString(
       CryptoJs.enc.Utf8
     )
-    console.log('userEmail:', userEmail)
 
     if (!userEmail) {
       socket.emit('error-in-connection', {
@@ -48,7 +45,6 @@ async function checkSocketConnection(socket: any) {
       return null
     }
     const me = await getUserByEmail(userEmail)
-    console.log('User found:', me ? me.email : 'No user found')
 
     if (!me) {
       socket.emit('error-in-connection', {
@@ -59,12 +55,11 @@ async function checkSocketConnection(socket: any) {
       return null
     }
     return me
-  } catch (err) {
-    console.log('Error decrypting email:', err)
-
+  } catch (err: any) {
+    server.log.error('Socket connection error:', err.message)
     socket.emit('error-in-connection', {
       status: 'error',
-      message: 'Invalid email format',
+      message: err.message || 'Invalid email format',
     })
     socket.disconnect(true)
     return null
@@ -127,7 +122,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
           return
         } catch (err: any) {
-          console.log(err.message || err)
+          server.log.error('Error in seenMessage:', err.message)
           return socket.emit(
             'errorWhenSeeingAmessage',
             err.message || 'Failed to mark messages as seen'
@@ -200,6 +195,7 @@ export function setupChatNamespace(chatNamespace: Namespace) {
         }))
         socket.emit('searchingInFriends', users)
       } catch (err: any) {
+        server.log.error('Error in searchForUser:', err.message)
         return socket.emit(
           'searchError',
           err.message || 'Error while Searching'
@@ -214,8 +210,12 @@ export function setupChatNamespace(chatNamespace: Namespace) {
           return socket.emit('failedToSendMessage', 'ENCRYPTION_KEY is not set')
         const bytes = CryptoJs.AES.decrypt(data, key)
         dencrypt = JSON.parse(bytes.toString(CryptoJs.enc.Utf8))
-      } catch (err) {
-        return socket.emit('failedToSendMessage', 'Invalid message data format')
+      } catch (err: any) {
+        server.log.error('Error in sendMessage decryption:', err.message)
+        return socket.emit(
+          'failedToSendMessage',
+          err.message || 'Invalid message data format'
+        )
       }
       try {
         const {
@@ -264,12 +264,12 @@ export function setupChatNamespace(chatNamespace: Namespace) {
             getConversations(receiver.id, receiver.email),
           ])
 
-        const mySockets = await getSocketIds(me.email, 'chat')
-        const recieverSockets = await getSocketIds(receiver.email, 'chat')
-        const receiverGlobalSockets = await getSocketIds(
-          receiver.email,
-          'sockets'
-        )
+        const [mySockets, recieverSockets, receiverGlobalSockets] =
+          await Promise.all([
+            getSocketIds(me.email, 'chat'),
+            getSocketIds(receiver.email, 'chat'),
+            getSocketIds(receiver.email, 'sockets'),
+          ])
 
         const messagePayload = {
           ...newMessage,
@@ -319,9 +319,12 @@ export function setupChatNamespace(chatNamespace: Namespace) {
             message: newMessage.message || 'sent you a new message',
           })
         }
-      } catch (error) {
-        console.error('Error in sendMessage:', error)
-        return socket.emit('failedToSendMessage', 'Internal server error')
+      } catch (error: any) {
+        server.log.error('Error in sendMessage:', error.message)
+        return socket.emit(
+          'failedToSendMessage',
+          error.message || 'Internal server error'
+        )
       }
     })
 

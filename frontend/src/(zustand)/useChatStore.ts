@@ -104,7 +104,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
 
       set({ isLoading: false })
     } catch (err: any) {
-      console.log(err)
       set({ isLoading: false })
     }
   },
@@ -153,7 +152,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       }
       set({ isLoading: false })
     } catch (err: any) {
-      console.log(err)
       toast.warning(
         err.response?.data?.message || 'Please Refresh or try again later'
       )
@@ -162,8 +160,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   },
 
   handleNewMessage: (newMessage: any) => {
-    console.log('newMessage : ', newMessage)
-
     if (!newMessage) return
 
     const { selectedConversationId, selectedConversation } = get()
@@ -199,8 +195,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   },
 
   handleChangeConversations: (newConversation: any) => {
-    console.log('newConversation : ', newConversation)
-
     set({ conversations: newConversation })
   },
 
@@ -209,7 +203,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     const user = useAuthStore.getState().user
 
     if (!user) {
-      console.log('Chat socket: No user found, cannot connect')
       return
     }
 
@@ -265,12 +258,9 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       })
     }
 
-    const onConnect = () => {
-      console.log('Chat socket: Successfully connected to chat server')
-    }
+    const onConnect = () => {}
 
     const onDisconnect = () => {
-      console.log('Chat socket: Disconnected from chat server')
       set({ isChatSocketConnected: false })
     }
 

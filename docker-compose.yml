@@ -36,7 +36,7 @@ services:
     container_name: user-service
     restart: unless-stopped
     env_file:
-      - ./backend/main/.env
+      - ./backend/.env
     volumes:
       - sqlite_storage:/db
     depends_on:
@@ -59,7 +59,7 @@ services:
     container_name: chat-service
     restart: unless-stopped
     env_file:
-      - ./backend/chat/.env
+      - ./backend/.env
     volumes:
       - sqlite_storage:/db
     depends_on:
@@ -82,7 +82,7 @@ services:
     container_name: game-service
     restart: unless-stopped
     env_file:
-      - ./backend/game/.env
+      - ./backend/.env
     volumes:
       - sqlite_storage:/db
     depends_on:

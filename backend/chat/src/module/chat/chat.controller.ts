@@ -1,13 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
-import { db } from '../../app'
-import axios from 'axios'
+import server, { db } from '../../app'
 import { isBlockedStatus, getUserById, getFriend } from '../user/user.service'
-
-const fs = require('fs')
-const path = require('path')
-const { pipeline } = require('stream/promises')
-const crypto = require('crypto')
 
 export async function addMessage(
   myId: number,
@@ -153,11 +147,10 @@ export async function getConversations(id: number, myEmail: string) {
     const rawMessages = sql.all(id, id, id, id, id, id)
 
     const messages = await formatMessages(rawMessages, myEmail)
-    console.log('Conversations fetched:', messages)
 
     return messages
-  } catch (err) {
-    console.log(err)
+  } catch (err: any) {
+    server.log.error(err.message)
     return null
   }
 }
@@ -166,14 +159,12 @@ export async function getFriends(req: FastifyRequest, rep: FastifyReply) {
   try {
     const me: any = req.user
     const conversations = await getConversations(me.id, me.email)
-
-    // const data = await addMessage(1, 2, "Hey !")
-    // console.log('here :', data);
-    // await addFriendById(1, 2)
     return rep.code(200).send(conversations)
-  } catch (err) {
-    console.log('getFriends error : ', err)
-    return rep.code(500).send({ error: 'Internal server error', status: false })
+  } catch (err: any) {
+    server.log.error(err.message)
+    return rep
+      .code(500)
+      .send({ error: err.message || 'Internal server error', status: false })
   }
 }
 
@@ -247,70 +238,12 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
     const rawMessages = sql.all(me.id, reciever.id, reciever.id, me.id, offset)
 
     const conversation = await formatMessages(rawMessages, me.email)
-    console.log(friend)
 
     return rep.code(200).send({ friend, conversation })
-  } catch (err) {
-    console.log('getFriends error : ', err)
-    return rep.code(500).send({ error: 'Internal server error', status: false })
-  }
-}
-
-export const generateUniqueFilename = (originalFilename: string) => {
-  const timestamp = Date.now()
-  const randomString = crypto.randomBytes(8).toString('hex')
-  const extension = path.extname(originalFilename) || '.png'
-  return `${timestamp}-${randomString}${extension}`
-}
-
-
-export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    if (!request.isMultipart()) {
-      return reply
-        .status(400)
-        .send({ status: false, message: 'Request is not multipart' })
-    }
-
-    const data = await request.file()
-    //     [20:46:19.021] INFO (42455): incoming request
-    // [20:46:19.032] ERROR (42455): ENOENT: no such file or directory, open '/goinfre/msarda/tmp/backend/chat/uploads/1752695179027-2609298eef2a92e6.png'
-
-    if (!data) {
-      return reply
-        .status(400)
-        .send({ status: false, message: 'No file provided' })
-    }
-
-    const allowedMimeTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-    ]
-    if (!allowedMimeTypes.includes(data.mimetype)) {
-      return reply.status(400).send({
-        status: false,
-        message: 'Only JPEG, PNG, GIF and WebP images are allowed',
-      })
-    }
-
-    const filename = generateUniqueFilename(data.filename)
-    console.log('__dirname : ', __dirname)
-
-    const filepath = path.join(__dirname, '../../../../uploads', filename)
-    console.log('filepath : ', filepath)
-
-    await pipeline(data.file, fs.createWriteStream(filepath))
-
-    return {
-      success: true,
-      filename,
-    }
-  } catch (err) {
-    request.log.error(err)
-    return reply
-      .status(500)
-      .send({ status: false, message: 'Failed to upload image' })
+  } catch (err: any) {
+    server.log.error(err.message)
+    return rep
+      .code(500)
+      .send({ error: err.message || 'Internal server error', status: false })
   }
 }

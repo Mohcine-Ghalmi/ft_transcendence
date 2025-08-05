@@ -8,6 +8,7 @@ import crypto from 'crypto'
 import path from 'path'
 import axios from 'axios'
 import fs from 'fs'
+import { sendError } from './user.2fa'
 const { pipeline } = require('stream/promises')
 
 export const generateUniqueFilename = (originalFilename: string) => {
@@ -61,7 +62,6 @@ export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
     const filename = generateUniqueFilename(data.filename)
 
     const filepath = path.join(process.cwd(), '../media', filename)
-    console.log('filepath : ', filepath)
 
     await pipeline(data.file, fs.createWriteStream(filepath))
 
@@ -70,10 +70,7 @@ export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
       filename,
     }
   } catch (err) {
-    request.log.error(err)
-    return reply
-      .status(500)
-      .send({ status: false, message: 'Failed to upload image' })
+    sendError(reply, err)
   }
 }
 
@@ -157,7 +154,7 @@ async function googleRegister(req: FastifyRequest, rep: FastifyReply) {
       `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
     )
   } catch (err: any) {
-    console.log('Google OAuth error:', err.message)
+    server.log.error('Google OAuth error:', err.message)
     return rep.redirect(
       `${process.env.FRONT_END_URL}?error=${encodeURIComponent(err.message)}`
     )
@@ -204,7 +201,7 @@ export async function fortyTwoRegister(req: FastifyRequest, rep: FastifyReply) {
       `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
     )
   } catch (err: any) {
-    console.log('42 OAuth error:', err.message)
+    server.log.error('42 OAuth error:', err.message)
     return rep.redirect(
       `${process.env.FRONT_END_URL}?error=${encodeURIComponent(err.message)}`
     )
@@ -233,11 +230,7 @@ export async function registerHandler(
     const accessToken = signJWT(tmp, rep)
     return rep.code(201).send({ ...tmp, accessToken })
   } catch (err: any) {
-    console.log(err)
-
-    return rep
-      .code(500)
-      .send({ message: err.message || 'Internal server error' })
+    sendError(rep, err)
   }
 }
 
@@ -245,39 +238,43 @@ export async function loginHandler(
   req: FastifyRequest<{ Body: LoginInput }>,
   rep: FastifyReply
 ) {
-  const body = req.body
+  try {
+    const body = req.body
 
-  const user: any = await getUserByEmail(body.email)
-  if (!user) {
-    return rep.code(401).send({ message: 'Invalid Email or password' })
-  }
-
-  if (user.type !== 0 && user.type !== null)
-    return rep
-      .code(401)
-      .send({ message: 'This Email is signed in with another method' })
-
-  const correctPassword = verifyPassword(
-    body.password,
-    user.salt,
-    user.password
-  )
-
-  if (correctPassword) {
-    if (user.isTwoFAVerified) {
-      return rep.code(200).send({
-        status: false,
-        message: 'Please verify your 2FA code first',
-        desc: '2FA verification required',
-      })
+    const user: any = await getUserByEmail(body.email)
+    if (!user) {
+      return rep.code(401).send({ message: 'Invalid Email or password' })
     }
-    const { password, salt, ...rest } = user
 
-    const accessToken = signJWT(rest, rep)
-    return rep.code(200).send({ ...rest, accessToken, status: true })
+    if (user.type !== 0 && user.type !== null)
+      return rep
+        .code(401)
+        .send({ message: 'This Email is signed in with another method' })
+
+    const correctPassword = verifyPassword(
+      body.password,
+      user.salt,
+      user.password
+    )
+
+    if (correctPassword) {
+      if (user.isTwoFAVerified) {
+        return rep.code(200).send({
+          status: false,
+          message: 'Please verify your 2FA code first',
+          desc: '2FA verification required',
+        })
+      }
+      const { password, salt, ...rest } = user
+
+      const accessToken = signJWT(rest, rep)
+      return rep.code(200).send({ ...rest, accessToken, status: true })
+    }
+
+    return rep.code(401).send({ message: 'Invalid Email or password' })
+  } catch (err) {
+    sendError(rep, err)
   }
-
-  return rep.code(401).send({ message: 'Invalid Email or password' })
 }
 
 export async function loginRouter() {

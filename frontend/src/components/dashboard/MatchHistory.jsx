@@ -3,13 +3,13 @@ import { useAuthStore } from '../../(zustand)/useAuthStore'
 import { formatDate } from '../../app/(main)/chat/components/LeftSide'
 
 // Match History Component
-export const MatchHistory = ({ matchHistory }) => {
+export const MatchHistory = () => {
   const { userDetails, user } = useAuthStore()
   const [matchHistoryData, setMatchHistoryData] = useState([])
   useEffect(() => {
     if (userDetails?.matchHistory?.length > 0)
       setMatchHistoryData(userDetails?.matchHistory || [])
-  }, [matchHistory, userDetails])
+  }, [userDetails])
   return (
     <div className="flex flex-col overflow-hidden xl:w-[70%] w-full">
       <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white mb-3 sm:mb-4 p-2 flex-shrink-0">

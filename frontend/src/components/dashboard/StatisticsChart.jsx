@@ -14,7 +14,6 @@ export const StatisticsChart = ({
 
   useEffect(() => {
     if (userDetails) {
-      console.log('userDetails.chartData:', userDetails.chartData)
       setChartData(userDetails.chartData || [])
     }
   }, [userDetails])
@@ -91,15 +90,15 @@ export const StatisticsChart = ({
             height={height}
             preserveAspectRatio="none"
           >
-            {/* <path
+            <path
               d={winsPath}
               stroke="#3B82F6"
               strokeWidth="2"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
-            /> */}
-            {/* {chartType !== 'bar' && (
+            />
+            {chartType !== 'bar' && (
               <path
                 d={lossesPath}
                 stroke="#EF4444"
@@ -108,7 +107,7 @@ export const StatisticsChart = ({
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-            )} */}
+            )}
           </svg>
         </div>
       ) : (

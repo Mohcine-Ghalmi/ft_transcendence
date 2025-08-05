@@ -1,4 +1,4 @@
-import { db } from '../../app'
+import server, { db } from '../../app'
 import { hashPassword } from '../../utils/hash'
 import type { CreateUserInput } from './user.schema'
 import {
@@ -16,7 +16,7 @@ export async function getUserByEmail(email: string) {
     const sql = db.prepare(`SELECT * FROM User WHERE email = ?`)
     return (await sql.get(email)) as typeof createUserResponseSchema
   } catch (err: any) {
-    console.log(err.message)
+    server.log.error(err.message)
     return null
   }
 }
@@ -31,9 +31,11 @@ export async function getUserByEmailROUTE(
     const data = (await sql.get(email)) as typeof createUserResponseSchema
     return rep.status(200).send(data)
   } catch (err: any) {
-    console.log(err.message)
-
-    rep.status(500).send({ error: 'Internal Server Error' })
+    server.log.error(err.message)
+    const statusCode = err.statusCode || err.status || 500
+    rep
+      .status(statusCode)
+      .send({ error: err.message || 'Internal server error' })
     return null
   }
 }
@@ -53,11 +55,11 @@ export async function getIsBlockedROUTE(
 
     return rep.code(200).send(data)
   } catch (err: any) {
-    console.log(err.message)
-    return rep.status(500).send({
-      status: 'error',
-      message: 'Internal server error',
-    })
+    server.log.error(err.message)
+    const statusCode = err.statusCode || err.status || 500
+    return rep
+      .status(statusCode)
+      .send({ error: err.message || 'Internal server error' })
   }
 }
 
@@ -70,8 +72,12 @@ export async function getUserByIdROUTE(
     const sql = db.prepare(`SELECT * FROM User WHERE id = ?`)
     const data = (await sql.get(id)) as typeof createUserResponseSchema
     return rep.code(200).send(data)
-  } catch (err) {
-    rep.status(500).send({ error: 'Internal Server Error' })
+  } catch (err: any) {
+    server.log.error(err.message)
+    const statusCode = err.statusCode || err.status || 500
+    rep
+      .status(statusCode)
+      .send({ error: err.message || 'Internal server error' })
     return null
   }
 }
@@ -109,7 +115,7 @@ export async function createUser(input: CreateUserInput) {
     })
     return await getUserByEmail(rest.email)
   } catch (err: any) {
-    console.error('Error creating user:', err.message)
+    server.log.error(err.message)
     return null
   }
 }
@@ -139,8 +145,11 @@ export async function getFriendROUTE(
     const res = await getFriend(fromEmail, toEmail, status)
     return rep.status(200).send(res)
   } catch (err: any) {
-    console.log(err.message)
-    return rep.status(500).send({ error: 'Internal Server Error' })
+    server.log.error(err.message)
+    const statusCode = err.statusCode || err.status || 500
+    return rep
+      .status(statusCode)
+      .send({ error: err.message || 'Internal server error' })
   }
 }
 export async function getFriend(
@@ -251,7 +260,7 @@ export function selectRandomFriends(email: string) {
       status: null,
     }))
   } catch (err: any) {
-    console.log('Error in selectRandomFriends : ', err.message)
+    server.log.error(err.message)
     return []
   }
 }
@@ -293,7 +302,7 @@ export async function listMyFriends(email: string) {
       return friend
     })
   } catch (err: any) {
-    console.log('Error in listMyFriends : ', err.message)
+    server.log.error(err.message)
     return []
   }
 }

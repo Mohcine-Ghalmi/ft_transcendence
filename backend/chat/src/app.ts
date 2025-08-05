@@ -188,9 +188,8 @@ async function startServer() {
       port: parseInt(CHAT_BACK_END_PORT),
       host: '0.0.0.0',
     })
-  } catch (error) {
-    server.log.error(error)
-    console.error('Failed to start server:', error)
+  } catch (error: any) {
+    server.log.error(error.message || 'Failed to start server')
     process.exit(1)
   }
 }

@@ -1,14 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import {
-  registerUserHandler,
-  loginUserHandler,
   getLoggedInUser,
   logoutUserHandled,
   resetPassword,
   sendResetOtp,
   verifyOtp,
-  googleRegister,
-  getAllUsersData,
   getUser,
   listMyFriendsHandler,
   getRandomFriends,
@@ -67,38 +63,6 @@ async function userRoutes(server: FastifyInstance) {
   )
 
   server.post(
-    '/register',
-    {
-      schema: {
-        body: $ref('createUserSchema'),
-      },
-    },
-    registerUserHandler
-  )
-
-  server.post(
-    '/register/google',
-    {
-      // schema: {
-      //   body: $ref('googleSchema'),
-      // },
-    },
-    googleRegister
-  )
-
-  server.post(
-    '/login',
-    {
-      schema: {
-        body: $ref('loginSchema'),
-        response: {
-          200: $ref('loginResponseSchema'),
-        },
-      },
-    },
-    loginUserHandler
-  )
-  server.post(
     '/getUser',
     {
       preHandler: [server.authenticate],
@@ -140,9 +104,7 @@ async function userRoutes(server: FastifyInstance) {
     },
     hostImages
   )
-  server.get('/users', getAllUsersData)
 
-  // List all friends with accepted status
   server.get('/friends', listMyFriendsHandler)
 }
 
