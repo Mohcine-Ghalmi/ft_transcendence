@@ -1,19 +1,12 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import {
-  createUser,
   getUserByEmail,
   isBlockedStatus,
   listMyFriends,
   selectRandomFriends,
 } from './user.service'
-import {
-  CreateUserInput,
-  type LoginInput,
-  type loginResponse,
-  createUserResponseSchema,
-} from './user.schema'
 import { hashPassword, verifyPassword } from '../../utils/hash'
-import { db, server } from '../../app'
+import { db, server, tokenBlacklist } from '../../app'
 import { sendEmailTmp } from '../Mail/mail.controller'
 import {
   resetOtpType,
@@ -21,87 +14,10 @@ import {
   sendEmailBodyType,
   OtpType,
 } from '../Mail/mail.schema'
-import { getIsBlocked } from './user.socket'
 import { signJWT } from './user.login'
 import path from 'path'
 import fsPromises from 'fs/promises'
-
-export async function registerUserHandler(
-  req: FastifyRequest<{
-    Body: CreateUserInput
-  }>,
-  rep: FastifyReply
-) {
-  try {
-    const body = req.body
-
-    const newUser = await getUserByEmail(body.email)
-    if (newUser)
-      return rep
-        .code(404)
-        .send({ status: false, message: 'User Already exists' })
-
-    if (!body.avatar) body.avatar = 'default.avif'
-    const user = await createUser(body)
-    const { password, salt, ...tmp } = user as any
-    const accessToken = server.jwt.sign(tmp, { expiresIn: '1d' })
-    return rep.code(201).send({ ...tmp, accessToken })
-  } catch (err: unknown) {
-    console.log(err)
-
-    return rep.code(500).send({ message: 'Internal server error' })
-  }
-}
-
-export async function googleRegister(
-  req: FastifyRequest<{
-    Body: any
-  }>,
-  rep: FastifyReply
-) {
-  try {
-    const apiKey = req.headers['x-api-key']
-
-    if (apiKey !== process.env.NEXT_AUTH_KEY) {
-      return rep.code(401).send({ status: false, message: 'Unauthorized' })
-    }
-
-    const user: any = req.body
-    if (!user)
-      return rep.code(400).send({ status: false, message: 'User not found' })
-    console.log('user : ', user)
-
-    const { password: localPassword, ...rest } = user
-
-    const newUser: any = await getUserByEmail(rest.email)
-
-    if (!newUser) {
-      const create = { ...user, password: 'RS:2L~H*jfMWpP0' }
-      await createUser(create)
-    } else {
-      if (newUser.type !== 1 && newUser.type !== 2)
-        return rep.code(200).send({
-          status: false,
-          message: 'This user was logged in with another method',
-        })
-    }
-    const googleUser: any = await getUserByEmail(user.email)
-    if (!googleUser)
-      return rep.code(200).send({ status: false, message: 'User not found' })
-
-    const { password: googlePassword, salt, ...tmp } = googleUser
-
-    const accessToken = server.jwt.sign(tmp, { expiresIn: '1d' })
-
-    // connecetSocket()
-
-    return rep.code(200).send({ ...tmp, accessToken })
-  } catch (err) {
-    console.log(err)
-
-    return rep.code(500).send({ message: 'Internal server error' })
-  }
-}
+import { sendError } from './user.2fa'
 
 export async function hasTwoFA(
   req: FastifyRequest<{ Body: { email: string } }>,
@@ -118,57 +34,8 @@ export async function hasTwoFA(
 
     return rep.code(200).send({ isTwoFAVerified: user.isTwoFAVerified })
   } catch (err) {
-    console.error(err)
-    return rep.code(500).send({ message: 'Internal Server Error' })
+    sendError(rep, err)
   }
-}
-
-export async function loginUserHandler(
-  req: FastifyRequest<{ Body: LoginInput }>,
-  rep: FastifyReply
-) {
-  const body = req.body
-
-  const user: any = await getUserByEmail(body.email)
-  if (!user) {
-    return rep.code(401).send({ message: 'Invalid Email or password' })
-  }
-
-  if (user.type !== 0 && user.type !== null)
-    return rep
-      .code(401)
-      .send({ message: 'This Email is signed in with another method' })
-  const correctPassword = verifyPassword(
-    body.password,
-    user.salt,
-    user.password
-  )
-
-  if (user.isTwoFAVerified) {
-    // check the two-factor authentication toke
-    // if (!body.twoFAToken) {
-    //   return rep.code(401).send({
-    //     message: 'Two-Factor Authentication is enabled, please provide the token',
-    //   })
-    // }
-    // // verify the two-factor authentication token
-    // const verified = server.twoFA.verify({
-    //   secret: user.twoFASecret,
-    //   encoding: 'base32',
-    //   token: body.twoFAToken,
-    //   window: 2,
-    // })
-    // if (!verified) {
-    //   return rep.code(401).send({ message: 'Invalid Two-Factor Authentication token' })
-  }
-  if (correctPassword) {
-    const { password, salt, ...rest } = user
-
-    const accessToken = server.jwt.sign(rest, { expiresIn: '1d' })
-    return rep.code(200).send({ ...rest, accessToken })
-  }
-
-  return rep.code(401).send({ message: 'Invalid Email or password' })
 }
 
 export async function logoutUserHandled(
@@ -176,10 +43,22 @@ export async function logoutUserHandled(
   rep: FastifyReply
 ) {
   try {
+    let token = req.cookies.accessToken
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7)
+      }
+    }
+
+    if (token) {
+      tokenBlacklist.add(token)
+    }
+
     rep.clearCookie('accessToken', { path: '/' })
     return rep.code(200).send({ message: 'Logged out successfully' })
   } catch (err) {
-    return rep.code(500).send({ message: 'Failed To Logout' })
+    sendError(rep, err)
   }
 }
 
@@ -191,7 +70,7 @@ export async function getLoggedInUser(req: FastifyRequest, rep: FastifyReply) {
     const { password, salt, ...rest } = logedIn
     return rep.code(200).send({ user: rest })
   } catch (err) {
-    return rep.code(500).send({ error: 'Internal Server Error' })
+    sendError(rep, err)
   }
 }
 
@@ -288,10 +167,7 @@ export async function sendResetOtp(
 
     return rep.send(res)
   } catch (err) {
-    return rep.send({
-      status: false,
-      message: `failed to send a reset password to ${email}`,
-    })
+    sendError(rep, err)
   }
 }
 
@@ -326,7 +202,7 @@ export async function verifyOtp(
       message: 'OTP Verified',
     })
   } catch (err) {
-    return rep.send({ status: false, message: "Couldn't Verify The OTP code" })
+    sendError(rep, err)
   }
 }
 
@@ -358,10 +234,7 @@ export async function resetPassword(
 
     return rep.send({ status: true, message: 'Password Updated Successfully' })
   } catch (err) {
-    console.log(err)
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal Server Error' })
+    sendError(rep, err)
   }
 }
 
@@ -395,10 +268,7 @@ export async function changePassword(
 
     return rep.code(200).send({ status: true, message: 'Password Changed' })
   } catch (err) {
-    console.log(err)
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal Server Error' })
+    sendError(rep, err)
   }
 }
 
@@ -429,10 +299,7 @@ export async function getUser(
 
     rep.code(200).send({ ...user, isBlockedByMe, isBlockedByHim })
   } catch (err) {
-    console.log(err)
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal Server Error' })
+    sendError(rep, err)
   }
 }
 
@@ -441,17 +308,22 @@ export async function getMe(
   rep: FastifyReply
 ) {
   try {
+    console.log('req.user : ', req.user)
+
     const { email }: any = req.user
 
     const user: any = await getUserByEmail(email)
 
+    if (!user) {
+      return rep.code(404).send({ error: 'User not found' })
+    }
+
     const { password, salt, ...rest } = user
 
-    const accessToken = server.jwt.sign(rest, { expiresIn: '1d' })
-    return rep.code(200).send({ ...rest, accessToken })
+    // Return user data in the expected format
+    return rep.code(200).send({ user: rest })
   } catch (err) {
-    console.log(err)
-    rep.code(500).send({ status: false, message: 'Internal Server Error' })
+    sendError(rep, err)
   }
 }
 
@@ -465,21 +337,7 @@ export async function getRandomFriends(
       .code(200)
       .send({ status: true, friends: selectRandomFriends(email) })
   } catch (err) {
-    console.log(err)
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal Server Error' })
-  }
-}
-
-export async function getAllUsersData(req: FastifyRequest, rep: FastifyReply) {
-  try {
-    return rep.code(200)
-  } catch (err) {
-    console.log(err)
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal Server Error' })
+    sendError(rep, err)
   }
 }
 
@@ -494,9 +352,7 @@ export async function listMyFriendsHandler(
     const friends = await listMyFriends(email)
     return rep.code(200).send({ status: true, friends })
   } catch (err) {
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal Server Error' })
+    sendError(rep, err)
   }
 }
 
@@ -514,7 +370,7 @@ export async function updateUserData(
 ) {
   try {
     const { email: currentEmail, avatar: oldAvatar }: any = req.user
-    const { login, email: newEmail, username, avatar, type } = req.body
+    const { login, username, avatar, type } = req.body
 
     if (!login || !username) {
       return rep.code(400).send({
@@ -522,17 +378,16 @@ export async function updateUserData(
         message: 'Invalid data: login and username are required',
       })
     }
-    /// /goinfre/msarda/tmp/backend/uploads
-    /// /goinfre/msarda/tmp/uploads
+
     if (avatar && oldAvatar !== 'default.avif') {
       try {
-        const filePath = path.join(__dirname, '../../../uploads', oldAvatar)
+        const filePath = path.join(__dirname, '../media', oldAvatar)
         console.log('Deleting file at:', filePath)
         await fsPromises.access(filePath)
         await fsPromises.unlink(filePath)
       } catch (err: any) {
         if (err.code !== 'ENOENT')
-          console.error('Failed to delete avatar:', err)
+          server.log.error('Failed to delete avatar:', err)
         // return rep.code(404).send({status: false, message: 'Avatar not found'})
       }
     }
@@ -540,14 +395,14 @@ export async function updateUserData(
     if (type === 0) {
       if (avatar) {
         const sql = db.prepare(
-          `UPDATE User SET login = ?, username = ?, avatar = ?, email = ? WHERE email = ?`
+          `UPDATE User SET login = ?, username = ?, avatar = ? WHERE email = ?`
         )
-        sql.run(login, username, avatar, newEmail, currentEmail)
+        sql.run(login, username, avatar, currentEmail)
       } else {
         const sql = db.prepare(
-          `UPDATE User SET login = ?, username = ?, email = ? WHERE email = ?`
+          `UPDATE User SET login = ?, username = ? WHERE email = ?`
         )
-        sql.run(login, username, newEmail, currentEmail)
+        sql.run(login, username, currentEmail)
       }
     } else if (type === 2) {
       if (avatar) {
@@ -578,7 +433,7 @@ export async function updateUserData(
       })
     }
 
-    const user: any = await getUserByEmail(newEmail)
+    const user: any = await getUserByEmail(currentEmail)
     if (!user) {
       return rep.code(404).send({ status: false, message: 'User not found' })
     }
@@ -591,10 +446,7 @@ export async function updateUserData(
       user: { ...rest },
     })
   } catch (err) {
-    console.error(err)
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal server error' })
+    sendError(rep, err)
   }
 }
 
@@ -691,9 +543,6 @@ export async function getUserDetails(
       LeaderBoardData,
     })
   } catch (err) {
-    console.log('getUserDetails : ', err)
-    return rep
-      .code(500)
-      .send({ status: false, message: 'Internal server error' })
+    sendError(rep, err)
   }
 }

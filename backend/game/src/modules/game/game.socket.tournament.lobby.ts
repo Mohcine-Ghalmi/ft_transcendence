@@ -5,11 +5,9 @@ import redis, { getSocketIds } from '../../database/redis'
 import { getUserByEmail, getFriend } from '../user/user.service'
 import CryptoJS from 'crypto-js'
 
-// Key prefix for tournaments in Redis
 const TOURNAMENT_PREFIX = 'tournament:'
 const TOURNAMENT_INVITE_PREFIX = 'tournament_invite:'
 
-// Helper function to get all active tournaments
 async function getAllActiveTournaments(): Promise<any[]> {
   try {
     const keys = await redis.keys(`${TOURNAMENT_PREFIX}*`)
@@ -30,7 +28,6 @@ async function getAllActiveTournaments(): Promise<any[]> {
 }
 
 export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
-  // List tournaments
   socket.on('ListTournaments', async () => {
     try {
       const keys = await redis.keys(`${TOURNAMENT_PREFIX}*`)
@@ -50,7 +47,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
     }
   })
 
-  // Invite to tournament (encrypted)
   socket.on('InviteToTournament', async (encryptedData: string) => {
     try {
       const key = process.env.ENCRYPTION_KEY
@@ -73,7 +69,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           message: 'Missing info.',
         })
 
-      // Validate users
       const [hostUser, guestUser] = await Promise.all([
         getUserByEmail(hostEmail),
         getUserByEmail(inviteeEmail),
@@ -89,7 +84,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           message: 'Cannot invite yourself.',
         })
 
-      // Check friendship
       const friendship = await getFriend(hostEmail, inviteeEmail)
       if (!friendship)
         return socket.emit('InviteToTournamentResponse', {
@@ -97,40 +91,33 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           message: 'You can only invite friends.',
         })
 
-      // Check for existing invite and clean up if expired
       const existingInviteId = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`);
       if (existingInviteId) {
         const existingInviteData = await redis.get(`${TOURNAMENT_INVITE_PREFIX}${existingInviteId}`);
         if (existingInviteData) {
           const existingInvite = JSON.parse(existingInviteData);
-          // If invite is expired (older than 30 seconds), clean up and allow new invite
           if (Date.now() - existingInvite.createdAt > 30000) {
             await Promise.all([
               redis.del(`${TOURNAMENT_INVITE_PREFIX}${existingInviteId}`),
               redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`),
             ]);
           } else {
-            // If invite is for the same tournament, block
             if (existingInvite.tournamentId === tournamentId) {
               return socket.emit('InviteToTournamentResponse', {
                 status: 'error',
                 message: 'Already invited to this tournament.',
               });
             }
-            // If invite is for a different tournament, allow new invite
-            // (or optionally block, but old behavior allowed new invites)
             return socket.emit('InviteToTournamentResponse', {
               status: 'error',
               message: 'Already has a pending invite.',
             });
           }
         } else {
-          // Clean up stale invite reference and allow new invite
           await redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`);
         }
       }
 
-      // Check if guest is online
       const guestSocketIds = (await getSocketIds(inviteeEmail, 'sockets')) || []
       if (guestSocketIds.length === 0)
         return socket.emit('InviteToTournamentResponse', {
@@ -138,7 +125,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           message: 'User not online.',
         })
 
-      // Store invite in Redis
       const inviteId = uuidv4()
       const inviteData = {
         inviteId,
@@ -156,7 +142,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         redis.setex(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`, 30, inviteId),
       ])
 
-      // Ensure hostUser and guestUser are plain objects
       const host = (hostUser as any).toJSON
         ? (hostUser as any).toJSON()
         : (hostUser as any)
@@ -164,7 +149,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         ? (guestUser as any).toJSON()
         : (guestUser as any)
 
-      // Notify guest
       io.to(guestSocketIds).emit('TournamentInviteReceived', {
         type: 'tournament_invite',
         inviteId,
@@ -177,7 +161,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         expiresAt: Date.now() + 30000,
       })
 
-      // Confirm to host
       socket.emit('InviteToTournamentResponse', {
         type: 'invite_sent',
         status: 'success',
@@ -189,7 +172,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
         guestData: guest,
       })
 
-      // Auto-expire
       setTimeout(async () => {
         const stillExists = await redis.get(
           `${TOURNAMENT_INVITE_PREFIX}${inviteId}`
@@ -213,7 +195,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
     }
   })
 
-  // Decline tournament invite
   socket.on(
     'DeclineTournamentInvite',
     async (data: { inviteId: string; inviteeEmail: string }) => {
@@ -241,13 +222,11 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
             message: 'Invalid invite.',
           })
 
-        // Clean up invite
         await Promise.all([
           redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
           redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteeEmail}`),
         ])
 
-        // Notify host that invite was declined
         const hostSocketIds =
           (await getSocketIds(invite.hostEmail, 'sockets')) || []
         io.to(hostSocketIds).emit('TournamentInviteDeclined', {
@@ -270,7 +249,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
     }
   )
 
-  // Cancel tournament invite (host only)
   socket.on(
     'CancelTournamentInvite',
     async (data: { inviteId: string; hostEmail: string }) => {
@@ -298,13 +276,11 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
             message: 'Only the host can cancel the invite.',
           })
 
-        // Clean up invite
         await Promise.all([
           redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
           redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.inviteeEmail}`),
         ])
 
-        // Notify invitee that invite was canceled
         const inviteeSocketIds =
           (await getSocketIds(invite.inviteeEmail, 'sockets')) || []
         io.to(inviteeSocketIds).emit('TournamentInviteCanceled', {
@@ -326,7 +302,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
     }
   )
 
-  // Leave tournament
   socket.on(
     'LeaveTournament',
     async (data: { tournamentId: string; playerEmail: string }) => {
@@ -338,7 +313,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
             message: 'Missing info.',
           })
 
-        // Get tournament data
         const tournamentData = await redis.get(
           `${TOURNAMENT_PREFIX}${tournamentId}`
         )
@@ -350,7 +324,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
 
         const tournament: Tournament = JSON.parse(tournamentData)
 
-        // Check if user is a participant
         const participantIndex = tournament.participants.findIndex(
           (p) => p.email === playerEmail
         )
@@ -360,7 +333,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
             message: 'You are not a participant in this tournament.',
           })
 
-        // Check if user is the host
         if (tournament.hostEmail === playerEmail) {
           return socket.emit('TournamentLeaveResponse', {
             status: 'error',
@@ -368,20 +340,16 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           })
         }
 
-        // Handle different tournament states
         if (tournament.status === 'lobby') {
-          // Simple leave for lobby tournaments
           const leftPlayer = tournament.participants[participantIndex]
           tournament.participants.splice(participantIndex, 1)
 
-          // Update tournament in Redis
           await redis.setex(
             `${TOURNAMENT_PREFIX}${tournamentId}`,
             3600,
             JSON.stringify(tournament)
           )
 
-          // Notify all remaining participants
           const allParticipantEmails = tournament.participants.map(
             (p: any) => p.email
           )
@@ -406,7 +374,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
             message: 'Left tournament successfully.',
           })
         } else if (tournament.status === 'in_progress') {
-          // Handle forfeit for active tournaments
           const { handleTournamentPlayerForfeit } = await import(
             './game.socket.tournament.events'
           )
@@ -418,14 +385,12 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
             advancingPlayer,
           } = handleTournamentPlayerForfeit(tournament, playerEmail)
 
-          // Save updated tournament
           await redis.setex(
             `${TOURNAMENT_PREFIX}${tournamentId}`,
             3600,
             JSON.stringify(updatedTournament)
           )
 
-          // Notify all tournament participants about the forfeit
           const allParticipantEmails = updatedTournament.participants.map(
             (p: any) => p.email
           )
@@ -464,7 +429,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
     }
   )
 
-  // Cancel tournament (host only)
   socket.on(
     'CancelTournament',
     async (data: { tournamentId: string; hostEmail: string }) => {
@@ -476,7 +440,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
             message: 'Missing info.',
           })
 
-        // Get tournament data
         const tournamentData = await redis.get(
           `${TOURNAMENT_PREFIX}${tournamentId}`
         )
@@ -487,8 +450,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           })
 
         const tournament: Tournament = JSON.parse(tournamentData)
-
-        // Check if user is the host
         if (tournament.hostEmail !== hostEmail) {
           return socket.emit('TournamentCancelResponse', {
             status: 'error',
@@ -496,7 +457,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           })
         }
 
-        // Check if tournament is in lobby state
         if (tournament.status !== 'lobby') {
           return socket.emit('TournamentCancelResponse', {
             status: 'error',
@@ -504,7 +464,6 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           })
         }
 
-        // Get all participants before deletion
         const allParticipantEmails = tournament.participants.map(
           (p: any) => p.email
         )
@@ -515,10 +474,7 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           allSocketIds.push(...socketIds)
         }
 
-        // Delete tournament immediately from Redis (event-driven cleanup)
         await redis.del(`${TOURNAMENT_PREFIX}${tournamentId}`)
-
-        // Emit tournament canceled event to all participants
         io.to(allSocketIds).emit('TournamentCanceled', {
           tournamentId,
           tournament: {
@@ -529,12 +485,9 @@ export function registerTournamentLobbyHandlers(socket: Socket, io: Server) {
           reason: 'Host canceled the tournament',
         })
 
-        // Redirect all participants to play page
         io.to(allSocketIds).emit('RedirectToPlay', {
           message: 'Tournament was canceled by the host.',
         })
-
-        // Emit updated tournament list to all clients
         const remainingTournaments = await getAllActiveTournaments()
         io.emit('TournamentList', remainingTournaments)
 

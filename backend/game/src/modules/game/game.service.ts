@@ -5,7 +5,6 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
   const db = getDatabase()
   
   try {
-    // First check if a match with this game_id already exists
     const existingStmt = db.prepare('SELECT id FROM match_history WHERE game_id = ?')
     const existing = existingStmt.get(match.gameId) as { id: number } | undefined
     
@@ -39,7 +38,6 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
       match.status
     )
     
-    // Update XP for both players based on the result
     await updateUserXP(match.winner, true)  // Winner gets +30 XP
     await updateUserXP(match.loser, false)  // Loser gets -15 XP
     
@@ -48,28 +46,20 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
       ...match
     }
   } catch (error) {
-    console.error(`Error creating match history for game ${match.gameId}:`, error)
-    
-    // If it's a UNIQUE constraint error, try to get the existing record
     if (error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-
       const existingStmt = db.prepare('SELECT * FROM match_history WHERE game_id = ?')
       const existing = existingStmt.get(match.gameId) as MatchHistory | undefined
-      
       if (existing) {
-
         return existing
       }
     }
     
-    // Re-throw the error if we can't handle it
     throw error
   }
 }
 
 export async function getMatchHistoryByUser(email: string, limit: number = 20): Promise<MatchHistory[]> {
   const db = getDatabase()
-  
   const stmt = db.prepare(`
     SELECT * FROM match_history 
     WHERE player1_email = ? OR player2_email = ?
@@ -165,7 +155,6 @@ export async function initializeMatchHistoryTable(): Promise<void> {
     )
   `)
   
-  // Create indexes for better performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_match_history_player1 ON match_history(player1_email);
     CREATE INDEX IF NOT EXISTS idx_match_history_player2 ON match_history(player2_email);
@@ -174,29 +163,21 @@ export async function initializeMatchHistoryTable(): Promise<void> {
   `)
 }
 
-// Function to update user XP based on game result
 export async function updateUserXP(userEmail: string, isWinner: boolean): Promise<void> {
   const db = getDatabase()
   
   try {
     const xpChange = isWinner ? 30 : -15
-    
     const getUserStmt = db.prepare('SELECT id, xp, level FROM User WHERE email = ?')
     const user = getUserStmt.get(userEmail) as { id: number; xp: number; level: number } | undefined
     
     if (!user) {
-      console.error(`User not found for XP update: ${userEmail}`)
       return
     }
-    
     const newXP = Math.max(0, user.xp + xpChange)
-    
     const newLevel = Math.floor(newXP / 100)
-    
     const updateStmt = db.prepare('UPDATE User SET xp = ?, level = ? WHERE email = ?')
     updateStmt.run(newXP, newLevel, userEmail)
-    
-    console.log(`Updated XP for ${userEmail}: ${user.xp} -> ${newXP} (${isWinner ? 'WIN' : 'LOSS'}: ${xpChange > 0 ? '+' : ''}${xpChange}), Level: ${user.level} -> ${newLevel}`)
     
   } catch (error) {
     console.error(`Error updating XP for user ${userEmail}:`, error)

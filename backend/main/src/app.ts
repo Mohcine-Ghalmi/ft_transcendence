@@ -112,6 +112,11 @@ async function registerPlugins() {
         process.env.FRONT_END_URL,
         process.env.CHAT_BACKEND_URL,
         process.env.GAME_BACKEND_URL,
+        'http://chat-service:5006',
+        'http://game-service:5007',
+        'http://nginx',
+        'https://nginx',
+        'http://frontend:3000',
       ].filter(Boolean) as string[]
 
       if (!origin || allowedOrigins.includes(origin)) {
@@ -130,7 +135,7 @@ async function registerPlugins() {
   })
 
   await server.register(fastifyStatic, {
-    root: path.resolve(process.cwd(), '../uploads'),
+    root: path.resolve(process.cwd(), '/media'),
     prefix: '/images/',
     decorateReply: false,
   })
@@ -208,10 +213,19 @@ server.decorate(
         })
       }
 
+      if (tokenBlacklist.has(token)) {
+        rep.clearCookie('accessToken')
+        return rep.code(401).send({
+          error: 'Token revoked',
+          message: 'This token has been invalidated',
+        })
+      }
+
       const decoded = server.jwt.verify(token)
 
       req.user = decoded
     } catch (err: any) {
+      server.log.error('Authentication error:', err.message)
       rep.clearCookie('accessToken')
 
       return rep.code(401).send({
@@ -252,9 +266,9 @@ async function registerRoutes() {
     server.addSchema(schema)
   }
 
-  server.register(userRoutes, { prefix: 'api/users' })
-  server.register(mailRoutes, { prefix: 'api/mail' })
-  server.register(twoFARoutes, { prefix: 'api/2fa' })
+  server.register(userRoutes, { prefix: 'api/user-service/users' })
+  server.register(mailRoutes, { prefix: 'api/user-service/mail' })
+  server.register(twoFARoutes, { prefix: 'api/user-service/2fa' })
   server.register(loginRouter)
 }
 
@@ -262,14 +276,14 @@ async function startServer() {
   try {
     const BACK_END_PORT = process.env.BACK_END_PORT as string
     if (!BACK_END_PORT) {
-      console.error('BACK_END_PORT environment variable is not set.')
+      server.log.error('BACK_END_PORT environment variable is not set.')
       process.exit(1)
     }
     await registerPlugins()
 
     await registerRoutes()
 
-    await cleanupStaleSocketsOnStartup()
+    //await cleanupStaleSocketsOnStartup()
 
     await server.listen({
       port: parseInt(BACK_END_PORT),
@@ -277,9 +291,8 @@ async function startServer() {
     })
 
     setupSocketIO(server)
-  } catch (error) {
-    server.log.error(error)
-    console.error('Failed to start server:', error)
+  } catch (error: any) {
+    server.log.error(error.message || error)
     process.exit(1)
   }
 }

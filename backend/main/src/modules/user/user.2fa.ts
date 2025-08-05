@@ -1,9 +1,17 @@
 import QRCode from 'qrcode'
 import speakeasy from 'speakeasy'
 import { FastifyInstance, FastifyRequest, type FastifyReply } from 'fastify'
-import { db } from '../../app'
+import server, { db } from '../../app'
 import { getUserByEmail } from './user.service'
 import { signJWT } from './user.login'
+
+export function sendError(rep: FastifyReply, err: any) {
+  server.log.error(err.message)
+  const statusCode = err.statusCode || err.status || 500
+  return rep
+    .status(statusCode)
+    .send({ error: err.message || 'Internal server error' })
+}
 
 export async function setTwoFASecret(
   id: number,
@@ -15,14 +23,16 @@ export async function setTwoFASecret(
       'UPDATE User SET isTwoFAVerified = ? ,twoFASecret = ? WHERE id = ?'
     )
     stmt.run(status, secret, id)
-  } catch (error) {
-    console.error('Error updating two-factor authentication secret:', error)
+  } catch (error: any) {
+    server.log.error(
+      'Error updating two-factor authentication secret : ',
+      error.message
+    )
   }
 }
 
 async function handleQRCodeGenerator(req: FastifyRequest, rep: FastifyReply) {
   try {
-    const { id }: any = req.user
     const secret = speakeasy.generateSecret({
       name: 'ft_transcendence',
     })
@@ -38,9 +48,8 @@ async function handleQRCodeGenerator(req: FastifyRequest, rep: FastifyReply) {
       secret: secret.base32,
       qrCode: qrCodeDataURL,
     })
-  } catch (error) {
-    console.error('Error generating QR code:', error)
-    return rep.status(500).send({ error: 'Failed to generate QR code' })
+  } catch (error: any) {
+    return sendError(rep, error)
   }
 }
 
@@ -81,9 +90,8 @@ async function verifyTwoFaLogin(
 
     const accessToken = signJWT(rest, rep)
     return rep.code(200).send({ ...rest, accessToken })
-  } catch (err) {
-    console.error('Error in verifyTwoFaLogin:', err)
-    return rep.status(500).send({ error: 'Internal server error' })
+  } catch (err: any) {
+    return sendError(rep, err)
   }
 }
 
@@ -106,10 +114,7 @@ async function verifiedTwoFA(
     }
     return rep.send({ verified })
   } catch (error) {
-    console.error('Error verifying two-factor authentication:', error)
-    return rep
-      .status(500)
-      .send({ error: 'Failed to verify two-factor authentication' })
+    return sendError(rep, error)
   }
 }
 
@@ -119,10 +124,7 @@ async function disableQRCode(req: FastifyRequest, rep: FastifyReply) {
     await setTwoFASecret(id, '', 0)
     return rep.send({ success: true })
   } catch (error) {
-    console.error('Error disabling two-factor authentication:', error)
-    return rep
-      .status(500)
-      .send({ error: 'Failed to disable two-factor authentication' })
+    return sendError(rep, error)
   }
 }
 

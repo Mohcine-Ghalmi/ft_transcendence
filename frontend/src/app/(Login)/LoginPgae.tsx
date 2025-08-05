@@ -76,8 +76,9 @@ export default function LoginPage() {
     }
 
     // If validation passes, proceed with login
-    const res = await login({ email, password })
-    if (res) router.push('/dashboard')
+    await login({ email, password }).then((res) => {
+      if (res) router.push('/dashboard')
+    })
     // Add your login logic here
   }
 
@@ -109,7 +110,7 @@ export default function LoginPage() {
           </button>
         </Link>
       </header>
-      {hidePopUp && <VerifyTwoFa email={email} />}
+      {hidePopUp && <VerifyTwoFa />}
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-5xl">

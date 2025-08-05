@@ -3,22 +3,18 @@ import { GameRoomData, activeGames, gameRooms } from './game.socket.types'
 import { createMatchHistory } from './game.service'
 import { activeGameSessions, userGameSessions } from './game.socket.types'
 
-// Helper function to clean up game resources
 export async function cleanupGame(
   gameId: string,
   reason: 'normal_end' | 'player_left' | 'timeout' = 'normal_end'
 ) {
   const gameRoom = gameRooms.get(gameId)
   if (!gameRoom) return
-
-  // CLEAN UP SESSION TRACKING FIRST
   const gameSessions = activeGameSessions.get(gameId)
   if (gameSessions) {
     gameSessions.clear()
     activeGameSessions.delete(gameId)
   }
 
-  // Clean up user game sessions for both players
   const playersToCleanup = [gameRoom.hostEmail, gameRoom.guestEmail]
   for (const playerEmail of playersToCleanup) {
     const userGameId = userGameSessions.get(playerEmail)
@@ -27,28 +23,21 @@ export async function cleanupGame(
     }
   }
 
-  // Continue with existing cleanup logic
   gameRoom.status = 'completed'
   gameRoom.endedAt = Date.now()
-
-  // Save the final state to Redis briefly (for debugging/logging purposes)
-  await redis.setex(`game_room:${gameId}`, 300, JSON.stringify(gameRoom)) // Keep for 5 minutes instead of 1 hour
-
-  // Remove from active games immediately
+  await redis.setex(`game_room:${gameId}`, 300, JSON.stringify(gameRoom))
   activeGames.delete(gameId)
   gameRooms.delete(gameId)
 
-  // Delete the Redis key immediately after a short delay to ensure data is saved
   setTimeout(async () => {
     try {
       await redis.del(`game_room:${gameId}`)
     } catch (error) {
       console.error(`Error deleting game room ${gameId} from Redis:`, error)
     }
-  }, 1000) // 1 second delay to ensure the final state is saved
+  }, 1000)
 }
 
-// Helper function to save match history
 export async function saveMatchHistory(
   gameId: string,
   gameRoom: GameRoomData,
@@ -58,7 +47,6 @@ export async function saveMatchHistory(
   reason: 'normal_end' | 'player_left' | 'timeout' = 'normal_end'
 ) {
   try {
-    // Check if match history already exists for this game
     const { getDatabase } = await import('../../database/connection')
     const db = getDatabase()
     const existingStmt = db.prepare(
@@ -69,14 +57,10 @@ export async function saveMatchHistory(
     if (existing) {
       return
     }
-
-    // Calculate game duration
     const gameDuration =
       gameRoom.startedAt && gameRoom.endedAt
         ? Math.floor((gameRoom.endedAt - gameRoom.startedAt) / 1000)
         : 0
-
-    // Save match history
     await createMatchHistory({
       gameId,
       player1Email: gameRoom.hostEmail,
@@ -93,11 +77,9 @@ export async function saveMatchHistory(
     })
   } catch (error) {
     console.error(`Error saving match history for game ${gameId}:`, error)
-    // Don't re-throw the error to prevent game cleanup from failing
   }
 }
 
-// Helper function to emit to multiple users
 export async function emitToUsers(
   io: any,
   userEmails: string[],

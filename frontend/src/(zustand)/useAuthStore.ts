@@ -7,12 +7,12 @@ import { jwtDecode } from 'jwt-decode'
 import CryptoJs from 'crypto-js'
 import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
+import { useGameStore } from './useGameStore'
 
-const BACK_END = process.env.NEXT_PUBLIC_BACKEND
-const FRON_END = process.env.NEXT_PUBLIC_FRONEND
+const FRONT_END = process.env.NEXT_PUBLIC_FRONTEND
 
 export const axiosInstance = axios.create({
-  baseURL: BACK_END,
+  baseURL: `/api/user-service`,
   withCredentials: true,
 })
 
@@ -20,7 +20,7 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken')
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -36,12 +36,22 @@ axiosInstance.interceptors.response.use(
       (error.response?.status === 401 ||
         error.status === 401 ||
         error.status === 403) &&
-      window.location.href !== `${FRON_END}/`
+      window.location.href !== `${FRONT_END}/`
     ) {
       const disconnectSocket = useAuthStore.getState().disconnectSocket
       disconnectSocket()
+
+      useAuthStore.setState({
+        user: null,
+        isAuthenticated: false,
+        userDetails: null,
+        notifications: [],
+        onlineUsers: [],
+      })
+
       localStorage.removeItem('accessToken')
-      window.location.href = `${FRON_END}/`
+
+      window.location.href = `${FRONT_END}/`
     }
     return Promise.reject(error)
   }
@@ -90,7 +100,7 @@ interface UserState {
   logout: () => Promise<void>
   connectSocket: () => void
   disconnectSocket: () => void
-  googleLogin: (data: any) => Promise<void>
+  // googleLogin: (data: any) => Promise<void>
   notifications: any
   setNotifations: (data: any) => void
   seachedUsers: any
@@ -106,6 +116,7 @@ interface UserState {
   userDetails: UserDetails | null
   setUserDetails: (data: UserDetails) => void
   getUserDetails: (email: string) => Promise<void>
+  hasStoredToken: () => boolean
 }
 
 export const useAuthStore = create<UserState>()((set, get) => ({
@@ -125,7 +136,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   getUserDetails: async (email: string) => {
     try {
-      const res = await axiosInstance.post('/api/users/getUserDetails', {
+      const res = await axiosInstance.post('/users/getUserDetails', {
         email,
       })
       const data: UserDetails = res.data
@@ -150,7 +161,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
   getUser: async () => {
     try {
-      const res = await axiosInstance.get('/api/users/me')
+      const res = await axiosInstance.get('/users/me')
       get().setUser(res.data.user)
     } catch (err) {
       get().setUser(null)
@@ -159,46 +170,27 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
   },
   checkAuth: async () => {
-    return true
-    // set({ isLoading: true })
-    // try {
-    //   const res = await axiosInstance.get('/api/users/getMe')
-    //   const { user } = res.data
-    //   set({ user, isAuthenticated: true })
-    //   get().connectSocket()
-    //   return true
-    // } catch (err) {
-    //   console.error('Auth check failed:', err)
-    //   set({ user: null, isAuthenticated: false })
-    //   return false
-    // } finally {
-    //   set({ isLoading: false })
-    // }
-  },
-
-  googleLogin: async (data: any): Promise<void> => {
-    if (get().user) return Promise.resolve()
     set({ isLoading: true })
-
     try {
-      const byte = CryptoJs.AES.encrypt(
-        JSON.stringify(data),
-        process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
-      )
-      const res = await axios.post(`/api/login`, data)
-
-      if (res?.status === 200) {
-        const { accessToken, ...user } = res.data
-        localStorage.setItem('accessToken', accessToken)
-        set({ user, isAuthenticated: true })
-        toast.success('Login successful!')
-      } else {
-        toast.warning(res.data?.message || 'Login failed')
+      const token = localStorage.getItem('accessToken')
+      if (!token) {
+        set({ user: null, isAuthenticated: false })
+        return false
       }
-    } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || err.message || 'Login failed'
-      toast.error(errorMessage)
+
+      const res = await axiosInstance.get('/users/getMe')
+      const { user } = res.data
+      if (user) {
+        set({ user, isAuthenticated: true })
+        get().connectSocket()
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error('Auth check failed:', err)
+      set({ user: null, isAuthenticated: false })
+      localStorage.removeItem('accessToken')
+      return false
     } finally {
       set({ isLoading: false })
     }
@@ -218,11 +210,14 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning('Registration failed')
         return false
       }
-      const { ...user } = res.data
-      // localStorage.setItem('accessToken', accessToken)
+      const { accessToken, ...user } = res.data
+
+      if (accessToken) {
+        localStorage.setItem('accessToken', accessToken)
+      }
+
       set({ user, isAuthenticated: true })
       get().connectSocket()
-      window.location.href = `${FRON_END}/dashboard`
       return true
     } catch (err: any) {
       console.log(err)
@@ -240,7 +235,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   }) => {
     set({ isLoading: true })
     try {
-      const res = await axiosInstance.post(`/api/users/changePassword`, data)
+      const res = await axiosInstance.post(`/users/changePassword`, data)
       if (res?.status === 200) {
         toast.success('Password changed successfully!')
         return true
@@ -265,37 +260,21 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         JSON.stringify(data),
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
-      // const hasTwoFAres = await axiosInstance.post(
-      //   `/api/users/verify-hasTwoFA`,
-      //   data.email
-      // )
-      // if (hasTwoFAres?.data?.isTwoFAVerified) {
-      //   toast.warning(
-      //     'You have two-factor authentication enabled. Please verify your OTP.'
-      //   )
-      //   return false
-      // }
       const res = await axiosInstance.post(`/v2/api/users/login`, data)
-      if (!res.data) {
-        toast.warning('Login failed')
+      console.log(res.data)
+
+      const { status, accessToken, ...user } = res.data
+      if (!status) {
+        get().setHidePopUp(true)
         return false
-      }
-      const { status, ...user } = res.data
-      if (status) {
+      } else if (status) {
+        localStorage.setItem('accessToken', accessToken)
         set({ user, isAuthenticated: true })
         get().connectSocket()
-        window.location.href = `${FRON_END}/dashboard`
-      } else {
-        console.log(res.data)
-        if (res.data.desc === '2FA verification required') {
-          get().setHidePopUp(true)
-          return false
-        }
-        return false
+        return true
       }
-
-      return true
     } catch (err: any) {
+      console.log(err)
       toast.warning(err.response?.data?.message || err.message)
       return false
     } finally {
@@ -305,19 +284,28 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   logout: async () => {
     try {
-      const res = await axiosInstance.post(`/api/users/logout`)
+      const res = await axiosInstance.post(`/users/logout`)
       if (res?.status === 200) {
         toast.success('Logout successful!')
       } else {
         toast.warning(res.data?.message || 'Logout failed')
       }
-      get().disconnectSocket()
     } catch (err) {
       console.error('Logout failed:', err)
       toast.warning('Logout failed')
+    } finally {
+      get().disconnectSocket()
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        userDetails: null,
+        notifications: [],
+        onlineUsers: [],
+      })
+      localStorage.removeItem('accessToken')
+      window.location.href = `${FRONT_END}/`
     }
-    // set({ user: null, isAuthenticated: false, isLoading: false })
-    // signOut({ callbackUrl: `${FRON_END}/` })
   },
 
   connectSocket: () => {
@@ -331,13 +319,16 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.off('disconnect')
       socketInstance.off('connect_error')
       socketInstance.off('getOnlineUsers')
+      useGameStore.getState().disconnectSocket()
       socketInstance.disconnect()
     }
     const cryptedMail = CryptoJs.AES.encrypt(
       user.email,
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
-    socketInstance = io(BACK_END, {
+
+    socketInstance = io('/', {
+      path: '/user-service/socket.io',
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },
@@ -345,6 +336,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
     const onConnect = () => {
       set({ socketConnected: true })
+      useGameStore.getState().connectSocket()
     }
 
     const onOnlineUsers = (onlineUsers: string[]) => {
@@ -358,6 +350,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     const onConnectError = (err: Error) => {
       console.log('Socket connection error:', err.message)
       set({ socketConnected: false })
+      get().logout()
     }
 
     const onNewNotification = (notifications: any) => {
@@ -387,7 +380,48 @@ export const useAuthStore = create<UserState>()((set, get) => ({
           const friendNotification = {
             message: notifications.message,
             type: 'friend_request',
+            desc: notifications?.desc,
             senderEmail: notifications.senderEmail,
+          }
+          console.log('friendNotification : ', friendNotification)
+
+          if (friendNotification?.desc) {
+            const {
+              searchedUsersGlobal,
+              setSearchedUsersGlobal,
+              randomFriendsSuggestions,
+              setRandomFriendsSuggestion,
+            } = useSearchStore.getState()
+
+            const updatedUsers =
+              searchedUsersGlobal.length > 0
+                ? searchedUsersGlobal.map((tmp) =>
+                    tmp.email === friendNotification.senderEmail
+                      ? {
+                          ...tmp,
+                          status: friendNotification.desc,
+                          fromEmail: friendNotification.senderEmail,
+                        }
+                      : tmp
+                  )
+                : []
+            const updatedUsersRandom =
+              randomFriendsSuggestions.length > 0
+                ? randomFriendsSuggestions.map((tmp) =>
+                    tmp.email === friendNotification.senderEmail
+                      ? {
+                          ...tmp,
+                          status: friendNotification.desc,
+                          fromEmail: friendNotification.senderEmail,
+                        }
+                      : tmp
+                  )
+                : []
+            console.log('searchedUsersGlobal : ', searchedUsersGlobal)
+
+            console.log('updatedUsers : ', updatedUsers)
+            setRandomFriendsSuggestion(updatedUsersRandom)
+            setSearchedUsersGlobal(updatedUsers)
           }
 
           set({
@@ -408,21 +442,30 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning(data.message)
       } else {
         if (data?.desc) {
-          const { searchedUsersGlobal, setSearchedUsersGlobal } =
-            useSearchStore.getState()
-          const { randomFriendsSuggestions, setRandomFriendsSuggestion } =
-            useSearchStore.getState()
+          const {
+            searchedUsersGlobal,
+            setSearchedUsersGlobal,
+            randomFriendsSuggestions,
+            setRandomFriendsSuggestion,
+          } = useSearchStore.getState()
 
-          const updatedUsers = searchedUsersGlobal.map((tmp) =>
-            tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-              : tmp
-          )
-          const updatedUsersRandom = randomFriendsSuggestions.map((tmp) =>
-            tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-              : tmp
-          )
+          const updatedUsers =
+            searchedUsersGlobal.length > 0
+              ? searchedUsersGlobal.map((tmp) =>
+                  tmp.email === data.hisEmail
+                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+                    : tmp
+                )
+              : []
+
+          const updatedUsersRandom =
+            randomFriendsSuggestions.length > 0
+              ? randomFriendsSuggestions.map((tmp) =>
+                  tmp.email === data.hisEmail
+                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+                    : tmp
+                )
+              : []
           console.log('searchedUsersGlobal : ', searchedUsersGlobal)
 
           console.log('updatedUsers : ', updatedUsers)
@@ -489,6 +532,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   disconnectSocket: () => {
+    useGameStore.getState().disconnectSocket()
     if (socketInstance) {
       socketInstance.off('connect')
       socketInstance.off('disconnect')
@@ -506,7 +550,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       set({ socketConnected: false })
     }
   },
+
+  hasStoredToken: () => {
+    if (typeof window === 'undefined') return false
+    return !!localStorage.getItem('accessToken')
+  },
 }))
 
-// Export socket instance for direct access if needed
 export const getSocketInstance = () => socketInstance

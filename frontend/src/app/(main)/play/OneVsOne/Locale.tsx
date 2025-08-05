@@ -29,8 +29,6 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
       setErrors(newErrors)
       return
     }
-
-    // Clear errors if validation passes
     setErrors({})
 
     onAddPlayer({
@@ -39,7 +37,6 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
       avatar: avatar,
     })
 
-    // Reset form
     setLogin('')
     setusername('')
     setAvatar(null)
@@ -169,7 +166,6 @@ const AddPlayerModal = ({ isOpen, onClose, onAddPlayer }) => {
   )
 }
 
-// Player Card Component
 export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
   if (!player) {
     return (
@@ -232,7 +228,6 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
 }
 
 
-// Main Local 1v1 Component
 export default function Local1v1() {
   const [player2, setPlayer2] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -253,7 +248,6 @@ export default function Local1v1() {
     setPlayer2(null)
   }
 
-  // If both players are present and showGame is true, show PingPongGame
   if (showGame && player2) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">

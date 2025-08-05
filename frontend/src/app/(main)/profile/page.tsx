@@ -3,6 +3,7 @@
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
 import { useChatStore } from '@/(zustand)/useChatStore'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
+import { MatchHistory } from '@/components/dashboard/MatchHistory'
 import { StatisticsChart } from '@/components/dashboard/StatisticsChart'
 import { useFriend } from '@/utils/useFriend'
 import Image from 'next/image'
@@ -120,10 +121,6 @@ const TopProfile = ({ user }) => {
   )
 }
 
-const MatchHistory = ({ user }) => {
-  return <div>MatchHistory</div>
-}
-
 const State = ({ user }) => {
   const { userDetails } = useAuthStore()
   const total = userDetails?.wins + userDetails?.losses
@@ -177,38 +174,6 @@ const Level = ({ user }) => {
         <Card number={userDetails?.losses | 0} text="Losses" />
         {/* <Card number="5" text="Streak" />
         <Card number="1500" text="Rating" /> */}
-      </div>
-    </div>
-  )
-}
-
-export const Profile = ({ user }) => {
-  const [isSelected, setIsSelected] = useState(false)
-  return (
-    <div className="w-[80%] h-[90vh] mt-15">
-      <TopProfile user={user} />
-      <Level user={user} />
-      {/* select */}
-      <div className="mt-10 flex items-center gap-6 my-4">
-        <button
-          onClick={() => setIsSelected(false)}
-          className={`${
-            !isSelected && 'border-white'
-          } border-b border-transparent text-xl p-6 duration-75`}
-        >
-          State
-        </button>
-        <button
-          onClick={() => setIsSelected(true)}
-          className={`${
-            isSelected && 'border-white'
-          } border-b border-transparent text-xl p-6 duration-75`}
-        >
-          Match History
-        </button>
-      </div>
-      <div className=" flex flex-col items-center justify-center w-full">
-        {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
       </div>
     </div>
   )
@@ -269,7 +234,7 @@ export default function Page() {
           </button>
         </div>
         <div className=" flex flex-col items-center justify-center w-full">
-          {!isSelected ? <State user={user} /> : <MatchHistory user={user} />}
+          {!isSelected ? <State user={user} /> : <MatchHistory />}
         </div>
       </div>
     </div>

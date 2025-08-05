@@ -15,7 +15,6 @@ interface GetTournamentParticipantParams {
 }
 
 export async function gameRoutes(fastify: FastifyInstance) {
-  // Get match history for a user
   fastify.get<{ Querystring: GetMatchHistoryParams }>(
     '/match-history',
     {
@@ -33,7 +32,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
       try {
         const { email } = request.query
         
-        // Verify user exists
         const user = await getUserByEmail(email)
         if (!user) {
           return reply.status(404).send({ error: 'User not found' })
@@ -69,7 +67,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
       try {
         const { email } = request.query
         
-        // Verify user exists
         const user = await getUserByEmail(email)
         if (!user) {
           return reply.status(404).send({ error: 'User not found' })
@@ -82,7 +79,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
           data: stats
         })
       } catch (error) {
-        console.error('Error fetching player stats:', error)
         return reply.status(500).send({ error: 'Internal server error' })
       }
     }
@@ -129,7 +125,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
           }
         })
       } catch (error) {
-        console.error('Error fetching tournament participant data:', error)
         return reply.status(500).send({ error: 'Internal server error' })
       }
     }

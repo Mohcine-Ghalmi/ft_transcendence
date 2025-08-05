@@ -30,6 +30,7 @@ declare module 'fastify' {
 }
 
 export const db = initializeDatabase()
+export const tokenBlacklist = new Set<string | undefined>()
 
 server.decorate(
   'authenticate',
@@ -51,6 +52,15 @@ server.decorate(
         })
       }
 
+      // Check if token is blacklisted
+      if (tokenBlacklist.has(token)) {
+        rep.clearCookie('accessToken')
+        return rep.code(401).send({
+          error: 'Token revoked',
+          message: 'This token has been invalidated',
+        })
+      }
+
       const decoded = server.jwt.verify(token)
 
       req.user = decoded
@@ -65,6 +75,14 @@ server.decorate(
   }
 )
 
+server.get('/healthcheck', async function () {
+  try {
+    return { status: 'OK', timestamp: new Date().toISOString() }
+  } catch (err) {
+    return { status: 'ERROR', message: 'Database error' }
+  }
+})
+
 async function startServer() {
   try {
     const GAME_BACK_END_PORT = process.env.GAME_BACK_END_PORT as string
@@ -72,7 +90,7 @@ async function startServer() {
       throw new Error('GAME_BACK_END_PORT environment variable is not set')
     }
 
-    await cleanupStaleSocketsOnStartup()
+    //await cleanupStaleSocketsOnStartup()
 
     await server.register(fastifyCookie)
 
@@ -81,7 +99,22 @@ async function startServer() {
     })
 
     await server.register(cors, {
-      origin: process.env.FRONT_END_URL,
+      origin: (origin: string | undefined, cb: any) => {
+        const allowedOrigins = [
+          process.env.FRONT_END_URL,
+          process.env.MAIN_BACKEND_URL,
+          process.env.CHAT_BACKEND_URL,
+          'http://nginx',
+          'https://nginx',
+          'http://frontend:3000',
+        ].filter(Boolean) as string[]
+
+        if (!origin || allowedOrigins.includes(origin)) {
+          cb(null, true)
+        } else {
+          cb(new Error('Not allowed'), false)
+        }
+      },
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true,
@@ -90,7 +123,7 @@ async function startServer() {
 
     setupSocketIO(server)
 
-    server.register(gameRoutes, { prefix: '/api/game' })
+    server.register(gameRoutes, { prefix: 'api/game-service' })
 
     await server.listen({
       port: parseInt(GAME_BACK_END_PORT),

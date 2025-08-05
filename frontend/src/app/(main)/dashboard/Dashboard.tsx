@@ -1,28 +1,29 @@
 'use client'
-import {
-  matchHistory,
-  friends,
-  friendSuggestions,
-} from '../../../data/mockData'
+import { friends, friendSuggestions } from '../../../data/mockData'
 import { ProfileSection } from '../../../components/dashboard/ProfileSection'
 import { GameModeCards } from '../../../components/dashboard/GameModeCards'
-import { MatchHistory } from '../../../components/dashboard/MatchHistory'
 import { FriendsSection } from '../../../components/dashboard/FriendsSection'
 import { FriendSuggestions } from '../../../components/dashboard/FriendSuggestions'
 import { StatisticsChart } from '../../../components/dashboard/StatisticsChart'
 import { useEffect } from 'react'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
 import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { MatchHistory } from '../../../components/dashboard/MatchHistory'
 
 export default function PingPongDashboard() {
   const { getRandomFriendsSuggestions } = useSearchStore()
   const { getUserDetails, userDetails, user } = useAuthStore()
+
   const total = userDetails?.wins + userDetails?.losses
   const winRate = total ? ((userDetails?.wins / total) * 100).toFixed(1) : 0
+
   useEffect(() => {
-    getUserDetails(user.email)
-    getRandomFriendsSuggestions()
-  }, [])
+    if (user?.email) {
+      getUserDetails(user.email)
+      getRandomFriendsSuggestions()
+    }
+  }, [user?.email])
+
   return (
     <div className="h-full text-white">
       {/* Main Dashboard Content */}
@@ -33,7 +34,7 @@ export default function PingPongDashboard() {
             <ProfileSection />
             <GameModeCards />
             <div className="flex xl:flex-row flex-col w-full gap-4">
-              <MatchHistory matchHistory={matchHistory} />
+              <MatchHistory />
               <FriendSuggestions />
             </div>
             <FriendsSection />

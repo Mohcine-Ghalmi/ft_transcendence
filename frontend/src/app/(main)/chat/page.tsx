@@ -51,7 +51,6 @@ const page = () => {
       } else if (data.status === 'error') {
         toast.warning(data.message)
       }
-      console.log(data)
     }
 
     if (socketInstance?.connected)

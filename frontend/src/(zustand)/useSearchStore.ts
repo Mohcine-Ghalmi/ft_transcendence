@@ -1,6 +1,6 @@
-import { Anybody } from 'next/font/google'
 import { create } from 'zustand'
 import { axiosInstance, useAuthStore } from './useAuthStore'
+import { toast } from 'react-toastify'
 
 interface useSearch {
   searchedUsersGlobal: any
@@ -25,8 +25,6 @@ export const useSearchStore = create<useSearch>((set, get) => ({
   },
   searchedChatUsers: [],
   setSearchedChatUsers: (searchedChatUsers) => {
-    console.log('searchedChatUsers : ', searchedChatUsers)
-
     set({ searchedChatUsers })
   },
   randomFriendsSuggestions: [],
@@ -37,14 +35,13 @@ export const useSearchStore = create<useSearch>((set, get) => ({
   getRandomFriendsSuggestions: async () => {
     try {
       const { user } = useAuthStore.getState()
-      const res = await axiosInstance.post('/api/users/getRandomFriends', {
+      const res = await axiosInstance.post('/users/getRandomFriends', {
         email: user.email,
       })
       set({ randomFriendsSuggestions: res.data.friends })
-      console.log('randomFriendsSuggestions : ', res.data.friends)
-    } catch (err) {
+    } catch (err: any) {
       set({ randomFriendsSuggestions: [] })
-      console.log(err)
+      toast.warning('Error fetching random friends suggestions:', err.message)
     }
   },
 }))

@@ -61,6 +61,7 @@ export async function cleanupStaleSocketsOnStartup() {
 }
 
 import { createAdapter } from '@socket.io/redis-adapter'
+import server from './app'
 
 async function checkSocketConnection(socket: any) {
   if (!socket || !socket.handshake || !socket.handshake.query) {
@@ -101,10 +102,11 @@ async function checkSocketConnection(socket: any) {
       return null
     }
     return me
-  } catch (err) {
+  } catch (err: any) {
+    server.log.error('Socket connection error:', err.message)
     socket.emit('error-in-connection', {
       status: 'error',
-      message: 'Invalid email format',
+      message: err.message || 'Invalid email format',
     })
     socket.disconnect(true)
     return null
@@ -154,10 +156,11 @@ export async function setupSocketIO(server: FastifyInstance) {
           io.emit('getOnlineUsers', onlineUsers)
         }
       })
-    } catch (error) {
+    } catch (error: any) {
+      server.log.error('Socket connection error:', error.message)
       return socket.emit('error-in-connection', {
         status: 'error',
-        message: 'An error occurred during connection',
+        message: error.message || 'An error occurred during connection',
       })
     }
   })

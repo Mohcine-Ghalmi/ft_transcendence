@@ -6,7 +6,11 @@ import { toast } from 'react-toastify'
 import { ConversationContainer, EmptyChat, More } from './server/ChatSide'
 import CryptoJs from 'crypto-js'
 import '@fortawesome/fontawesome-free/css/all.min.css'
-import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import {
+  axiosInstance,
+  socketInstance,
+  useAuthStore,
+} from '@/(zustand)/useAuthStore'
 import {
   axiosChatInstance,
   chatSocket,
@@ -314,8 +318,7 @@ const Chat = () => {
     const formData = new FormData()
     formData.append('file', image)
     try {
-      const res = await axiosChatInstance.post('/api/chat/postImage', formData)
-      // toast.success('Image uploaded successfully')
+      const res = await axiosInstance.post('/users/postImage', formData)
       setImage(null)
       return res.data.filename
     } catch (err: any) {
@@ -390,8 +393,6 @@ const Chat = () => {
   }
 
   useEffect(() => {
-    console.log('Chat isChatSocketConnected : ', isChatSocketConnected)
-
     const onFailedToSendMessage = (err) => {
       toast.error(err)
       setIsLoading(false)

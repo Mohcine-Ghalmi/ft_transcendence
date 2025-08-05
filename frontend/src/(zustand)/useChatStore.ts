@@ -5,11 +5,10 @@ import { toast } from 'react-toastify'
 import CryptoJs from 'crypto-js'
 import axios from 'axios'
 
-const FRON_END = process.env.NEXT_PUBLIC_FRONEND
-const BACK_END = 'http://localhost:5006'
+const FRONT_END = process.env.NEXT_PUBLIC_FRONTEND
 
 export const axiosChatInstance = axios.create({
-  baseURL: BACK_END,
+  baseURL: `/api/chat-service`,
   withCredentials: true,
 })
 
@@ -33,12 +32,12 @@ axiosChatInstance.interceptors.response.use(
       (error.response?.status === 401 ||
         error.status === 401 ||
         error.status === 403) &&
-      window.location.href !== `${FRON_END}/`
+      window.location.href !== `${FRONT_END}/`
     ) {
       const disconnectSocket = useAuthStore.getState().disconnectSocket
       disconnectSocket()
       localStorage.removeItem('accessToken')
-      window.location.href = `${FRON_END}/`
+      window.location.href = `${FRONT_END}/`
     }
     return Promise.reject(error)
   }
@@ -99,13 +98,12 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   getConversations: async () => {
     set({ isLoading: true })
     try {
-      const res = await axiosChatInstance.get('/api/chat/getFriends')
+      const res = await axiosChatInstance.get('/getFriends')
 
       set({ conversations: res.data })
 
       set({ isLoading: false })
     } catch (err: any) {
-      console.log(err)
       set({ isLoading: false })
     }
   },
@@ -113,7 +111,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   getMessage: async (id: number, offset: number) => {
     set({ isLoading: true })
     try {
-      const res = await axiosChatInstance.get(`/api/chat/${id}/${offset}`)
+      const res = await axiosChatInstance.get(`/${id}/${offset}`)
       const user = useAuthStore.getState().user
       set({
         selectedConversation:
@@ -154,7 +152,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       }
       set({ isLoading: false })
     } catch (err: any) {
-      console.log(err)
       toast.warning(
         err.response?.data?.message || 'Please Refresh or try again later'
       )
@@ -163,8 +160,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   },
 
   handleNewMessage: (newMessage: any) => {
-    console.log('newMessage : ', newMessage)
-
     if (!newMessage) return
 
     const { selectedConversationId, selectedConversation } = get()
@@ -200,8 +195,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
   },
 
   handleChangeConversations: (newConversation: any) => {
-    console.log('newConversation : ', newConversation)
-
     set({ conversations: newConversation })
   },
 
@@ -209,7 +202,9 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     if (chatSocket?.connected) return
     const user = useAuthStore.getState().user
 
-    if (!user) return
+    if (!user) {
+      return
+    }
 
     if (chatSocket) {
       chatSocket.off('connect')
@@ -223,11 +218,13 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
 
-    chatSocket = io(`${BACK_END}/chat`, {
+    chatSocket = io('/chat', {
+      path: '/chat-service/socket.io',
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },
     })
+
     set({ isChatSocketConnected: true })
 
     const onMessagesSeenUpdate = (data: any) => {
@@ -261,18 +258,17 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       })
     }
 
-    const onConnect = () => {
-      console.log('connected to chat')
-    }
+    const onConnect = () => {}
 
     const onDisconnect = () => {
       set({ isChatSocketConnected: false })
     }
 
     const onConnectError = (err: Error) => {
+      console.error('Chat socket: Connection error:', err)
       toast.warning('Failed To Connect To the Chat Server')
       setTimeout(() => {
-        window.location.href = `${FRON_END}/`
+        window.location.href = `${FRONT_END}/`
       }, 2000)
     }
 

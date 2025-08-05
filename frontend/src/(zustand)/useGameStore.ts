@@ -9,11 +9,11 @@ import { useSearchStore } from './useSearchStore'
 import { useChatStore } from './useChatStore'
 import { useAuthStore } from './useAuthStore'
 
-const BACK_END = 'http://localhost:5007'
-const FRON_END = process.env.NEXT_PUBLIC_FRONEND
+const FRONT_END = process.env.NEXT_PUBLIC_FRONTEND
 
 export const axiosGameInstance = axios.create({
-  baseURL: BACK_END,
+  // baseURL: `${BACK_END}`,
+  baseURL: '/api/game-service',
   withCredentials: true,
 })
 
@@ -37,17 +37,16 @@ axiosGameInstance.interceptors.response.use(
       (error.response?.status === 401 ||
         error.status === 401 ||
         error.status === 403) &&
-      window.location.href !== `${FRON_END}/`
+      window.location.href !== `${FRONT_END}/`
     ) {
       const disconnectSocket = useAuthStore.getState().disconnectSocket
       disconnectSocket()
       localStorage.removeItem('accessToken')
-      window.location.href = `${FRON_END}/`
+      window.location.href = `${FRONT_END}/`
     }
     return Promise.reject(error)
   }
 )
-
 
 export let gameSocketInstance: Socket | null = null
 
@@ -61,8 +60,11 @@ export const useGameStore = create<UserState>()((set, get) => ({
   socketConnected: false,
 
   connectSocket: () => {
+    console.log('Connecting to game socket... : ', gameSocketInstance)
+
     if (gameSocketInstance?.connected) return
     const { user } = useAuthStore.getState()
+    console.log('user in connectSocket : ', user)
 
     if (!user) return
 
@@ -77,7 +79,10 @@ export const useGameStore = create<UserState>()((set, get) => ({
       user.email,
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
-    gameSocketInstance = io(BACK_END, {
+    console.log('cryptedMail : ', cryptedMail)
+
+    gameSocketInstance = io('/', {
+      path: '/game-service/socket.io',
       withCredentials: true,
       reconnection: false,
       query: { cryptedMail },

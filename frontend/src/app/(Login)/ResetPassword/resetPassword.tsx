@@ -46,7 +46,7 @@ export default function ResetPassword({ setShowRestpassword }) {
     // Simulate API call
     setTimeout(async () => {
       try {
-        const res = await axiosInstance.post('/api/users/password-reset-otp', {
+        const res = await axiosInstance.post('/password-reset-otp', {
           email,
         })
         if (res.data.status) {

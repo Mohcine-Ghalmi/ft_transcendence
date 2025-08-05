@@ -3,14 +3,12 @@ import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'react-toastify'
-import { useAuthStore } from '@/(zustand)/useAuthStore'
 
 const SignInWithOthers = () => {
   //
   const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(false)
   const searchParams = useSearchParams()
-  const { googleLogin } = useAuthStore()
 
   useEffect(() => {
     const errorCode = searchParams.get('error')

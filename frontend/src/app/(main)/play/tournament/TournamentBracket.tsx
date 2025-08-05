@@ -29,7 +29,6 @@ export function MobileBracket({
         Current Round: {currentRound + 1}
       </div>
 
-      {/* Mobile vertical bracket */}
       <div className="flex flex-col w-full space-y-4">
         {Array.from({ length: rounds }).map((_, roundIndex) => {
           const matchesInRound = tournamentSize / Math.pow(2, roundIndex + 1)
@@ -52,11 +51,8 @@ export function MobileBracket({
                     : 'border-green-400/50 bg-gray-700/50'
                   const isCurrentRound = roundIndex === currentRound
 
-                  // Get players for this match
                   let player1, player2
-
                   if (roundIndex === 0) {
-                    // First round pulls directly from participants
                     const player1Index = matchIndex * 2
                     const player2Index = player1Index + 1
                     player1 =
@@ -68,7 +64,6 @@ export function MobileBracket({
                         ? participants[player2Index]
                         : null
                   } else {
-                    // Look for winners from previous round
                     const prevRound = roundIndex - 1
                     const prevMatchIndex1 = matchIndex * 2
                     const prevMatchIndex2 = prevMatchIndex1 + 1
@@ -139,12 +134,10 @@ export function MobileBracket({
                         onPlayMatch(match)
                       }
                     >
-                      {/* Match header */}
                       <div className="bg-black text-gray-300 text-xs font-medium px-2 py-1 border-b border-gray-700">
                         Match {matchIndex + 1}
                       </div>
 
-                      {/* Players container */}
                       <div className="flex flex-col">
                         <div
                           className={`py-2 px-3 border-b ${player1BorderColor} ${player1BgStyle}`}
@@ -175,7 +168,6 @@ export function MobileBracket({
         })}
       </div>
 
-      {/* Legend for bracket */}
       <div className="flex flex-wrap items-center justify-center mt-4 text-xs space-x-2 space-y-1">
         <div className="flex items-center mt-1">
           <div className="w-3 h-3 rounded-full bg-gray-400 mr-1"></div>
@@ -222,9 +214,7 @@ export function DesktopBracket({
     return player.name || 'Unknown'
   }
 
-  // Increase match height for better visibility
   const adjustedMatchHeight = matchHeight * 1.5
-
   return (
     <div className="flex flex-col items-center mt-4 p-4 overflow-x-auto w-full">
       <h3 className="text-white text-xl md:text-2xl mb-3 text-center">
@@ -238,7 +228,6 @@ export function DesktopBracket({
           minWidth: `${(rounds * 2 + 1) * roundWidth}px`,
         }}
       >
-        {/* Left side of the bracket */}
         {Array.from({ length: rounds }).map((_, roundIndex) => {
           const matchesInRound = tournamentSize / Math.pow(2, roundIndex + 1)
 
@@ -260,12 +249,9 @@ export function DesktopBracket({
                     ? getMatchStateStyle(match.state)
                     : 'border-indigo-400/50 bg-gray-700/50'
                   const isCurrentRound = roundIndex === currentRound
-
-                  // Get players for this match
                   let player1, player2
 
                   if (roundIndex === 0) {
-                    // First round pulls directly from participants
                     const player1Index = matchIndex * 2
                     const player2Index = player1Index + 1
                     player1 =
@@ -277,7 +263,6 @@ export function DesktopBracket({
                         ? participants[player2Index]
                         : null
                   } else {
-                    // Look for winners from previous round
                     const prevRound = roundIndex - 1
                     const prevMatchIndex1 = matchIndex * 2
                     const prevMatchIndex2 = prevMatchIndex1 + 1
@@ -494,7 +479,6 @@ export function DesktopBracket({
             >
               {Array.from({ length: matchesInRound / 2 }).map(
                 (_, matchIndex) => {
-                  // For the right side, we need to shift the matchIndex to the second half of matches in this round
                   const actualMatchIndex = matchIndex + matchesInRound / 2
                   const match = getMatch(roundIndex, actualMatchIndex)
 
@@ -502,12 +486,8 @@ export function DesktopBracket({
                     ? getMatchStateStyle(match.state)
                     : 'border-indigo-400/50 bg-gray-700/50'
                   const isCurrentRound = roundIndex === currentRound
-
-                  // Get players for this match
                   let player1, player2
-
                   if (roundIndex === 0) {
-                    // First round pulls directly from participants
                     const halfPoint = participants.length / 2
                     const player1Index = halfPoint + matchIndex * 2
                     const player2Index = player1Index + 1
@@ -520,7 +500,6 @@ export function DesktopBracket({
                         ? participants[player2Index]
                         : null
                   } else {
-                    // Look for winners from previous round (right side)
                     const prevRound = roundIndex - 1
                     const prevMatchesPerHalf = matchesInRound
                     const prevMatchIndex1 =
@@ -555,7 +534,6 @@ export function DesktopBracket({
                     }
                   }
 
-                  // Use match players if available
                   player1 = match && match.player1 ? match.player1 : player1
                   player2 = match && match.player2 ? match.player2 : player2
 
@@ -803,10 +781,6 @@ const TournamentBracket = ({
       (m) => m.round === roundIndex && m.matchIndex === matchIndex
     )
   }
-
-  // Remove simulateMatch and related logic.
-  // Instead, use onPlayMatch(match) for current round matches.
-
   if (isMobile) {
     return (
       <MobileBracket

@@ -5,6 +5,7 @@ import FA2 from '@/app/(Login)/FA2'
 import Image from 'next/image'
 import { CustomError } from '../../(Login)/SignUp/SingUpPage'
 import { toast } from 'react-toastify'
+import { axiosChatInstance } from '@/(zustand)/useChatStore'
 
 const DragAndDrop = ({ errors, setErrors, setFormData, validateField }) => {
   const { user } = useAuthStore()
@@ -156,13 +157,11 @@ const Settings = () => {
   const { user, setUser } = useAuthStore()
   const [formData, setFormData] = useState({
     username: user.username,
-    email: user.email,
     login: user.login,
     avatar: null as File | null,
   })
   const [errors, setErrors] = useState({
     username: '',
-    email: '',
     login: '',
     avatar: '',
   })
@@ -172,7 +171,6 @@ const Settings = () => {
     const newErrors = {
       ...errors,
       username: validateField('username', formData.username),
-      email: validateField('email', formData.email),
       login: validateField('login', formData.login),
       avatar: validateField('avatar', formData.avatar),
     }
@@ -180,10 +178,7 @@ const Settings = () => {
     setErrors(newErrors)
 
     const isStep1Valid =
-      !newErrors.username &&
-      !newErrors.email &&
-      !newErrors.login &&
-      !newErrors.avatar
+      !newErrors.username && !newErrors.login && !newErrors.avatar
     if (!isStep1Valid) {
       return
     }
@@ -191,7 +186,7 @@ const Settings = () => {
       const formData = new FormData()
       formData.append('file', image)
       try {
-        const res = await axiosInstance.post('/api/chat/postImage', formData)
+        const res = await axiosInstance.post('/users/postImage', formData)
         toast.success('Image uploaded successfully')
         return res.data.filename
       } catch (err: any) {
@@ -208,9 +203,8 @@ const Settings = () => {
           return
         }
       }
-      const res = await axiosInstance.post('/api/users/updateUserData', {
+      const res = await axiosInstance.post('/users/updateUserData', {
         username: formData.username,
-        email: formData.email,
         login: formData.login,
         avatar: avatarUrl,
         type: user.type,
@@ -219,7 +213,6 @@ const Settings = () => {
         toast.success('User data updated successfully')
         setUser({
           ...user,
-          email: formData.email,
           username: formData.username,
           login: formData.login,
           avatar: avatarUrl ? avatarUrl : user.avatar,
@@ -257,17 +250,6 @@ const Settings = () => {
           !/^[a-zA-Z0-9_]+$/.test(value)
         ) {
           error = 'Login can only contain letters, numbers, and underscores'
-        }
-        break
-
-      case 'email':
-        if (!value || (typeof value === 'string' && !value.trim())) {
-          error = 'Email is required'
-        } else if (
-          typeof value === 'string' &&
-          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-        ) {
-          error = 'Please enter a valid email address'
         }
         break
 
@@ -329,19 +311,6 @@ const Settings = () => {
                 className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
               />
               <CustomError message={errors.login} isTouched={errors.login} />
-            </div>
-            <div className="flex flex-col gap-2">
-              <span>Email</span>
-              <input
-                type="text"
-                placeholder={user.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                value={formData.email}
-                className="px-2 py-4 border border-gray-500 rounded-2xl bg-[#1F2124]"
-              />
-              <CustomError message={errors.email} isTouched={errors.email} />
             </div>
           </>
         )}

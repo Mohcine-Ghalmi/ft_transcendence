@@ -16,34 +16,27 @@ export function TournamentInviteProvider({ children }) {
   const socket = getGameSocketInstance();
   const [receivedInvites, setReceivedInvites] = useState([]);
   const [isSliding, setIsSliding] = useState({});
+  const [sessionConflicts, setSessionConflicts] = useState(new Set());
   const router = useRouter();
 
   useEffect(() => {
     if (!socket || !user?.email) return;
 
     const handleTournamentInviteReceived = (data) => {
-      console.log('Tournament invite received from:', data.hostData?.username, 'Tournament ID:', data.tournamentId);
-      
-      // Check if invitation from this exact host and tournament already exists
       setReceivedInvites(prev => {
         const existingIndex = prev.findIndex(invite => 
           invite.hostData?.email === data.hostData?.email && invite.tournamentId === data.tournamentId
         );
         
         if (existingIndex !== -1) {
-          // Update existing invitation from same host and tournament
-          console.log('Updating existing tournament invite from same host and tournament');
           const updated = [...prev];
           updated[existingIndex] = { ...data, timestamp: Date.now() };
           return updated;
         } else {
-          // Add new invitation (allows multiple from different hosts/tournaments)
-          console.log('Adding new tournament invite - multiple invitations allowed');
           return [...prev, { ...data, timestamp: Date.now() }];
         }
       });
       
-      // Auto-hide after 30 seconds
       setTimeout(() => {
         setIsSliding(prev => ({ ...prev, [data.inviteId]: true }));
         setTimeout(() => {
@@ -58,7 +51,6 @@ export function TournamentInviteProvider({ children }) {
     };
     
     const handleTournamentInviteCanceled = (data) => {
-      console.log('Tournament invite canceled:', data.inviteId);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -68,7 +60,6 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentInviteTimeout = (data) => {
-      console.log('Tournament invite timeout:', data.inviteId);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -78,23 +69,16 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentInviteAccepted = (data) => {
-      console.log('Tournament invite accepted:', data.inviteId, 'by:', data.inviteeEmail);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
         delete newSliding[data.inviteId];
         return newSliding;
       });
-      
-      // Only navigate if this is the invited player (not the host)
-      if (data.inviteeEmail === user.email || data.guestEmail === user.email) {
-        console.log('Navigating to tournament:', data.tournamentId);
-        router.push(`/play/tournament/${data.tournamentId}`);
-      }
+     
     };
 
     const handleTournamentInviteDeclined = (data) => {
-      console.log('Tournament invite declined:', data.inviteId, 'by:', data.inviteeEmail || data.guestEmail);
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -104,19 +88,18 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentInviteResponse = (data) => {
-      console.log('Tournament invite response:', data);
-      // This handles the response when the current user accepts an invite
-      if (data.status === 'success' && data.tournamentId) {
+      if (data.status === 'success' && data.redirectToLobby && data.tournamentId) {
         setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
         setIsSliding(prev => {
           const newSliding = { ...prev };
           delete newSliding[data.inviteId];
           return newSliding;
         });
-        // Redirect to tournament lobby immediately with shorter timeout for better UX
+        
         setTimeout(() => {
           router.push(`/play/tournament/${data.tournamentId}`);
         }, 300);
+        
       } else if (data.status === 'error') {
         setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
         setIsSliding(prev => {
@@ -128,36 +111,34 @@ export function TournamentInviteProvider({ children }) {
     };
 
     const handleTournamentCancelled = (data) => {
-      console.log('Tournament cancelled:', data.tournamentId);
-      // Clear any pending invites if the tournament was cancelled
       setReceivedInvites(prev => prev.filter(invite => invite.tournamentId !== data.tournamentId));
     };
 
-    // NEW: Handle cleanup from other sessions
-    const handleTournamentInviteCleanup = (data) => {
-      console.log('Cleaning up tournament invite in inactive session:', data.inviteId, data.action);
+    const handleTournamentSessionConflict = (data) => {
       
+      if (data.type === 'another_session_joined' || data.type === 'match_starting_elsewhere') {
+        setSessionConflicts(prev => new Set([...prev, data.tournamentId]));
+      }
+    };
+
+    const handleTournamentSessionTakenOver = (data) => {
+      setSessionConflicts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(data.tournamentId);
+        return newSet;
+      });
+    };
+
+    const handleTournamentInviteCleanup = (data) => {
       setReceivedInvites(prev => prev.filter(invite => invite.inviteId !== data.inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
         delete newSliding[data.inviteId];
         return newSliding;
       });
-
-      // Optional: Show a brief notification that the invite was handled elsewhere
-      if (data.action === 'accepted') {
-        console.log('Tournament invite was accepted in another session');
-        // You could show a toast notification here
-      } else if (data.action === 'declined') {
-        console.log('Tournament invite was declined in another session');
-      } else if (data.action === 'canceled') {
-        console.log('Tournament invite was canceled by host');
-      } else if (data.action === 'timeout') {
-        console.log('Tournament invite expired');
-      }
+   
     };
 
-    // Add event listeners
     socket.on("TournamentInviteReceived", handleTournamentInviteReceived);
     socket.on("TournamentInviteCanceled", handleTournamentInviteCanceled);
     socket.on("TournamentInviteTimeout", handleTournamentInviteTimeout);
@@ -165,9 +146,10 @@ export function TournamentInviteProvider({ children }) {
     socket.on("TournamentInviteDeclined", handleTournamentInviteDeclined);
     socket.on("TournamentInviteResponse", handleTournamentInviteResponse);
     socket.on("TournamentCancelled", handleTournamentCancelled);
-    socket.on("TournamentInviteCleanup", handleTournamentInviteCleanup); // NEW listener
+    socket.on("TournamentInviteCleanup", handleTournamentInviteCleanup);
+    socket.on("TournamentSessionConflict", handleTournamentSessionConflict);
+    socket.on("TournamentSessionTakenOver", handleTournamentSessionTakenOver);
 
-    // Cleanup event listeners on unmount
     return () => {
       socket.off("TournamentInviteReceived", handleTournamentInviteReceived);
       socket.off("TournamentInviteCanceled", handleTournamentInviteCanceled);
@@ -176,7 +158,9 @@ export function TournamentInviteProvider({ children }) {
       socket.off("TournamentInviteDeclined", handleTournamentInviteDeclined);
       socket.off("TournamentInviteResponse", handleTournamentInviteResponse);
       socket.off("TournamentCancelled", handleTournamentCancelled);
-      socket.off("TournamentInviteCleanup", handleTournamentInviteCleanup); // NEW cleanup
+      socket.off("TournamentInviteCleanup", handleTournamentInviteCleanup);
+      socket.off("TournamentSessionConflict", handleTournamentSessionConflict);
+      socket.off("TournamentSessionTakenOver", handleTournamentSessionTakenOver);
     };
   }, [socket, user?.email, router]);
 
@@ -188,7 +172,6 @@ export function TournamentInviteProvider({ children }) {
         inviteeEmail: user.email,
       });
       
-      // Remove from current session immediately
       setReceivedInvites(prev => prev.filter(inv => inv.inviteId !== inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -206,7 +189,6 @@ export function TournamentInviteProvider({ children }) {
         inviteeEmail: user.email,
       });
       
-      // Remove from current session immediately
       setReceivedInvites(prev => prev.filter(inv => inv.inviteId !== inviteId));
       setIsSliding(prev => {
         const newSliding = { ...prev };
@@ -225,7 +207,6 @@ export function TournamentInviteProvider({ children }) {
     });
   };
   
-  // Helper functions for compatibility with OnlineTournament component
   const hasPendingInviteWith = (email) => {
     return receivedInvites.some(invite => invite.hostData?.email === email);
   };
@@ -234,8 +215,22 @@ export function TournamentInviteProvider({ children }) {
     return receivedInvites;
   };
 
+  const isTournamentInConflict = (tournamentId) => {
+    return sessionConflicts.has(tournamentId);
+  };
+
   return (
-    <TournamentInviteContext.Provider value={{ socket, receivedInvites, acceptInvite, declineInvite, clearInvite, hasPendingInviteWith, getPendingInvites }}>
+    <TournamentInviteContext.Provider value={{ 
+      socket, 
+      receivedInvites, 
+      acceptInvite, 
+      declineInvite, 
+      clearInvite, 
+      hasPendingInviteWith, 
+      getPendingInvites,
+      isTournamentInConflict,
+      sessionConflicts
+    }}>
       {children}
       {receivedInvites.map((invite, index) => (
         <div 
@@ -247,7 +242,7 @@ export function TournamentInviteProvider({ children }) {
           }`}
           style={{ 
             right: '1rem',
-            top: `${1 + index * 12}rem` // Stack invitations vertically
+            top: `${1 + index * 12}rem`
           }}
         >
           <div className="bg-[#2a2f3a] border border-[#404654] rounded-lg shadow-2xl p-4 max-w-sm w-80">

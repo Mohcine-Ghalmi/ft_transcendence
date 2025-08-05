@@ -22,6 +22,7 @@ interface TournamentNotification {
   onJoin?: () => void;
   onIgnore?: () => void;
   onTimeout?: () => void;
+  isActiveSession?: boolean;
 }
 
 interface TournamentNotificationContextType {
@@ -81,16 +82,6 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
       return () => clearInterval(timer);
     }
   }, [notification.countdown, notification.type, notification.tournamentId, notification.matchId, notification.onTimeout, notification.autoRedirect, notification.redirectTo, router, socket, user?.email, onClose, notification]);
-
-  // useEffect(() => {
-  //   if (notification.autoClose && notification.duration) {
-  //     const timer = setTimeout(() => {
-  //       onClose();
-  //     }, notification.duration);
-
-  //     return () => clearTimeout(timer);
-  //   }
-  // }, [notification.autoClose, notification.duration, onClose]);
 
   const getIcon = () => {
     switch (notification.type) {
@@ -159,6 +150,7 @@ const GlobalTournamentNotification = ({ notification, onClose }: {
 export const TournamentNotificationProvider = () => {
   const [notifications, setNotifications] = useState<TournamentNotification[]>([]);
   const [socket, setSocket] = useState<any>(null);
+  const [activeSessionConflicts, setActiveSessionConflicts] = useState(new Set<string>());
   const { user } = useAuthStore();
   const router = useRouter();
 
@@ -170,8 +162,13 @@ export const TournamentNotificationProvider = () => {
   }, []);
 
   const addNotification = (notification: Omit<TournamentNotification, 'id'>) => {
+    if (notification.tournamentId && activeSessionConflicts.has(notification.tournamentId)) {
+      console.log(`Skipping notification for tournament ${notification.tournamentId} - active in another session`);
+      return;
+    }
+
     const id = Date.now().toString() + Math.random().toString(36);
-    setNotifications(prev => [...prev, { ...notification, id }]);
+    setNotifications(prev => [...prev, { ...notification, id, isActiveSession: true }]);
   };
 
   const removeNotification = (id: string) => {
@@ -198,6 +195,8 @@ export const TournamentNotificationProvider = () => {
 
     const handleMatchStartingSoon = (data: any) => {
       if (data.playerEmail === user?.email) {
+        console.log('Match starting notification received for user:', user.email);
+        
         addNotification({
           type: 'match_starting',
           title: 'Your Match is Starting!',
@@ -216,6 +215,73 @@ export const TournamentNotificationProvider = () => {
       }
     };
 
+    const handleTournamentSessionConflict = (data: any) => {
+      console.log('Tournament session conflict in notification provider:', data.type);
+      
+      if (data.tournamentId) {
+        setActiveSessionConflicts(prev => new Set([...prev, data.tournamentId]));
+        
+        setNotifications(prev => prev.filter(n => n.tournamentId !== data.tournamentId));
+        if (data.type === 'match_starting_elsewhere') {
+          addNotification({
+            type: 'tournament_info',
+            title: 'Match in Another Session',
+            message: 'Your tournament match is starting in another browser/tab.',
+            autoClose: true,
+            duration: 2000,
+            isActiveSession: false
+          });
+        } else if (data.type === 'match_started_elsewhere') {
+          addNotification({
+            type: 'tournament_info',
+            title: 'Match Started Elsewhere',
+            message: 'Your tournament match has started in another browser/tab.',
+            autoClose: true,
+            duration: 2000,
+            isActiveSession: false
+          });
+        }
+      }
+    };
+
+    const handleTournamentSessionTakenOver = (data: any) => {
+      if (data.tournamentId) {
+        setActiveSessionConflicts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.tournamentId);
+          return newSet;
+        });
+        
+        addNotification({
+          type: 'tournament_info',
+          title: 'Session Taken Over',
+          message: 'Your tournament session was taken over by another browser/tab.',
+          autoClose: true,
+          duration: 5000
+        });
+      }
+    };
+    
+    const handleTournamentSessionConflictResolved = (data: any) => {
+      if (data.status === 'success' && data.action === 'takeover_completed') {
+        clearAllNotifications();
+        addNotification({
+          type: 'tournament_info',
+          title: 'Session Taken Over',
+          message: 'Successfully took over tournament session.',
+          autoClose: true,
+          duration: 3000
+        });
+        if (data.tournamentId) {
+          setActiveSessionConflicts(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(data.tournamentId);
+            return newSet;
+          });
+        }
+      }
+    };
+
     const handleTournamentBracketReady = (data: any) => {
       addNotification({
         type: 'bracket_ready',
@@ -229,23 +295,29 @@ export const TournamentNotificationProvider = () => {
     };
 
     const handleGlobalTournamentNotification = (data: any) => {
+      console.log('Global tournament notification received:', data);
+      
       if (data.type === 'match_starting' && data.tournamentId && data.matchId && data.countdown) {
-        addNotification({
-          type: 'match_starting',
-          title: data.title || '⚡ Your Match is Starting!',
-          message: data.message || `Your match will begin in ${data.countdown} seconds!`,
-          countdown: data.countdown,
-          tournamentId: data.tournamentId,
-          matchId: data.matchId,
-          autoClose: true,
-          duration: data.countdown * 1000,
-          showJoinButton: true,
-          autoRedirect: true,
-          redirectTo: `/play/game/${data.matchId}`,
-          onTimeout: () => {
-            router.push(`/play/game/${data.matchId}`);
-          }
-        });
+        if (!activeSessionConflicts.has(data.tournamentId)) {
+          addNotification({
+            type: 'match_starting',
+            title: data.title || '⚡ Your Match is Starting!',
+            message: data.message || `Your match will begin in ${data.countdown} seconds!`,
+            countdown: data.countdown,
+            tournamentId: data.tournamentId,
+            matchId: data.matchId,
+            autoClose: true,
+            duration: data.countdown * 1000,
+            showJoinButton: true,
+            autoRedirect: true,
+            redirectTo: `/play/game/${data.matchId}`,
+            onTimeout: () => {
+              router.push(`/play/game/${data.matchId}`);
+            }
+          });
+        } else {
+          console.log(`Skipping global tournament notification - tournament ${data.tournamentId} is in conflict`);
+        }
       }
     };
 
@@ -253,18 +325,26 @@ export const TournamentNotificationProvider = () => {
     socket.on('GlobalMatchStartingSoon', handleMatchStartingSoon);
     socket.on('GlobalTournamentBracketReady', handleTournamentBracketReady);
     socket.on('GlobalTournamentNotification', handleGlobalTournamentNotification);
+    socket.on('TournamentSessionConflict', handleTournamentSessionConflict);
+    socket.on('TournamentSessionTakenOver', handleTournamentSessionTakenOver);
+    socket.on('TournamentSessionConflictResolved', handleTournamentSessionConflictResolved);
 
     return () => {
       socket.off('GlobalTournamentStarted', handleTournamentStarted);
       socket.off('GlobalMatchStartingSoon', handleMatchStartingSoon);
       socket.off('GlobalTournamentBracketReady', handleTournamentBracketReady);
       socket.off('GlobalTournamentNotification', handleGlobalTournamentNotification);
+      socket.off('TournamentSessionConflict', handleTournamentSessionConflict);
+      socket.off('TournamentSessionTakenOver', handleTournamentSessionTakenOver);
+      socket.off('TournamentSessionConflictResolved', handleTournamentSessionConflictResolved);
     };
-  }, [socket, user?.email]);
+  }, [socket, user?.email, activeSessionConflicts]);
 
   return (
     <>
-      {notifications.map(notification => (
+      {notifications
+        .filter(notification => notification.isActiveSession !== false)
+        .map(notification => (
         <GlobalTournamentNotification
           key={notification.id}
           notification={notification}
@@ -275,7 +355,6 @@ export const TournamentNotificationProvider = () => {
   );
 };
 
-// Context Provider Component (for wrapping app)
 export const TournamentNotificationContextProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<TournamentNotification[]>([]);
 

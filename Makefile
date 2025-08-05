@@ -1,5 +1,5 @@
 build:
-	mkdir -p /Users/${USER}/goinfre/sqlite_db
+	mkdir -p /goinfre/${USER}/sqlite_db
 	docker compose -f  docker-compose.yml build
 
 up:
@@ -9,5 +9,5 @@ down:
 	docker compose -f docker-compose.yml down
 
 clean:
-	rm -rf /Users/${USER}/goinfre/sqlite_db
+	rm -rf /goinfre/${USER}/sqlite_db
 	./clean.sh

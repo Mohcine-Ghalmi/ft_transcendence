@@ -78,6 +78,7 @@ declare module 'fastify' {
 }
 
 export const db = initializeDatabase()
+export const tokenBlacklist = new Set<string | undefined>()
 
 server.decorate(
   'authenticate',
@@ -99,6 +100,14 @@ server.decorate(
         })
       }
 
+      if (tokenBlacklist.has(token)) {
+        rep.clearCookie('accessToken')
+        return rep.code(401).send({
+          error: 'Token revoked',
+          message: 'This token has been invalidated',
+        })
+      }
+
       const decoded = server.jwt.verify(token)
 
       req.user = decoded
@@ -113,6 +122,14 @@ server.decorate(
   }
 )
 
+server.get('/healthcheck', async function () {
+  try {
+    return { status: 'OK', timestamp: new Date().toISOString() }
+  } catch (err) {
+    return { status: 'ERROR', message: 'Database error' }
+  }
+})
+
 async function startServer() {
   try {
     const CHAT_BACK_END_PORT = process.env.CHAT_BACK_END_PORT as string
@@ -120,7 +137,7 @@ async function startServer() {
       throw new Error('CHAT_BACK_END_PORT environment variable is not set')
     }
 
-    await cleanupStaleSocketsOnStartup()
+    //await cleanupStaleSocketsOnStartup()
 
     await server.register(fastifyCookie)
 
@@ -141,14 +158,29 @@ async function startServer() {
     })
 
     await server.register(cors, {
-      origin: process.env.FRONT_END_URL,
+      origin: (origin: string | undefined, cb: any) => {
+        const allowedOrigins = [
+          process.env.FRONT_END_URL,
+          process.env.MAIN_BACKEND_URL,
+          process.env.GAME_BACKEND_URL,
+          'http://nginx',
+          'https://nginx',
+          'http://frontend:3000',
+        ].filter(Boolean) as string[]
+
+        if (!origin || allowedOrigins.includes(origin)) {
+          cb(null, true)
+        } else {
+          cb(new Error('Not allowed'), false)
+        }
+      },
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true,
       exposedHeaders: ['set-cookie'],
     })
 
-    await server.register(chatRoutes, { prefix: 'api/chat' })
+    await server.register(chatRoutes, { prefix: 'api/chat-service' })
 
     setupSocketIO(server)
 
@@ -156,9 +188,8 @@ async function startServer() {
       port: parseInt(CHAT_BACK_END_PORT),
       host: '0.0.0.0',
     })
-  } catch (error) {
-    server.log.error(error)
-    console.error('Failed to start server:', error)
+  } catch (error: any) {
+    server.log.error(error.message || 'Failed to start server')
     process.exit(1)
   }
 }

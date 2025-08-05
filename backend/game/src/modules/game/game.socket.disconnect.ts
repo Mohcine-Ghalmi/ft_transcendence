@@ -60,10 +60,9 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
       }
 
       await processGameDisconnect(userEmail, io);
-    }, 5000); // 5 second grace period for reconnection
+    }, 5000); 
   });
 
-  // Add heartbeat mechanism to keep game sessions alive
   socket.on('gameHeartbeat', (data: { gameId: string }) => {
     if (data.gameId) {
       updateGameHeartbeat(data.gameId);
@@ -73,54 +72,37 @@ export const handleGameDisconnect: GameSocketHandler = (socket, io) => {
 
 async function processGameDisconnect(userEmail: string, io: Server) {
   const currentGameId = getUserCurrentGame(userEmail);
-  if (!currentGameId) {
+  if (!currentGameId)
     return;
-  }
-  if (processingGames.has(currentGameId)) {
+  if (processingGames.has(currentGameId))
     return;
-  }
 
   const gameRoom = gameRooms.get(currentGameId);
-  if (!gameRoom) {
+  if (!gameRoom)
     return;
-  }
-
-  if (gameRoom.hostEmail !== userEmail && gameRoom.guestEmail !== userEmail) {
+  if (gameRoom.hostEmail !== userEmail && gameRoom.guestEmail !== userEmail)
     return;
-  }
-
   const otherPlayerEmail = gameRoom.hostEmail === userEmail ? gameRoom.guestEmail : gameRoom.hostEmail;
-  
   const otherPlayerSockets = await getSocketIds(otherPlayerEmail, 'sockets') || [];
   if (otherPlayerSockets.length === 0) {
     await cleanupGame(currentGameId, 'timeout');
     return;
   }
 
-  // If game is in progress, mark the other player as winner and save to match history
   if (gameRoom.status === 'in_progress') {
-    console.log(`[Disconnect] Processing game forfeit for ${userEmail} in game ${currentGameId}`);
     
-    // Mark game as being processed
     processingGames.add(currentGameId);
-    
     const winner = otherPlayerEmail;
     const loser = userEmail;
-    
-    // Get current game state for final score
     const currentGameState = activeGames.get(currentGameId);
     const finalScore = currentGameState?.scores || { p1: 0, p2: 0 };
-    
-    // Update game room with end time
     gameRoom.status = 'completed';
     gameRoom.endedAt = Date.now();
     gameRoom.winner = winner;
     gameRoom.leaver = loser;
     
-    // Check if this is a tournament game
     const tournamentId = (gameRoom as any).tournamentId;
     const matchId = (gameRoom as any).matchId;
-    
     if (tournamentId && matchId) {
       try {
         await handleTournamentGameDisconnect(tournamentId, matchId, winner, loser, io);
@@ -129,13 +111,8 @@ async function processGameDisconnect(userEmail: string, io: Server) {
       }
     }
     
-    // Save match history
     await saveMatchHistory(currentGameId, gameRoom, winner, loser, finalScore, 'player_left');
-    
-    // Clean up game immediately
     await cleanupGame(currentGameId, 'player_left');
-    
-    // Emit game end event to remaining player
     const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || [];
     io.to(otherPlayerSocketIds).emit('GameEnded', {
       gameId: currentGameId,
@@ -148,27 +125,16 @@ async function processGameDisconnect(userEmail: string, io: Server) {
       reason: 'player_left',
       message: 'Opponent disconnected. You win!'
     });
-    
-    // Remove from processing set after a delay
     setTimeout(() => {
       processingGames.delete(currentGameId);
     }, 5000);
     
   } else if (gameRoom.status === 'accepted') {
-    // Game was accepted but not started yet - mark as canceled
-    console.log(`[Disconnect] Canceling accepted game ${currentGameId} due to player disconnect`);
-    
     processingGames.add(currentGameId);
-    
-    // Update game room
     gameRoom.status = 'canceled';
     gameRoom.endedAt = Date.now();
     gameRoom.leaver = userEmail;
-    
-    // Clean up game immediately
     await cleanupGame(currentGameId, 'timeout');
-    
-    // Notify other player
     const otherPlayerSocketIds = await getSocketIds(otherPlayerEmail, 'sockets') || [];
     io.to(otherPlayerSocketIds).emit('GameEndedByOpponentLeave', {
       gameId: currentGameId,
@@ -177,13 +143,11 @@ async function processGameDisconnect(userEmail: string, io: Server) {
       message: 'Opponent disconnected before the game started.'
     });
     
-    // Remove from processing set after a delay
     setTimeout(() => {
       processingGames.delete(currentGameId);
     }, 5000);
   }
 
-  // Handle tournament forfeit for players in active tournament matches
   await handleTournamentPlayerDisconnect(userEmail, io);
 }
 
@@ -202,8 +166,6 @@ async function handleTournamentGameDisconnect(
     const match = tournament.matches.find((m: any) => m.id === matchId);
     
     if (!match) return;
-    
-    // Update match result
     if (match.player1?.email === winner) {
       match.state = 'player1_win';
       match.winner = match.player1;
@@ -211,33 +173,23 @@ async function handleTournamentGameDisconnect(
       match.state = 'player2_win';  
       match.winner = match.player2;
     }
-    
-    // Mark the disconnected player as eliminated
     const loserParticipant = tournament.participants.find((p: any) => p.email === loser);
     if (loserParticipant) {
       loserParticipant.status = 'eliminated';
     }
-    
-    // Update winner status
     const winnerParticipant = tournament.participants.find((p: any) => p.email === winner);
     if (winnerParticipant) {
       winnerParticipant.status = 'accepted';
     }
-    
-    // Check if all matches in current round are complete
     const currentRound = match.round;
     const roundMatches = tournament.matches.filter((m: any) => m.round === currentRound);
     const allRoundComplete = roundMatches.every((m: any) => m.state !== 'waiting' && m.state !== 'in_progress');
     
     if (allRoundComplete) {
-      // Advance to next round
       const updatedTournament = advanceTournamentRound(tournament);
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(updatedTournament));
-      
-      // Notify all participants
       const allParticipantEmails = updatedTournament.participants.map((p: any) => p.email);
       const allSocketIds = [];
-      
       for (const email of allParticipantEmails) {
         const socketIds = await getSocketIds(email, 'sockets') || [];
         allSocketIds.push(...socketIds);
@@ -261,8 +213,6 @@ async function handleTournamentGameDisconnect(
     } else {
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
     }
-    
-    // Notify all participants about match result
     const allParticipantEmails = tournament.participants.map((p: any) => p.email);
     const allSocketIds = [];
     
@@ -293,14 +243,9 @@ async function handleTournamentPlayerDisconnect(userEmail: string, io: Server) {
     for (const key of tournamentKeys) {
       const tournamentData = await redis.get(key);
       if (!tournamentData) continue;
-      
       const tournament = JSON.parse(tournamentData);
-      
-      // Check if disconnecting user is the host
       if (tournament.hostEmail === userEmail && tournament.status !== 'completed' && tournament.status !== 'canceled') {
-        // Host disconnected - delete tournament and kick all players
         const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
-        
         const allParticipantEmails = tournament.participants.map((p: any) => p.email);
         const allSocketIds: string[] = [];
         
@@ -321,16 +266,12 @@ async function handleTournamentPlayerDisconnect(userEmail: string, io: Server) {
           message: 'Tournament canceled because host disconnected.',
           tournamentId
         });
-        
         const remainingTournaments = await getAllActiveTournaments();
         io.emit('TournamentList', remainingTournaments);
-        
         continue;
       }
       
-      // Handle participant forfeit only if they're in an active match
       const isParticipant = tournament.participants.some((p: any) => p.email === userEmail);
-      
       if (isParticipant && tournament.status === 'in_progress') {
         const activeMatch = tournament.matches.find((match: any) => 
           match.state === 'in_progress' && 
@@ -339,10 +280,8 @@ async function handleTournamentPlayerDisconnect(userEmail: string, io: Server) {
         
         if (activeMatch) {
           const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
-          
           const { updatedTournament, affectedMatch, forfeitedPlayer, advancingPlayer, isAutoWin } = 
             handleTournamentPlayerForfeit(tournament, userEmail);
-          
           const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
           await redis.setex(key, 3600, JSON.stringify(updatedTournament));
           
@@ -353,7 +292,6 @@ async function handleTournamentPlayerDisconnect(userEmail: string, io: Server) {
             const socketIds = await getSocketIds(email, 'sockets') || [];
             allSocketIds.push(...socketIds);
           }
-          
           if (isAutoWin) {
             io.to(allSocketIds).emit('TournamentCompleted', {
               tournamentId,

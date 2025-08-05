@@ -8,6 +8,8 @@ import crypto from 'crypto'
 import path from 'path'
 import axios from 'axios'
 import fs from 'fs'
+import { sendError } from './user.2fa'
+const { pipeline } = require('stream/promises')
 
 export const generateUniqueFilename = (originalFilename: string) => {
   const timestamp = Date.now()
@@ -17,8 +19,7 @@ export const generateUniqueFilename = (originalFilename: string) => {
 }
 export async function downloadAndSaveImage(imageUrl: string, filename: string) {
   const response = await axios.get(imageUrl, { responseType: 'stream' })
-  const filepath = path.join(__dirname, '../../../../uploads', filename)
-  console.log('filepath : ', filepath)
+  const filepath = path.join(process.cwd(), '../media', filename)
 
   const writer = fs.createWriteStream(filepath)
   response.data.pipe(writer)
@@ -29,26 +30,75 @@ export async function downloadAndSaveImage(imageUrl: string, filename: string) {
   })
 }
 
-// {
-//   id: '116279595096157558841',
-//   email: 'cbamiixsimo@gmail.com',
-//   verified_email: true,
-//   name: 'med sarda',
-//   given_name: 'med',
-//   family_name: 'sarda',
-//   picture: 'https://lh3.googleusercontent.com/a/ACg8ocJURU_hS6TmyQWN0Bhdy0ZjPb_0OZK1BJ-pipO1JHwABItAWeY3=s96-c'
-// }
+export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    if (!request.isMultipart()) {
+      return reply
+        .status(400)
+        .send({ status: false, message: 'Request is not multipart' })
+    }
 
-export const signJWT = (user: any, rep: FastifyReply) => {
-  const accessToken = server.jwt.sign(user, { expiresIn: '1d' })
-  rep.setCookie('accessToken', accessToken, {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
-    path: '/',
-    domain: 'localhost',
-    maxAge: 60 * 60 * 24,
-  })
+    const data = await request.file()
+
+    if (!data) {
+      return reply
+        .status(400)
+        .send({ status: false, message: 'No file provided' })
+    }
+
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    ]
+    if (!allowedMimeTypes.includes(data.mimetype)) {
+      return reply.status(400).send({
+        status: false,
+        message: 'Only JPEG, PNG, GIF and WebP images are allowed',
+      })
+    }
+
+    const filename = generateUniqueFilename(data.filename)
+
+    const filepath = path.join(process.cwd(), '../media', filename)
+
+    await pipeline(data.file, fs.createWriteStream(filepath))
+
+    return {
+      success: true,
+      filename,
+    }
+  } catch (err) {
+    sendError(reply, err)
+  }
+}
+
+export const signJWT = (
+  user: any,
+  rep: FastifyReply,
+  setCookie: boolean = true
+) => {
+  const payload = {
+    // id: user.id,
+    // email: user.email,
+    // username: user.username,
+    ...user,
+    iat: Math.floor(Date.now() / 1000),
+  }
+
+  const accessToken = server.jwt.sign(payload, { expiresIn: '1hr' })
+
+  if (setCookie) {
+    rep.setCookie('accessToken', accessToken, {
+      httpOnly: false,
+      secure: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 1000,
+    })
+  }
+
   return accessToken
 }
 
@@ -99,16 +149,15 @@ async function googleRegister(req: FastifyRequest, rep: FastifyReply) {
     }
     const { password, salt, ...userWithoutPassword } = existingUser as any
     const accessToken = signJWT(userWithoutPassword, rep)
-    return rep.redirect(`${process.env.FRONT_END_URL}/dashboard`)
+
+    return rep.redirect(
+      `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
+    )
   } catch (err: any) {
-    console.log('Google OAuth error:', err)
+    server.log.error('Google OAuth error:', err.message)
     return rep.redirect(
       `${process.env.FRONT_END_URL}?error=${encodeURIComponent(err.message)}`
     )
-    // return rep.code(500).send({
-    //   error: 'Authentication failed',
-    //   message: err?.message || 'An error occurred during Google login',
-    // })
   }
 }
 
@@ -147,13 +196,15 @@ export async function fortyTwoRegister(req: FastifyRequest, rep: FastifyReply) {
     }
     const { password, salt, ...userWithoutPassword } = existingUser as any
     const accessToken = signJWT(userWithoutPassword, rep)
-    return rep.redirect(`${process.env.FRONT_END_URL}/dashboard`)
+
+    return rep.redirect(
+      `${process.env.FRONT_END_URL}/dashboard?token=${accessToken}`
+    )
   } catch (err: any) {
-    console.log('42 OAuth error:', err)
-    return rep.code(500).send({
-      error: 'Authentication failed',
-      message: err?.message || 'An error occurred during 42 login',
-    })
+    server.log.error('42 OAuth error:', err.message)
+    return rep.redirect(
+      `${process.env.FRONT_END_URL}?error=${encodeURIComponent(err.message)}`
+    )
   }
 }
 
@@ -165,6 +216,7 @@ export async function registerHandler(
 ) {
   try {
     const body = req.body
+    console.log('Registering user:', body)
 
     const newUser = await getUserByEmail(body.email)
     if (newUser)
@@ -177,10 +229,8 @@ export async function registerHandler(
     const { password, salt, ...tmp } = user as any
     const accessToken = signJWT(tmp, rep)
     return rep.code(201).send({ ...tmp, accessToken })
-  } catch (err: unknown) {
-    console.log(err)
-
-    return rep.code(500).send({ message: 'Internal server error' })
+  } catch (err: any) {
+    sendError(rep, err)
   }
 }
 
@@ -188,44 +238,48 @@ export async function loginHandler(
   req: FastifyRequest<{ Body: LoginInput }>,
   rep: FastifyReply
 ) {
-  const body = req.body
+  try {
+    const body = req.body
 
-  const user: any = await getUserByEmail(body.email)
-  if (!user) {
+    const user: any = await getUserByEmail(body.email)
+    if (!user) {
+      return rep.code(401).send({ message: 'Invalid Email or password' })
+    }
+
+    if (user.type !== 0 && user.type !== null)
+      return rep
+        .code(401)
+        .send({ message: 'This Email is signed in with another method' })
+
+    const correctPassword = verifyPassword(
+      body.password,
+      user.salt,
+      user.password
+    )
+
+    if (correctPassword) {
+      if (user.isTwoFAVerified) {
+        return rep.code(200).send({
+          status: false,
+          message: 'Please verify your 2FA code first',
+          desc: '2FA verification required',
+        })
+      }
+      const { password, salt, ...rest } = user
+
+      const accessToken = signJWT(rest, rep)
+      return rep.code(200).send({ ...rest, accessToken, status: true })
+    }
+
     return rep.code(401).send({ message: 'Invalid Email or password' })
+  } catch (err) {
+    sendError(rep, err)
   }
-
-  if (user.type !== 0 && user.type !== null)
-    return rep
-      .code(401)
-      .send({ message: 'This Email is signed in with another method' })
-
-  if (user.isTwoFAVerified) {
-    return rep.code(200).send({
-      status: false,
-      message: 'Please verify your 2FA code first',
-      desc: '2FA verification required',
-    })
-  }
-  const correctPassword = verifyPassword(
-    body.password,
-    user.salt,
-    user.password
-  )
-
-  if (correctPassword) {
-    const { password, salt, ...rest } = user
-
-    const accessToken = signJWT(rest, rep)
-    return rep.code(200).send({ ...rest, accessToken, status: true })
-  }
-
-  return rep.code(401).send({ message: 'Invalid Email or password' })
 }
 
 export async function loginRouter() {
   server.get('/login/google/callback', googleRegister)
   server.get('/login/42/callback', fortyTwoRegister)
-  server.post('/v2/api/users/register', registerHandler)
-  server.post('/v2/api/users/login', loginHandler)
+  server.post('/api/user-service/v2/api/users/register', registerHandler)
+  server.post('/api/user-service/v2/api/users/login', loginHandler)
 }
