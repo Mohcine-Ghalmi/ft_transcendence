@@ -1,5 +1,3 @@
-// game.socket.types.ts - Add session conflict helpers to existing types
-
 import { Socket, Server } from 'socket.io'
 
 export const activeGameSessions = new Map<string, Set<string>>()
@@ -16,12 +14,10 @@ export function setActiveTournamentSession(tournamentId: string, userEmail: stri
   tournamentActiveSessions.get(tournamentId)!.set(userEmail, socketId);
 }
 
-// Helper function to get active tournament session for a user
 export function getActiveTournamentSession(tournamentId: string, userEmail: string): string | undefined {
   return tournamentActiveSessions.get(tournamentId)?.get(userEmail);
 }
 
-// Helper function to remove tournament session tracking
 export function removeActiveTournamentSession(tournamentId: string, userEmail: string) {
   tournamentActiveSessions.get(tournamentId)?.delete(userEmail);
   if (tournamentActiveSessions.get(tournamentId)?.size === 0) {
@@ -29,18 +25,16 @@ export function removeActiveTournamentSession(tournamentId: string, userEmail: s
   }
 }
 
-// Helper function to cleanup tournament sessions when tournament ends
 export function cleanupTournamentSessions(tournamentId: string) {
   tournamentActiveSessions.delete(tournamentId);
 }
 
-// Enhanced function to emit to only active tournament sessions
 export async function emitToActiveTournamentSessions(
   io: any, 
   tournamentId: string, 
   event: string, 
   data: any,
-  userEmails?: string[] // Optional: specific users to target
+  userEmails?: string[]
 ) {
   const activeSessions = tournamentActiveSessions.get(tournamentId);
   if (!activeSessions) return;
@@ -53,12 +47,10 @@ export async function emitToActiveTournamentSessions(
   for (const userEmail of targetUsers) {
     const activeSocketId = activeSessions.get(userEmail);
     if (activeSocketId) {
-      // Verify the socket is still connected
       const userSockets = await getSocketIds(userEmail, 'sockets') || [];
       if (userSockets.includes(activeSocketId)) {
         activeSocketIds.push(activeSocketId);
       } else {
-        // Clean up stale session
         activeSessions.delete(userEmail);
       }
     }
@@ -69,7 +61,6 @@ export async function emitToActiveTournamentSessions(
   }
 }
 
-// Enhanced function to emit tournament notifications to specific user's active session
 export async function emitToActiveUserSession(
   io: any,
   tournamentId: string,
@@ -80,13 +71,11 @@ export async function emitToActiveUserSession(
   const activeSocketId = getActiveTournamentSession(tournamentId, userEmail);
   if (activeSocketId) {
     const { getSocketIds } = await import('../../database/redis');
-    // Verify the socket is still connected
     const userSockets = await getSocketIds(userEmail, 'sockets') || [];
     if (userSockets.includes(activeSocketId)) {
       io.to(activeSocketId).emit(event, data);
       return true;
     } else {
-      // Clean up stale session
       removeActiveTournamentSession(tournamentId, userEmail);
     }
   }
@@ -106,12 +95,10 @@ export function checkGameSessionConflict(userEmail: string, gameId: string, sock
   }
   
   if (currentGameId === gameId) {
-    // Check if there are other active sessions for the same game
     const gameSessions = activeGameSessions.get(gameId) || new Set();
     const otherSessions = new Set([...gameSessions].filter(sid => sid !== socketId));
     
     if (otherSessions.size > 0) {
-      // Check if other sessions belong to the same user
       let hasOtherUserSessions = false;
       for (const sessionId of otherSessions) {
         const sessionUser = socketToUser.get(sessionId);
@@ -132,7 +119,6 @@ export function checkGameSessionConflict(userEmail: string, gameId: string, sock
     
     return { hasConflict: false, conflictType: 'none' };
   } else {
-    // User is in a different game
     const existingSessions = activeGameSessions.get(currentGameId) || new Set();
     if (existingSessions.size > 0) {
       return { 
@@ -146,15 +132,12 @@ export function checkGameSessionConflict(userEmail: string, gameId: string, sock
   }
 }
 
-// Clean up stale sessions for a specific game
 export function cleanupStaleGameSessions(gameId: string): number {
   const gameSessions = activeGameSessions.get(gameId);
   if (!gameSessions) return 0;
   
   let cleanedCount = 0;
   const staleSessions = new Set<string>();
-  
-  // Find sessions that no longer have valid socket connections
   for (const sessionId of gameSessions) {
     const userEmail = socketToUser.get(sessionId);
     if (!userEmail) {
@@ -168,13 +151,10 @@ export function cleanupStaleGameSessions(gameId: string): number {
     }
   }
   
-  // Remove stale sessions
   for (const staleSession of staleSessions) {
     gameSessions.delete(staleSession);
     cleanedCount++;
   }
-  
-  // If no sessions left, remove the game entry
   if (gameSessions.size === 0) {
     activeGameSessions.delete(gameId);
   }
@@ -182,7 +162,6 @@ export function cleanupStaleGameSessions(gameId: string): number {
   return cleanedCount;
 }
 
-// Get all active games for a user
 export function getUserActiveGames(userEmail: string): string[] {
   const activeGames: string[] = [];
   
@@ -191,7 +170,7 @@ export function getUserActiveGames(userEmail: string): string[] {
       const sessionUser = socketToUser.get(sessionId);
       if (sessionUser === userEmail) {
         activeGames.push(gameId);
-        break; // Don't add the same game multiple times
+        break; 
       }
     }
   }
@@ -199,11 +178,9 @@ export function getUserActiveGames(userEmail: string): string[] {
   return activeGames;
 }
 
-// Force cleanup user from all games
 export function forceCleanupUserFromAllGames(userEmail: string): string[] {
   const cleanedGames: string[] = [];
   
-  // Remove user from all game sessions
   for (const [gameId, sessions] of activeGameSessions.entries()) {
     const userSessions = new Set<string>();
     
@@ -220,20 +197,17 @@ export function forceCleanupUserFromAllGames(userEmail: string): string[] {
       }
       cleanedGames.push(gameId);
       
-      // If no sessions left, remove the game entry
       if (sessions.size === 0) {
         activeGameSessions.delete(gameId);
       }
     }
   }
   
-  // Remove user game session mapping
   userGameSessions.delete(userEmail);
   
   return cleanedGames;
 }
 
-// Check if a game session is still valid
 export function isValidGameSession(gameId: string, userEmail: string): boolean {
   const currentGameId = userGameSessions.get(userEmail);
   if (currentGameId !== gameId) {
@@ -245,11 +219,9 @@ export function isValidGameSession(gameId: string, userEmail: string): boolean {
     return false;
   }
   
-  // Check if user has any active sessions in this game
   for (const sessionId of gameSessions) {
     const sessionUser = socketToUser.get(sessionId);
     if (sessionUser === userEmail) {
-      // Verify the socket still exists
       const userSockets = userToSockets.get(userEmail);
       if (userSockets && userSockets.has(sessionId)) {
         return true;
@@ -260,7 +232,6 @@ export function isValidGameSession(gameId: string, userEmail: string): boolean {
   return false;
 }
 
-// Get session statistics for debugging
 export function getSessionStats(): {
   totalActiveSessions: number;
   totalActiveGames: number;
@@ -273,7 +244,7 @@ export function getSessionStats(): {
   
   for (const [gameId, sessions] of activeGameSessions.entries()) {
     totalActiveSessions += sessions.size;
-    if (sessions.size > 2) { // More than 2 sessions (1 per player)
+    if (sessions.size > 2) {
       gamesWithMultipleSessions++;
     }
   }
@@ -294,21 +265,17 @@ export function getSessionStats(): {
   };
 }
 
-// Enhanced session management functions
 export function addUserToGameSession(userEmail: string, gameId: string, socketId: string) {
-  // Clean up any existing sessions for this user in other games first
   const existingGameId = userGameSessions.get(userEmail);
   if (existingGameId && existingGameId !== gameId) {
     const existingSessions = activeGameSessions.get(existingGameId);
     if (existingSessions) {
-      // Remove user's old sessions
       for (const sessionId of [...existingSessions]) {
         const sessionUser = socketToUser.get(sessionId);
         if (sessionUser === userEmail) {
           existingSessions.delete(sessionId);
         }
       }
-      // Clean up empty game session
       if (existingSessions.size === 0) {
         activeGameSessions.delete(existingGameId);
       }
@@ -341,7 +308,6 @@ export function cleanupUserSession(userEmail: string, socketId: string) {
         const gameSessions = activeGameSessions.get(gameId);
         if (gameSessions) {
           gameSessions.delete(socketId);
-          // Clean up empty game session
           if (gameSessions.size === 0) {
             activeGameSessions.delete(gameId);
           }
@@ -351,7 +317,6 @@ export function cleanupUserSession(userEmail: string, socketId: string) {
     }
   }
   
-  // Also clean up from any game sessions
   for (const [gameId, sessions] of activeGameSessions.entries()) {
     if (sessions.has(socketId)) {
       sessions.delete(socketId);
@@ -362,7 +327,6 @@ export function cleanupUserSession(userEmail: string, socketId: string) {
   }
 }
 
-// New function to handle reconnection
 export function reconnectUserToGameSession(userEmail: string, gameId: string, socketId: string): boolean {
   const existingGameId = userGameSessions.get(userEmail);
   if (existingGameId === gameId) {
@@ -373,7 +337,6 @@ export function reconnectUserToGameSession(userEmail: string, gameId: string, so
   return false;
 }
 
-// Check if user has any active sockets
 export function hasActiveSockets(userEmail: string): boolean {
   const sockets = userToSockets.get(userEmail);
   return sockets ? sockets.size > 0 : false;
@@ -399,7 +362,6 @@ export function updateGameHeartbeat(gameId: string) {
   gameSessionHeartbeat.set(gameId, Date.now());
 }
 
-// Existing interfaces and types
 export interface InviteToGameData {
   myEmail: string
   hisEmail: string
@@ -423,7 +385,6 @@ export interface GameRoomData {
   winner?: string
   loser?: string
   leaver?: string
-  // Tournament properties (optional)
   tournamentId?: string
   matchId?: string
 }
@@ -468,12 +429,10 @@ export interface MatchmakingPlayer {
   joinedAt: number
 }
 
-// Global state (shared across modules)
 export const activeGames = new Map<string, GameState>()
 export const gameRooms = new Map<string, GameRoomData>()
 export const matchmakingQueue: MatchmakingPlayer[] = []
 
-// Helper functions
 export function getPlayerData(user: any): PlayerData {
   return {
     id: user.id,
@@ -497,10 +456,7 @@ export function isInQueue(email: string): boolean {
   return matchmakingQueue.some(p => p.email === email);
 }
 
-// Socket handler type
 export type GameSocketHandler = (socket: Socket, io: Server) => void
-
-// Tournament types
 export interface Tournament {
   tournamentId: string;
   name: string;

@@ -12,14 +12,12 @@ import {
 } from './game.socket.types'
 import redis, { getSocketIds } from '../../database/redis'
 
-// Helper function to check if user is currently in an active game
 async function isUserInActiveGame(userEmail: string): Promise<{
   isInGame: boolean;
   gameId?: string;
   gameStatus?: string;
 }> {
   try {
-    // Check in-memory game sessions first
     const currentGameId = getUserCurrentGame(userEmail);
     if (currentGameId) {
       const gameRoom = gameRooms.get(currentGameId);
@@ -32,7 +30,6 @@ async function isUserInActiveGame(userEmail: string): Promise<{
       }
     }
 
-    // Check Redis for any active game rooms
     const redisGameRooms = await redis.keys('game_room:*');
     for (const roomKey of redisGameRooms) {
       const gameRoomData = await redis.get(roomKey);
@@ -48,7 +45,6 @@ async function isUserInActiveGame(userEmail: string): Promise<{
             };
           }
         } catch (parseError) {
-          // Clean up corrupted data
           await redis.del(roomKey);
         }
       }
@@ -56,12 +52,10 @@ async function isUserInActiveGame(userEmail: string): Promise<{
 
     return { isInGame: false };
   } catch (error) {
-    console.error('Error checking user game status:', error);
     return { isInGame: false };
   }
 }
 
-// NEW: Enhanced function to clean up ALL invitations involving a user
 async function cleanupAllUserInvitations(userEmail: string, acceptedGameId?: string): Promise<{
   cleanedInvitations: Array<{
     gameId: string;
@@ -80,7 +74,6 @@ async function cleanupAllUserInvitations(userEmail: string, acceptedGameId?: str
     const affectedPlayers = new Set<string>();
     
     for (const key of allInviteKeys) {
-      // Skip the accepted invitation
       if (acceptedGameId && key === `game_invite:${acceptedGameId}`) {
         continue;
       }
@@ -89,36 +82,25 @@ async function cleanupAllUserInvitations(userEmail: string, acceptedGameId?: str
       if (inviteData) {
         try {
           const invite: GameInviteData = JSON.parse(inviteData);
-          
-          // Check if this invitation involves the user (either as host or guest)
           if (invite.hostEmail === userEmail || invite.guestEmail === userEmail) {
             const invitationType = invite.hostEmail === userEmail ? 'sent' : 'received';
             const otherPlayerEmail = invite.hostEmail === userEmail ? invite.guestEmail : invite.hostEmail;
-            
-            // Skip the accepted invitation
             if (acceptedGameId && invite.gameId === acceptedGameId) {
               continue;
             }
-            
-            // Clean up this invitation
             await Promise.all([
               redis.del(key),
               redis.del(`game_invite:${invite.hostEmail}:${invite.guestEmail}`),
               redis.del(`game_invite:${invite.guestEmail}:${invite.hostEmail}`)
             ]);
-            
             cleanedInvitations.push({
               gameId: invite.gameId,
               type: invitationType,
               otherPlayerEmail
             });
-            
             affectedPlayers.add(otherPlayerEmail);
-            
-            console.log(`Cleaned up ${invitationType} invitation: ${invite.gameId} between ${invite.hostEmail} and ${invite.guestEmail}`);
           }
         } catch (parseError) {
-          // Clean up corrupted invitation data
           await redis.del(key);
         }
       }
@@ -126,12 +108,10 @@ async function cleanupAllUserInvitations(userEmail: string, acceptedGameId?: str
     
     return { cleanedInvitations, affectedPlayers };
   } catch (error) {
-    console.error('Error cleaning up user invitations:', error);
     return { cleanedInvitations: [], affectedPlayers: new Set() };
   }
 }
 
-// NEW: Function to notify affected players about invitation cleanup
 async function notifyAffectedPlayers(
   io: Server,
   cleanedInvitations: Array<{
@@ -142,7 +122,6 @@ async function notifyAffectedPlayers(
   acceptingPlayerEmail: string,
   acceptingPlayerName: string
 ) {
-  // Group invitations by affected player
   const playerInvitations = new Map<string, Array<{
     gameId: string;
     type: 'sent' | 'received';
@@ -154,15 +133,13 @@ async function notifyAffectedPlayers(
     }
     playerInvitations.get(invitation.otherPlayerEmail)!.push({
       gameId: invitation.gameId,
-      type: invitation.type === 'sent' ? 'received' : 'sent' // Flip perspective for the other player
+      type: invitation.type === 'sent' ? 'received' : 'sent'
     });
   }
   
-  // Notify each affected player
   for (const [playerEmail, invitations] of playerInvitations.entries()) {
     const playerSocketIds = await getSocketIds(playerEmail, 'sockets') || [];
     if (playerSocketIds.length > 0) {
-      // Send comprehensive cleanup notification
       io.to(playerSocketIds).emit('GameInvitationsCleanup', {
         reason: 'player_accepted_other_invitation',
         acceptingPlayer: acceptingPlayerName,
@@ -172,10 +149,8 @@ async function notifyAffectedPlayers(
         timestamp: Date.now()
       });
       
-      // Send individual cleanup events for each invitation (for backward compatibility)
       for (const invitation of invitations) {
         if (invitation.type === 'received') {
-          // They had sent an invitation that was auto-declined
           io.to(playerSocketIds).emit('GameInviteDeclined', {
             gameId: invitation.gameId,
             declinedBy: acceptingPlayerEmail,
@@ -183,7 +158,6 @@ async function notifyAffectedPlayers(
             message: `${acceptingPlayerName} is now in a game and cannot accept your invitation`
           });
         } else {
-          // They had received an invitation that was auto-canceled
           io.to(playerSocketIds).emit('GameInviteCanceled', {
             gameId: invitation.gameId,
             canceledBy: acceptingPlayerEmail,
@@ -192,7 +166,6 @@ async function notifyAffectedPlayers(
           });
         }
         
-        // Send generic cleanup event
         io.to(playerSocketIds).emit('GameInviteCleanup', {
           gameId: invitation.gameId,
           action: 'auto_cleanup',
@@ -221,7 +194,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // Get invitation data
         const inviteData = await redis.get(`game_invite:${gameId}`)
         if (!inviteData) {
           return socket.emit('GameInviteResponse', {
@@ -231,7 +203,6 @@ export const handleGameAcceptance: GameSocketHandler = (
         }
 
         const invite: GameInviteData = JSON.parse(inviteData)
-
         if (invite.guestEmail !== guestEmail) {
           return socket.emit('GameInviteResponse', {
             status: 'error',
@@ -239,10 +210,8 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // Check if the host (sender) is currently in an active game
         const hostGameStatus = await isUserInActiveGame(invite.hostEmail);
         if (hostGameStatus.isInGame) {
-          // Clean up the expired invitation since host is unavailable
           await Promise.all([
             redis.del(`game_invite:${gameId}`),
             redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
@@ -257,17 +226,14 @@ export const handleGameAcceptance: GameSocketHandler = (
           });
         }
 
-        // Check if the guest (acceptor) is currently in an active game
         const guestGameStatus = await isUserInActiveGame(guestEmail);
         if (guestGameStatus.isInGame) {
-          // Clean up the invitation
           await Promise.all([
             redis.del(`game_invite:${gameId}`),
             redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
             redis.del(`game_invite:${guestEmail}:${invite.hostEmail}`),
           ]);
 
-          // Notify host that guest is already in a game
           const hostSocketIds = (await getSocketIds(invite.hostEmail, 'sockets')) || [];
           if (hostSocketIds.length > 0) {
             io.to(hostSocketIds).emit('GameInviteDeclined', {
@@ -286,7 +252,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           });
         }
 
-        // Get user data before cleaning up invitations
         const [hostUser, guestUser] = await Promise.all([
           getUserByEmail(invite.hostEmail),
           getUserByEmail(invite.guestEmail),
@@ -302,20 +267,17 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // NEW: Clean up ALL invitations involving both players BEFORE accepting
         const [hostCleanup, guestCleanup] = await Promise.all([
           cleanupAllUserInvitations(invite.hostEmail, gameId),
           cleanupAllUserInvitations(invite.guestEmail, gameId)
         ]);
 
-        // IMPORTANT: Clean up this invitation data IMMEDIATELY to prevent double processing
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
           redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
           redis.del(`game_invite:${guestEmail}:${invite.hostEmail}`),
         ])
 
-        // Create game room
         const gameRoomData: GameRoomData = {
           gameId,
           hostEmail: host.email,
@@ -331,7 +293,6 @@ export const handleGameAcceptance: GameSocketHandler = (
         )
         gameRooms.set(gameId, gameRoomData)
 
-        // Get ALL socket IDs for both users
         const hostSocketIds = (await getSocketIds(host.email, 'sockets')) || []
         const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []
 
@@ -341,7 +302,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           acceptedBy: guest.email,
         }
 
-        // Send acceptance confirmation to the accepting guest
         socket.emit('GameInviteAccepted', {
           ...acceptedData,
           hostEmail: host.email,
@@ -349,7 +309,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           hostData: getPlayerData(host),
         })
 
-        // Send acceptance notification to ALL host sockets
         if (hostSocketIds.length > 0) {
           io.to(hostSocketIds).emit('GameInviteAccepted', {
             ...acceptedData,
@@ -360,7 +319,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // NEW: Notify all affected players about invitation cleanup
         if (hostCleanup.cleanedInvitations.length > 0) {
           await notifyAffectedPlayers(
             io,
@@ -379,7 +337,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           );
         }
 
-        // Clean up invitations from other guest sessions (if any)
         const otherGuestSockets = guestSocketIds.filter(socketId => socketId !== socket.id)
         if (otherGuestSockets.length > 0) {
           io.to(otherGuestSockets).emit('GameInviteCleanup', {
@@ -390,10 +347,7 @@ export const handleGameAcceptance: GameSocketHandler = (
         }
 
         const totalCleanedInvitations = hostCleanup.cleanedInvitations.length + guestCleanup.cleanedInvitations.length;
-        console.log(`Game accepted: ${host.email} vs ${guest.email}. Cleaned up ${totalCleanedInvitations} other invitations.`);
-
       } catch (error) {
-        console.error('Error accepting game invite:', error);
         socket.emit('GameInviteResponse', {
           status: 'error',
           message: 'Failed to accept invitation.',
@@ -424,7 +378,6 @@ export const handleGameAcceptance: GameSocketHandler = (
         }
 
         const invite: GameInviteData = JSON.parse(inviteData)
-
         if (invite.guestEmail !== guestEmail) {
           return socket.emit('GameInviteResponse', {
             status: 'error',
@@ -432,7 +385,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           })
         }
 
-        // Clean up BOTH directional invitation keys
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
           redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`),
@@ -441,7 +393,6 @@ export const handleGameAcceptance: GameSocketHandler = (
 
         const guestUser = await getUserByEmail(invite.guestEmail)
         const guest = guestUser as unknown as User
-
         if (guest) {
           const hostSocketIds = (await getSocketIds(invite.hostEmail, 'sockets')) || []
           const guestSocketIds = (await getSocketIds(guest.email, 'sockets')) || []

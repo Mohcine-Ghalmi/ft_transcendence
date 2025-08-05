@@ -1,24 +1,16 @@
-// Utility/event helpers for tournament socket logic
-// Export any helpers needed by lobby/match handlers
-
 import {
   Tournament,
   TournamentParticipant,
   TournamentMatch,
 } from './game.socket.types'
 
-// Helper function to create tournament bracket
 export function createTournamentBracket(
   participants: TournamentParticipant[],
   size: number
 ): TournamentMatch[] {
   const matches: TournamentMatch[] = []
   const totalRounds = Math.log2(size)
-
-  // Shuffle participants for random seeding
   const shuffledParticipants = [...participants].sort(() => Math.random() - 0.5)
-
-  // Create first round matches
   for (let i = 0; i < size / 2; i++) {
     const player1 = shuffledParticipants[i * 2] || undefined
     const player2 = shuffledParticipants[i * 2 + 1] || undefined
@@ -29,8 +21,6 @@ export function createTournamentBracket(
       | 'player1_win'
       | 'player2_win' = 'waiting'
     let winner: TournamentParticipant | undefined = undefined
-
-    // Handle byes (when there's no opponent)
     if (player1 && !player2) {
       state = 'player1_win'
       winner = player1
@@ -49,8 +39,6 @@ export function createTournamentBracket(
       winner,
     })
   }
-
-  // Create placeholder matches for future rounds
   for (let round = 1; round < totalRounds; round++) {
     const matchesInRound = size / Math.pow(2, round + 1)
     for (let i = 0; i < matchesInRound; i++) {
@@ -67,27 +55,20 @@ export function createTournamentBracket(
 
   return matches
 }
-
-// Helper function to advance tournament round
 export function advanceTournamentRound(tournament: Tournament): Tournament {
   const updatedTournament = { ...tournament }
-
-  // Find the current round
   const currentRound = Math.max(...tournament.matches.map((m) => m.round))
   const nextRound = currentRound + 1
   const totalRounds = Math.log2(tournament.size)
 
   if (nextRound >= totalRounds) {
-    // Tournament is complete
     updatedTournament.status = 'completed'
     updatedTournament.endedAt = Date.now()
 
-    // Find the winner (last remaining player)
     const finalMatch = updatedTournament.matches.find(
       (m) => m.round === currentRound && m.state !== 'waiting'
     )
     if (finalMatch && finalMatch.winner) {
-      // Update winner status
       const winnerParticipant = updatedTournament.participants.find(
         (p) => p.email === finalMatch.winner!.email
       )
@@ -99,16 +80,12 @@ export function advanceTournamentRound(tournament: Tournament): Tournament {
 
     return updatedTournament
   }
-
-  // Get completed matches from current round
   const completedMatches = updatedTournament.matches.filter(
     (m) =>
       m.round === currentRound &&
       (m.state === 'player1_win' || m.state === 'player2_win') &&
       m.winner
   )
-
-  // Create next round matches
   const nextRoundMatches: any = []
   for (let i = 0; i < completedMatches.length; i += 2) {
     const match1 = completedMatches[i]
@@ -128,14 +105,11 @@ export function advanceTournamentRound(tournament: Tournament): Tournament {
       })
     }
   }
-
-  // Add new matches to tournament
   updatedTournament.matches.push(...nextRoundMatches)
 
   return updatedTournament
 }
 
-// Helper function to check if tournament is complete
 export function isTournamentComplete(tournament: Tournament): boolean {
   const totalRounds = Math.log2(tournament.size)
   const finalRoundMatches = tournament.matches.filter(
@@ -150,8 +124,6 @@ export function isTournamentComplete(tournament: Tournament): boolean {
     )
   )
 }
-
-// Helper function to get tournament winner
 export function getTournamentWinner(
   tournament: Tournament
 ): TournamentParticipant | null {
@@ -165,7 +137,6 @@ export function getTournamentWinner(
   return finalMatch?.winner || null
 }
 
-// Helper function to get current round matches
 export function getCurrentRoundMatches(
   tournament: Tournament
 ): TournamentMatch[] {
@@ -173,14 +144,12 @@ export function getCurrentRoundMatches(
   return tournament.matches.filter((m) => m.round === currentRound)
 }
 
-// Helper function to get next round matches
 export function getNextRoundMatches(tournament: Tournament): TournamentMatch[] {
   const currentRound = Math.max(...tournament.matches.map((m) => m.round))
   const nextRound = currentRound + 1
   return tournament.matches.filter((m) => m.round === nextRound)
 }
 
-// Helper function to check if all matches in a round are completed
 export function isRoundComplete(
   tournament: Tournament,
   round: number
@@ -194,7 +163,6 @@ export function isRoundComplete(
   )
 }
 
-// Helper function to get tournament statistics
 export function getTournamentStats(tournament: Tournament) {
   const totalMatches = tournament.matches.length
   const completedMatches = tournament.matches.filter(
@@ -221,7 +189,6 @@ export function getTournamentStats(tournament: Tournament) {
   }
 }
 
-// Helper function to validate tournament data
 export function validateTournament(tournament: Tournament): {
   valid: boolean
   errors: string[]
@@ -268,7 +235,6 @@ export function validateTournament(tournament: Tournament): {
   }
 }
 
-// Helper function to get participant by email
 export function getParticipantByEmail(
   tournament: Tournament,
   email: string
@@ -276,7 +242,6 @@ export function getParticipantByEmail(
   return tournament.participants.find((p) => p.email === email)
 }
 
-// Helper function to check if participant is host
 export function isParticipantHost(
   tournament: Tournament,
   email: string
@@ -284,7 +249,6 @@ export function isParticipantHost(
   return tournament.hostEmail === email
 }
 
-// Helper function to get match by ID
 export function getMatchById(
   tournament: Tournament,
   matchId: string
@@ -292,7 +256,6 @@ export function getMatchById(
   return tournament.matches.find((m) => m.id === matchId)
 }
 
-// Helper function to get matches by round
 export function getMatchesByRound(
   tournament: Tournament,
   round: number
@@ -300,7 +263,6 @@ export function getMatchesByRound(
   return tournament.matches.filter((m) => m.round === round)
 }
 
-// Helper function to get player's current match
 export function getPlayerCurrentMatch(
   tournament: Tournament,
   playerEmail: string
@@ -312,7 +274,6 @@ export function getPlayerCurrentMatch(
   )
 }
 
-// Helper function to check if player is in tournament
 export function isPlayerInTournament(
   tournament: Tournament,
   playerEmail: string
@@ -320,7 +281,6 @@ export function isPlayerInTournament(
   return tournament.participants.some((p) => p.email === playerEmail)
 }
 
-// Helper function to handle player forfeit in tournament
 export function handleTournamentPlayerForfeit(
   tournament: Tournament,
   playerEmail: string
@@ -331,7 +291,6 @@ export function handleTournamentPlayerForfeit(
   advancingPlayer: TournamentParticipant | null
   isAutoWin: boolean
 } {
-  // Find the participant who is forfeiting
   const forfeitedPlayer = tournament.participants.find(
     (p) => p.email === playerEmail
   )
@@ -344,17 +303,12 @@ export function handleTournamentPlayerForfeit(
       isAutoWin: false,
     }
   }
-
-  // Mark the forfeiting player as eliminated
   forfeitedPlayer.status = 'eliminated'
-
-  // Check if only one player remains active
   const activeParticipants = tournament.participants.filter(
     (p) => p.status !== 'eliminated'
   )
 
   if (activeParticipants.length === 1) {
-    // Auto-win scenario
     const winner = activeParticipants[0]
     tournament.status = 'completed'
     tournament.endedAt = Date.now()
@@ -370,7 +324,6 @@ export function handleTournamentPlayerForfeit(
     }
   }
 
-  // Find the current match involving this player
   const currentMatch = tournament.matches.find(
     (m) =>
       (m.player1?.email === playerEmail || m.player2?.email === playerEmail) &&
@@ -387,20 +340,16 @@ export function handleTournamentPlayerForfeit(
     }
   }
 
-  // Determine the advancing player (opponent)
   const advancingPlayer =
     currentMatch.player1?.email === playerEmail
       ? currentMatch.player2
       : currentMatch.player1
 
   if (!advancingPlayer) {
-    // Edge case: no opponent (bye situation), just mark as forfeit win
     if (currentMatch.player1?.email === playerEmail) {
-      // Player 1 forfeited, no player 2 to advance (shouldn't happen in normal tournament)
       currentMatch.state = 'player2_win'
       currentMatch.winner = currentMatch.player2
     } else {
-      // Player 2 forfeited, player 1 wins by default
       currentMatch.state = 'player1_win'
       currentMatch.winner = currentMatch.player1
     }
@@ -413,7 +362,6 @@ export function handleTournamentPlayerForfeit(
     }
   }
 
-  // Update match result - the remaining player wins by forfeit
   if (currentMatch.player1?.email === advancingPlayer.email) {
     currentMatch.state = 'player1_win'
     currentMatch.winner = currentMatch.player1
@@ -422,7 +370,6 @@ export function handleTournamentPlayerForfeit(
     currentMatch.winner = currentMatch.player2
   }
 
-  // Mark the advancing player as accepted (still in tournament)
   if (advancingPlayer) {
     const advancingParticipant = tournament.participants.find(
       (p) => p.email === advancingPlayer.email
@@ -432,7 +379,6 @@ export function handleTournamentPlayerForfeit(
     }
   }
 
-  // Advance winner to next round if next round exists
   const nextRound = currentMatch.round + 1
   const nextMatchIndex = Math.floor(currentMatch.matchIndex / 2)
   const nextMatch = tournament.matches.find(
@@ -440,16 +386,12 @@ export function handleTournamentPlayerForfeit(
   )
 
   if (nextMatch && currentMatch.winner) {
-    // Determine if winner goes to player1 or player2 slot
     if (currentMatch.matchIndex % 2 === 0) {
-      // Even match index -> winner goes to player1 slot
       nextMatch.player1 = currentMatch.winner
     } else {
-      // Odd match index -> winner goes to player2 slot
       nextMatch.player2 = currentMatch.winner
     }
 
-    // Check if next match is ready (both players assigned)
     if (nextMatch.player1 && nextMatch.player2) {
       nextMatch.state = 'waiting'
     }

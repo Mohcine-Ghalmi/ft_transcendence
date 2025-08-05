@@ -17,7 +17,7 @@ export function GameInviteProvider({ children }) {
   const socket = getGameSocketInstance()
   const [receivedInvites, setReceivedInvites] = useState([])
   const [isSliding, setIsSliding] = useState({})
-  const [acceptingInvites, setAcceptingInvites] = useState(new Set()) // Track which invites are being processed
+  const [acceptingInvites, setAcceptingInvites] = useState(new Set())
   const router = useRouter()
   // const { connectSocket } = useGameStore()
 
@@ -30,24 +30,10 @@ export function GameInviteProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    console.log('socket useEffect : ', socket?.connected)
 
     if (!socket || !user?.email) return
 
-    // Socket event listeners for game invites
     const handleGameInviteReceived = (data) => {
-      console.log('Game invite received:', data)
-
-      console.log(
-        'Game invite received from:',
-        data.hostData?.username,
-        'GameID:',
-        data.gameId
-      )
-      console.log('Current user email:', user.email)
-      console.log('Host email:', data.hostData?.email)
-
-      // Check if there's already an invitation from this exact host and game combination
       setReceivedInvites((prev) => {
         const existingFromSameHostAndGame = prev.findIndex(
           (invite) =>
@@ -56,8 +42,6 @@ export function GameInviteProvider({ children }) {
         )
 
         if (existingFromSameHostAndGame !== -1) {
-          // Replace existing invitation from same host and game
-          console.log('Replacing existing invite from same host and game')
           const updated = [...prev]
           updated[existingFromSameHostAndGame] = {
             ...data,
@@ -65,13 +49,10 @@ export function GameInviteProvider({ children }) {
           }
           return updated
         } else {
-          // Add new invitation (allows multiple from different hosts)
-          console.log('Adding new invite - multiple invitations allowed')
           return [...prev, { ...data, timestamp: Date.now() }]
         }
       })
 
-      // Auto-hide after 30 seconds using unique gameId (consistent with tournaments)
       setTimeout(() => {
         setIsSliding((prev) => ({ ...prev, [data.gameId]: true }))
         setTimeout(() => {
@@ -98,15 +79,7 @@ export function GameInviteProvider({ children }) {
       })
     }
 
-    // Handle cleanup event for multi-session sync
     const handleGameInviteCleanup = (data) => {
-      console.log(
-        'Cleaning up invite in inactive session:',
-        data.gameId,
-        data.action
-      )
-
-      // Remove the invite from this session's UI
       setReceivedInvites((prev) =>
         prev.filter((invite) => invite.gameId !== data.gameId)
       )
@@ -116,24 +89,14 @@ export function GameInviteProvider({ children }) {
         return newSliding
       })
 
-      // Remove from accepting state
       setAcceptingInvites((prev) => {
         const newSet = new Set(prev)
         newSet.delete(data.gameId)
         return newSet
       })
-
-      // Optional: Show a brief notification that the invite was handled elsewhere
-      if (data.action === 'accepted') {
-        console.log('Invite was accepted in another session')
-      } else if (data.action === 'declined') {
-        console.log('Invite was declined in another session')
-      }
     }
 
-    // NEW: Enhanced response handler for invitation acceptance/decline
     const handleGameInviteResponse = (data) => {
-      // Remove from accepting state regardless of result
       if (data.gameId) {
         setAcceptingInvites((prev) => {
           const newSet = new Set(prev)
@@ -143,13 +106,10 @@ export function GameInviteProvider({ children }) {
       }
 
       if (data.status === 'error') {
-        // Handle specific error cases
         if (data.reason === 'host_in_game') {
           toast.error(
             'The sender is already in an active game and cannot start a new one.'
           )
-
-          // Remove the expired invite from UI
           setReceivedInvites((prev) =>
             prev.filter((invite) => invite.gameId !== data.gameId)
           )
@@ -162,15 +122,12 @@ export function GameInviteProvider({ children }) {
           toast.error(
             'You are already in an active game. Please finish your current game first.'
           )
-
-          // Optionally redirect to current game if gameId is provided
           if (data.currentGameId) {
             setTimeout(() => {
               router.push(`/play/game/${data.currentGameId}`)
             }, 2000)
           }
         } else {
-          // Generic error handling
           toast.error(data.message || 'Failed to accept invitation.')
         }
       } else if (data.status === 'success') {
@@ -178,25 +135,22 @@ export function GameInviteProvider({ children }) {
       }
     }
 
-    // Add event listeners
     socket.on('GameInviteReceived', handleGameInviteReceived)
     socket.on('GameInviteCanceled', handleGameInviteCanceled)
     socket.on('GameInviteCleanup', handleGameInviteCleanup)
-    socket.on('GameInviteResponse', handleGameInviteResponse) // NEW listener
+    socket.on('GameInviteResponse', handleGameInviteResponse) 
 
-    // Cleanup event listeners on unmount
     return () => {
       socket.off('GameInviteReceived', handleGameInviteReceived)
       socket.off('GameInviteCanceled', handleGameInviteCanceled)
       socket.off('GameInviteCleanup', handleGameInviteCleanup)
-      socket.off('GameInviteResponse', handleGameInviteResponse) // NEW cleanup
+      socket.off('GameInviteResponse', handleGameInviteResponse)
     }
   }, [socket, user?.email, router])
 
   const acceptInvite = (gameId) => {
     const invite = receivedInvites.find((inv) => inv.gameId === gameId)
     if (invite && socket) {
-      // Mark as accepting to show loading state
       setAcceptingInvites((prev) => new Set([...prev, gameId]))
 
       socket.emit('AcceptGameInvite', {
@@ -204,7 +158,6 @@ export function GameInviteProvider({ children }) {
         guestEmail: user.email,
       })
 
-      // Remove from current session immediately (optimistic update)
       setReceivedInvites((prev) => prev.filter((inv) => inv.gameId !== gameId))
       setIsSliding((prev) => {
         const newSliding = { ...prev }
@@ -212,7 +165,6 @@ export function GameInviteProvider({ children }) {
         return newSliding
       })
 
-      // Navigate to game page (will be handled by response if there's an error)
       router.push(`/play/game/${invite.gameId}`)
     }
   }
@@ -225,7 +177,6 @@ export function GameInviteProvider({ children }) {
         guestEmail: user.email,
       })
 
-      // Remove from current session immediately
       setReceivedInvites((prev) => prev.filter((inv) => inv.gameId !== gameId))
       setIsSliding((prev) => {
         const newSliding = { ...prev }
@@ -243,7 +194,6 @@ export function GameInviteProvider({ children }) {
       return newSliding
     })
 
-    // Remove from accepting state if present
     setAcceptingInvites((prev) => {
       const newSet = new Set(prev)
       newSet.delete(gameId)
@@ -293,7 +243,7 @@ export function GameInviteProvider({ children }) {
             }`}
             style={{
               right: '1rem',
-              top: `${1 + index * 12}rem`, // Stack invitations vertically
+              top: `${1 + index * 12}rem`, 
             }}
           >
             <div className="bg-[#2a2f3a] border border-[#404654] rounded-lg shadow-2xl p-4 max-w-sm w-80">

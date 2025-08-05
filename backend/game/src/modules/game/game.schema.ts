@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { buildJsonSchemas } from 'fastify-zod'
 
-// Game state schema for real-time game updates
 const gameStateSchema = z.object({
   gameId: z.string(),
   ballX: z.number(),
@@ -19,7 +18,6 @@ const gameStateSchema = z.object({
   lastUpdate: z.number()
 })
 
-// Match history schema
 const matchHistorySchema = z.object({
   id: z.number().optional(),
   gameId: z.string(),
@@ -29,14 +27,13 @@ const matchHistorySchema = z.object({
   player2Score: z.number(),
   winner: z.string().email(),
   loser: z.string().email(),
-  gameDuration: z.number(), // in seconds
+  gameDuration: z.number(),
   startedAt: z.number(),
   endedAt: z.number(),
   gameMode: z.enum(['1v1', 'tournament']).default('1v1'),
   status: z.enum(['completed', 'forfeit']).default('completed')
 })
 
-// Game action schema for player inputs
 const gameActionSchema = z.object({
   gameId: z.string(),
   playerEmail: z.string().email(),
@@ -44,7 +41,6 @@ const gameActionSchema = z.object({
   timestamp: z.number()
 })
 
-// Game result schema
 const gameResultSchema = z.object({
   gameId: z.string(),
   winner: z.string().email(),

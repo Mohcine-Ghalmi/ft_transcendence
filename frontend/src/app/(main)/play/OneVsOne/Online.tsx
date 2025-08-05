@@ -212,10 +212,10 @@ export default function OnlineMatch() {
   const [friends, setFriends] = useState([])
   const [gameId, setGameId] = useState(null)
   const [isInviting, setIsInviting] = useState(false)
-  const [gameState, setGameState] = useState('idle') // 'idle', 'waiting_response', 'waiting_to_start', 'in_game'
+  const [gameState, setGameState] = useState('idle') 
   const [isHost, setIsHost] = useState(false)
   const [sessionConflict, setSessionConflict] = useState(false)
-  const [currentSessionGameId, setCurrentSessionGameId] = useState(null) // Track this session's game
+  const [currentSessionGameId, setCurrentSessionGameId] = useState(null)
 
   const { user, onlineUsers } = useAuthStore()
   const { socket, receivedInvite, acceptInvite, declineInvite, clearInvite } =
@@ -225,7 +225,6 @@ export default function OnlineMatch() {
   const countdownIntervalRef = useRef(null)
   const [currentPath, setCurrentPath] = useState('')
 
-  // Load game state from memory storage (not localStorage due to artifact restrictions)
   const [persistentGameState, setPersistentGameState] = useState({
     gameState: 'idle',
     gameId: null,
@@ -233,7 +232,6 @@ export default function OnlineMatch() {
     isHost: false,
   })
 
-  // Helper function to handle host leaving before game starts
   const handleHostLeaveBeforeStart = () => {
     if (
       isHost &&
@@ -255,10 +253,8 @@ export default function OnlineMatch() {
     }
   }
 
-  // UPDATED: Helper function to handle guest leaving during waiting phase
   const handleGuestLeaveWaiting = () => {
     if (!isHost && gameId && receivedInvite && socket && user?.email) {
-      // Guest is leaving while waiting to respond to invite
       socket.emit('DeclineGameInvite', {
         gameId,
         guestEmail: user.email,
@@ -267,7 +263,6 @@ export default function OnlineMatch() {
     }
   }
 
-  // Helper function to check if this session should handle the event
   const isThisSessionEvent = (eventGameId) => {
     return currentSessionGameId === eventGameId || gameId === eventGameId
   }
@@ -303,14 +298,12 @@ export default function OnlineMatch() {
     return () => clearTimeout(timeoutId)
   }, [])
 
-  // UPDATED: Handle route changes and page navigation with guest handling
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const handleRouteChange = () => {
       const newPath = window.location.pathname
 
-      // Handle different game states when player leaves
       if (currentPath && newPath !== currentPath) {
         if (
           gameState === 'waiting_to_start' &&
@@ -320,7 +313,6 @@ export default function OnlineMatch() {
         ) {
           handleHostLeaveBeforeStart()
         } else if (gameState === 'in_game' && gameId && socket && user?.email) {
-          // Player left during active game - mark as lost
           socket.emit('LeaveGame', {
             gameId,
             playerEmail: user.email,
@@ -332,13 +324,11 @@ export default function OnlineMatch() {
           socket &&
           user?.email
         ) {
-          // Player left while waiting for response - cancel invite
           socket.emit('CancelGameInvite', {
             gameId,
             hostEmail: user.email,
           })
         } else if (
-          // ADDED: Handle guest leaving during waiting phase
           !isHost &&
           gameId &&
           receivedInvite &&
@@ -353,16 +343,13 @@ export default function OnlineMatch() {
     }
 
     const handleBeforeUnload = (e) => {
-      // Handle page refresh/close for different game states
       if (gameState === 'waiting_to_start' && gameId && socket && user?.email) {
         handleHostLeaveBeforeStart()
       } else if (gameState === 'in_game' && gameId && socket && user?.email) {
-        // Show confirmation dialog for active games
         e.preventDefault()
         e.returnValue =
           'Are you sure you want to leave the game? This will result in a loss.'
 
-        // Emit leave event
         socket.emit('LeaveGame', {
           gameId,
           playerEmail: user.email,
@@ -381,7 +368,6 @@ export default function OnlineMatch() {
           hostEmail: user.email,
         })
       } else if (
-        // ADDED: Handle guest leaving during waiting phase
         !isHost &&
         gameId &&
         receivedInvite &&
@@ -393,7 +379,6 @@ export default function OnlineMatch() {
     }
 
     const handleVisibilityChange = () => {
-      // Handle when user navigates to another tab or minimizes browser
       if (document.visibilityState === 'hidden') {
         if (
           gameState === 'waiting_to_start' &&
@@ -403,7 +388,6 @@ export default function OnlineMatch() {
         ) {
           handleHostLeaveBeforeStart()
         } else if (gameState === 'in_game' && gameId && socket && user?.email) {
-          // Player left during active game - mark as lost
           socket.emit('LeaveGame', {
             gameId,
             playerEmail: user.email,
@@ -420,7 +404,6 @@ export default function OnlineMatch() {
             hostEmail: user.email,
           })
         } else if (
-          // ADDED: Handle guest leaving during waiting phase
           !isHost &&
           gameId &&
           receivedInvite &&
@@ -440,7 +423,6 @@ export default function OnlineMatch() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
-    // Also listen for pushState and replaceState (for programmatic navigation)
     const originalPushState = history.pushState
     const originalReplaceState = history.replaceState
 
@@ -461,9 +443,8 @@ export default function OnlineMatch() {
       history.pushState = originalPushState
       history.replaceState = originalReplaceState
     }
-  }, [currentPath, gameState, gameId, isHost, socket, user, receivedInvite]) // UPDATED: Added receivedInvite dependency
+  }, [currentPath, gameState, gameId, isHost, socket, user, receivedInvite])
 
-  // Socket event listeners
   useEffect(() => {
     if (!socket) return
 
@@ -472,7 +453,7 @@ export default function OnlineMatch() {
 
       if (data.status === 'success' && data.type === 'invite_sent') {
         setGameId(data.gameId)
-        setCurrentSessionGameId(data.gameId) // Track this session's game
+        setCurrentSessionGameId(data.gameId)
         setInvitedPlayer({
           ...data.guestData,
           name: data.guestData.username || data.guestData.login,
@@ -494,10 +475,8 @@ export default function OnlineMatch() {
       }
     }
 
-    // FIXED: Improved logic for handling game invite acceptance with session checking
     const handleGameInviteAccepted = (data) => {
       if (data.status === 'ready_to_start') {
-        // Check if this is for our session
         if (!isThisSessionEvent(data.gameId)) {
           return
         }
@@ -507,12 +486,9 @@ export default function OnlineMatch() {
         setIsWaitingForResponse(false)
         clearCountdown()
 
-        // Check if we're the host (we have isHostNotification flag OR we were in waiting_response state)
         const isCurrentSessionHost =
           data.isHostNotification || gameState === 'waiting_response'
-
         if (isCurrentSessionHost) {
-          // We are the host - use guest data
           setIsHost(true)
           setInvitedPlayer({
             ...data.guestData,
@@ -522,7 +498,6 @@ export default function OnlineMatch() {
             GameStatus: 'Available',
           })
         } else {
-          // We are the guest - use host data
           setIsHost(false)
           setInvitedPlayer({
             ...data.hostData,
@@ -585,11 +560,8 @@ export default function OnlineMatch() {
       resetGameState()
     }
 
-    // FIXED: Add session conflict handlers
     const handleGameInviteCleanup = (data) => {
-      // This is sent to sessions that didn't accept/decline
       if (data.gameId === gameId || data.gameId === currentSessionGameId) {
-        // Another session handled this invite
         setSessionConflict(true)
         toast.info(data.message || 'Invite handled in another session')
         resetGameState()
@@ -714,7 +686,6 @@ export default function OnlineMatch() {
       router.push('/play')
     }
 
-    // Add event listeners
     socket.on('InviteToGameResponse', handleInviteResponse)
     socket.on('GameInviteAccepted', handleGameInviteAccepted)
     socket.on('GameInviteDeclined', handleGameInviteDeclined)
@@ -755,31 +726,26 @@ export default function OnlineMatch() {
     receivedInvite,
   ])
 
-  // Handle page refresh and disconnection
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // If we're in a game, notify the server that we're leaving
       if (socket && gameId && user?.email) {
         socket.emit('LeaveGame', {
           gameId,
           playerEmail: user.email,
         })
       }
-      // ADDED: Handle guest leaving during waiting phase
       if (!isHost && gameId && receivedInvite && socket && user?.email) {
         handleGuestLeaveWaiting()
       }
     }
 
     const handleVisibilityChange = () => {
-      // If page becomes hidden (user switches tabs or minimizes), treat as leaving
       if (document.hidden && socket && gameId && user?.email) {
         socket.emit('LeaveGame', {
           gameId,
           playerEmail: user.email,
         })
       }
-      // ADDED: Handle guest leaving during waiting phase
       if (
         document.hidden &&
         !isHost &&
@@ -799,9 +765,8 @@ export default function OnlineMatch() {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [socket, gameId, user?.email, isHost, receivedInvite]) // UPDATED: Added isHost and receivedInvite dependencies
+  }, [socket, gameId, user?.email, isHost, receivedInvite])
 
-  // Handle accepting invite from context
   useEffect(() => {
     if (receivedInvite && gameState === 'idle') {
       setInvitedPlayer({
@@ -810,8 +775,8 @@ export default function OnlineMatch() {
         GameStatus: 'Available',
       })
       setGameId(receivedInvite.gameId)
-      setCurrentSessionGameId(receivedInvite.gameId) // Track this session's game
-      setIsHost(false) // Guest is not host
+      setCurrentSessionGameId(receivedInvite.gameId)
+      setIsHost(false)
       setPersistentGameState({
         gameState: 'idle',
         gameId: receivedInvite.gameId,
@@ -821,7 +786,6 @@ export default function OnlineMatch() {
     }
   }, [receivedInvite, gameState])
 
-  // Fetch friends effect
   useEffect(() => {
     async function fetchFriends() {
       if (!user?.email) return
@@ -835,7 +799,7 @@ export default function OnlineMatch() {
 
         if (data.friends && Array.isArray(data.friends)) {
           const formatted = data.friends
-            .filter((f) => onlineUsers.includes(f.email)) // Check if user is in onlineUsers
+            .filter((f) => onlineUsers.includes(f.email))
             .map((f) => ({
               name: f.username,
               avatar: f.avatar,
@@ -861,7 +825,7 @@ export default function OnlineMatch() {
     setGameAccepted(false)
     setWaitTime(30)
     setGameId(null)
-    setCurrentSessionGameId(null) // Reset session tracking
+    setCurrentSessionGameId(null)
     setIsHost(false)
     setShowGame(false)
     setIsInviting(false)
@@ -905,9 +869,6 @@ export default function OnlineMatch() {
   })
 
   const handleInvite = async (player) => {
-    console.log('payer : ', player)
-    console.log('Inviting player:', socket?.connected)
-
     if (!socket) {
       return
     }
@@ -922,13 +883,11 @@ export default function OnlineMatch() {
     const success = await sendGameInvite(player.email, socket, user)
 
     if (success) {
-      // Start countdown
       countdownIntervalRef.current = setInterval(() => {
         setWaitTime((prev) => {
           if (prev <= 1) {
             clearInterval(countdownIntervalRef.current)
             countdownIntervalRef.current = null
-            // If time runs out, cancel the invite automatically
             handleCancelInvite()
             return 0
           }
@@ -951,7 +910,6 @@ export default function OnlineMatch() {
     resetGameState()
   }
 
-  // FIXED: Simplified start game logic
   const handleStartGame = () => {
     if (socket && gameId) {
       socket.emit('StartGame', { gameId })
@@ -968,8 +926,6 @@ export default function OnlineMatch() {
   const handleGameEnd = () => {
     resetGameState()
   }
-
-  // If waiting to start game, show waiting page
   if (gameState === 'waiting_to_start' && gameAccepted && invitedPlayer) {
     return (
       <WaitingPage
@@ -985,14 +941,12 @@ export default function OnlineMatch() {
 
   return (
     <div className="h-full w-full text-white">
-      {/* Show session conflict notification */}
       {sessionConflict && (
         <div className="fixed top-4 right-4 bg-yellow-600 text-white p-4 rounded-lg shadow-lg z-50">
           <p>Game is being handled in another session</p>
         </div>
       )}
 
-      {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
         <div className="w-full max-w-7xl">
           {!gameAccepted && gameState === 'idle' && (
@@ -1018,7 +972,6 @@ export default function OnlineMatch() {
                   />
                 </div>
 
-                {/* Online Players Section */}
                 <div className="mb-8">
                   <h2 className="text-2xl font-semibold text-white mb-6">
                     Online Players
@@ -1061,7 +1014,6 @@ export default function OnlineMatch() {
                 </div>
               </>
             ) : (
-              // Match Queue / Waiting for Response Interface
               <WaitingForResponseModal
                 currentUser={user}
                 invitedPlayer={invitedPlayer}
@@ -1070,7 +1022,6 @@ export default function OnlineMatch() {
               />
             )
           ) : (
-            // Game Component for Host
             <PingPongGame
               player1={user}
               player2={invitedPlayer}

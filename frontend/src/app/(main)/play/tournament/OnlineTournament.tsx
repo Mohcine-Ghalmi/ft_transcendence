@@ -38,11 +38,10 @@ const OnlinePlayMode = ({
 }: OnlinePlayModeProps & {
   friends: Player[]
   invitingPlayers: Set<string>
-  participants: any[] // Added participants property here
+  participants: any[]
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const participantEmails = new Set(participants.map(p => p.email || p.id))
-  // Use the same filtering logic as OneVsOne
   const filteredPlayers = friends.filter((player) =>
     player.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
     !participantEmails.has(player.email)
@@ -50,7 +49,6 @@ const OnlinePlayMode = ({
   return (
     <div className="bg-[#0f1419] rounded-lg p-6 border border-[#2a2f3a]">
       <h3 className="text-white text-xl font-semibold mb-4">Invite Players</h3>
-      {/* Search Bar */}
       <div className="relative mb-6">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
           <Search className="h-5 w-5 text-gray-400" />
@@ -63,7 +61,6 @@ const OnlinePlayMode = ({
           className="w-full pl-12 pr-4 py-3 bg-[#1a1d23] text-white rounded-lg border border-[#2a2f3a] outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
         />
       </div>
-      {/* Online Players List */}
       <div className="space-y-3 max-h-96 overflow-y-auto">
         <h4 className="text-white text-lg font-medium mb-3">Online Players</h4>
 
@@ -167,12 +164,11 @@ const RoundControls = ({
   )
 }
 
-// Main Tournament Component
 export default function OnlineTournament() {
   const { user, onlineUsers } = useAuthStore()
   const router = useRouter()
   const { addNotification } = useTournamentNotifications()
-  const [tournamentState, setTournamentState] = useState('setup') // setup, lobby, in_progress
+  const [tournamentState, setTournamentState] = useState('setup')
   const [tournamentName, setTournamentName] = useState(
     'Online Pong Championship'
   )
@@ -203,7 +199,7 @@ export default function OnlineTournament() {
   const [champion, setChampion] = useState(null)
   const [tournaments, setTournaments] = useState([])
   const [friends, setFriends] = useState<Player[]>([])
-  const [invitingPlayers, setInvitingPlayers] = useState(new Set<string>()) // Track multiple inviting players
+  const [invitingPlayers, setInvitingPlayers] = useState(new Set<string>())
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const totalRounds = Math.log2(tournamentSize)
@@ -294,7 +290,7 @@ export default function OnlineTournament() {
 
         if (data.friends && Array.isArray(data.friends)) {
           const formatted = data.friends
-            .filter((f) => onlineUsers.includes(f.email)) // Check if user is in onlineUsers
+            .filter((f) => onlineUsers.includes(f.email))
             .map((f) => ({
               name: f.username,
               avatar: f.avatar,
@@ -412,26 +408,15 @@ export default function OnlineTournament() {
 
   const startCurrentRoundMatches = () => {
     if (!tournamentId || !socket) {
-      console.error(
-        '❌ Cannot start matches - missing tournamentId or socket:',
-        {
-          tournamentId,
-          socket: !!socket,
-        }
-      )
       return
     }
 
-    console.log('🎮 Starting current round matches:', {
-      tournamentId,
-      hostEmail: user.email,
-      notifyCountdown: 10,
-    })
+   
 
     socket.emit('StartCurrentRound', {
       tournamentId,
       hostEmail: user.email,
-      notifyCountdown: 10, // 10 second countdown for players to join matches
+      notifyCountdown: 10,
     })
   }
 
@@ -444,14 +429,11 @@ export default function OnlineTournament() {
     }
 
     if (isAlreadyParticipant) {
-      console.log('Player is already a participant:', player.email)
       return
     }
-    // Add this player to the inviting set
     setInvitingPlayers((prev) => new Set([...prev, player.email]))
 
     if (!process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
-      // Remove from inviting set if failed
       setInvitingPlayers((prev) => {
         const newSet = new Set(prev)
         newSet.delete(player.email)
@@ -477,16 +459,6 @@ export default function OnlineTournament() {
   useEffect(() => {
     if (!socket) return
 
-    const handleInviteResponse = (data: any) => {
-      if (data.status === 'success' && data.type === 'invite_sent') {
-        console.log(
-          'Tournament invitation sent successfully to:',
-          data.guestData?.email
-        )
-      } else if (data.status === 'error') {
-        console.error('Tournament invitation error:', data.message)
-      }
-    }
     const handleInviteAccepted = (data: any) => {
       if (data.guestData?.email) {
         setInvitingPlayers((prev) => {
@@ -530,11 +502,6 @@ export default function OnlineTournament() {
     }
 
     const handleInviteCleanup = (data: any) => {
-      console.log(
-        'Cleaning up invite in OnlineTournament:',
-        data.guestEmail,
-        data.action
-      )
       if (data.guestEmail) {
         setInvitingPlayers((prev) => {
           const newSet = new Set(prev)
@@ -544,14 +511,12 @@ export default function OnlineTournament() {
       }
     }
 
-    socket.on('InviteToTournamentResponse', handleInviteResponse)
     socket.on('TournamentInviteAccepted', handleInviteAccepted)
     socket.on('TournamentInviteDeclined', handleInviteDeclined)
     socket.on('TournamentInviteTimeout', handleInviteTimeout)
     socket.on('TournamentInviteCanceled', handleInviteCanceled)
     socket.on('TournamentInviteCleanup', handleInviteCleanup)
     return () => {
-      socket.off('InviteToTournamentResponse', handleInviteResponse)
       socket.off('TournamentInviteAccepted', handleInviteAccepted)
       socket.off('TournamentInviteDeclined', handleInviteDeclined)
       socket.off('TournamentInviteTimeout', handleInviteTimeout)
@@ -564,7 +529,6 @@ export default function OnlineTournament() {
 
   const leaveTournament = () => {
     if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
-      // Check if user is the host
       const isHost = participants.some(
         (p) =>
           (p.id === user.id ||
@@ -598,14 +562,13 @@ export default function OnlineTournament() {
         setTournamentState('setup')
         setSentInvites(new Map())
         setPendingInvites(new Map())
-        setInvitingPlayers(new Set()) // Clear inviting players
+        setInvitingPlayers(new Set())
         setTournamentComplete(false)
         setChampion(null)
         return
       }
     }
 
-    // Reset local state for host after canceling or if not in lobby
     setTournamentId(null)
     setParticipants([
       {
@@ -622,21 +585,18 @@ export default function OnlineTournament() {
     setTournamentState('setup')
     setSentInvites(new Map())
     setPendingInvites(new Map())
-    setInvitingPlayers(new Set()) // Clear inviting players
+    setInvitingPlayers(new Set())
     setTournamentComplete(false)
     setChampion(null)
   }
 
-  // Reset tournament
   const resetTournament = () => {
     leaveTournament()
   }
 
-  // Get players who are still in the tournament (not eliminated)
   const getActivePlayers = () => {
     const eliminatedPlayerIds = new Set()
 
-    // Find all eliminated players
     matches.forEach((match) => {
       if (match.state === MATCH_STATES.PLAYER1_WIN && match.player2) {
         eliminatedPlayerIds.add(match.player2.id)
@@ -644,14 +604,9 @@ export default function OnlineTournament() {
         eliminatedPlayerIds.add(match.player1.id)
       }
     })
-
-    // Return active players
     return participants.filter((p) => !eliminatedPlayerIds.has(p.id))
   }
-
-  // Create tournament handler
   const handleCreateTournament = () => {
-    // Clear any existing errors
     setTournamentNameError(null)
 
     if (!tournamentName || tournamentName.trim().length === 0) {
@@ -672,7 +627,6 @@ export default function OnlineTournament() {
     })
   }
 
-  // Handle tournament creation response
   useEffect(() => {
     if (!socket) return
     const handleTournamentCreated = (tournament: any) => {
@@ -725,7 +679,6 @@ export default function OnlineTournament() {
         )
 
         if (isHost) {
-          // Host gets notification about joining the game bracket
           addNotification({
             type: 'tournament_started',
             title: 'Tournament Started!',
@@ -736,10 +689,8 @@ export default function OnlineTournament() {
             autoClose: false,
           })
 
-          // Redirect host to tournament page
           router.push(`/play/tournament/${tournamentId}`)
         } else {
-          // Participants get notification about tournament start
           addNotification({
             type: 'tournament_started',
             title: 'Tournament Started!',
@@ -758,7 +709,6 @@ export default function OnlineTournament() {
         data.tournamentId === tournamentId &&
         data.playerEmail === user?.email
       ) {
-        // Player has a match starting soon - show countdown using global notification
         addNotification({
           type: 'match_starting',
           title: 'Match Starting Soon!',
@@ -783,7 +733,6 @@ export default function OnlineTournament() {
         data.tournamentId === tournamentId &&
         (data.player1Email === user?.email || data.player2Email === user?.email)
       ) {
-        // This player's match is ready - use global notification
         addNotification({
           type: 'match_starting',
           title: 'Match Ready!',
@@ -795,25 +744,12 @@ export default function OnlineTournament() {
         })
       }
     }
-    const handleTournamentStartResponse = (data: any) => {
-      console.log('🎮 TournamentStartResponse:', data)
-      if (data.status === 'error') {
-        console.error('❌ Tournament start failed:', data.message)
-      }
-    }
+
 
     const handleStartCurrentRoundResponse = (data: any) => {
-      console.log('🎮 StartCurrentRoundResponse:', data)
       if (data.status === 'error') {
         console.error('❌ Start current round failed:', data.message)
       } else {
-        console.log('✅ Round starting:', {
-          round: data.round,
-          matchCount: data.matchCount,
-          message: data.message,
-        })
-
-        // Show success message to host
         addNotification({
           type: 'tournament_info',
           title: '🎮 Round Started',
@@ -829,7 +765,6 @@ export default function OnlineTournament() {
     }
     const handleTournamentParticipantLeft = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        // Remove participant using multiple identifiers for robustness
         setParticipants((prev) =>
           prev.filter((p) => {
             const leftPlayerEmail = data.leftPlayer?.email || data.playerEmail
@@ -837,7 +772,6 @@ export default function OnlineTournament() {
             const leftPlayerNickname = data.leftPlayer?.nickname
             const participant = p as any
 
-            // Check multiple identifiers to ensure robust removal
             return !(
               participant.id === leftPlayerEmail ||
               participant.email === leftPlayerEmail ||
@@ -865,7 +799,6 @@ export default function OnlineTournament() {
     }
     const handleTournamentCancelled = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        // Reset tournament state
         setTournamentState('setup')
         setTournamentId(null)
         setParticipants(
@@ -887,7 +820,6 @@ export default function OnlineTournament() {
     }
     const handleTournamentCancelResponse = (data: any) => {
       if (data.status === 'success') {
-        // Reset tournament state
         setTournamentState('setup')
         setTournamentId(null)
         setParticipants(
@@ -913,9 +845,7 @@ export default function OnlineTournament() {
     socket.on('TournamentUpdated', handleTournamentUpdated)
     socket.on('TournamentReady', handleTournamentReady)
     socket.on('TournamentStarted', handleTournamentStarted)
-    socket.on('TournamentStartResponse', handleTournamentStartResponse)
     socket.on('StartCurrentRoundResponse', handleStartCurrentRoundResponse)
-    // socket.on('TournamentParticipantLeft', handleTournamentParticipantLeft);
     socket.on('TournamentCancelled', handleTournamentCancelled)
     socket.on('TournamentCancelResponse', handleTournamentCancelResponse)
     socket.on('MatchStartingSoon', handleMatchStartingSoon)
@@ -927,7 +857,6 @@ export default function OnlineTournament() {
       socket.off('TournamentUpdated', handleTournamentUpdated)
       socket.off('TournamentReady', handleTournamentReady)
       socket.off('TournamentStarted', handleTournamentStarted)
-      socket.off('TournamentStartResponse', handleTournamentStartResponse)
       socket.off('StartCurrentRoundResponse', handleStartCurrentRoundResponse)
       // socket.off('TournamentParticipantLeft', handleTournamentParticipantLeft);
       socket.off('TournamentCancelled', handleTournamentCancelled)
@@ -938,7 +867,6 @@ export default function OnlineTournament() {
     }
   }, [socket, tournamentId, user?.email, router])
 
-  // Cancel tournament handler
   const handleCancelTournament = () => {
     if (!tournamentId || !user?.email || !socket) {
       return
@@ -950,7 +878,6 @@ export default function OnlineTournament() {
     })
   }
 
-  // Handle route changes and page unload - allow free navigation for all players
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (
@@ -959,7 +886,6 @@ export default function OnlineTournament() {
         user?.email &&
         socket
       ) {
-        // Check if user is the host
         const isHost = participants.some(
           (p) =>
             (p.id === user.id ||
@@ -969,7 +895,6 @@ export default function OnlineTournament() {
         )
 
         if (isHost) {
-          // Only cancel tournament when HOST closes browser/tab
           socket.emit('CancelTournament', {
             tournamentId,
             hostEmail: user.email,
@@ -979,7 +904,6 @@ export default function OnlineTournament() {
     }
 
     const handleRouteChange = () => {
-      // Only check if host is navigating away from tournament pages
       const currentPath = window.location.pathname
       const isTournamentPage =
         currentPath.includes('/tournament') || currentPath.includes('/play')
@@ -991,7 +915,6 @@ export default function OnlineTournament() {
         socket &&
         !isTournamentPage
       ) {
-        // Check if user is the host
         const isHost = participants.some(
           (p) =>
             (p.id === user.id ||
@@ -1001,7 +924,6 @@ export default function OnlineTournament() {
         )
 
         if (isHost) {
-          // Only cancel tournament when HOST navigates away from tournament area
           socket.emit('CancelTournament', {
             tournamentId,
             hostEmail: user.email,
@@ -1010,7 +932,6 @@ export default function OnlineTournament() {
       }
     }
 
-    // Only add event listeners for hosts to prevent tournament cancellation
     const isHost = participants.some(
       (p) =>
         (p.id === user.id ||
@@ -1022,7 +943,6 @@ export default function OnlineTournament() {
     if (isHost) {
       window.addEventListener('beforeunload', handleBeforeUnload)
 
-      // Listen for route changes (Next.js App Router)
       const originalPushState = history.pushState
       const originalReplaceState = history.replaceState
 
@@ -1048,12 +968,10 @@ export default function OnlineTournament() {
     }
   }, [tournamentState, tournamentId, user?.email, socket, participants])
 
-  // Handle tournament name change and clear errors
   const handleTournamentNameChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     setTournamentName(e.target.value)
-    // Clear error when user starts typing
     if (tournamentNameError) {
       setTournamentNameError(null)
     }
@@ -1144,7 +1062,6 @@ export default function OnlineTournament() {
           {/* Tournament Lobby Section */}
           {tournamentState === 'lobby' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Tournament Info and Participants */}
               <div className="bg-[#1a1d23] rounded-lg p-6 border border-[#2a2f3a]">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-2xl font-semibold text-white">
@@ -1178,7 +1095,6 @@ export default function OnlineTournament() {
                       />
                     ))}
 
-                    {/* Empty slots */}
                     {Array.from({
                       length: tournamentSize - participants.length,
                     }).map((_, index) => (
@@ -1242,7 +1158,6 @@ export default function OnlineTournament() {
                 </div>
               </div>
 
-              {/* Online Player Search and Invite - Only for Tournament Host */}
               {participants.some(
                 (p) =>
                   (p.id === user?.id ||
@@ -1262,7 +1177,6 @@ export default function OnlineTournament() {
             </div>
           )}
 
-          {/* Tournament Progress Section */}
           {tournamentState === 'in_progress' && !tournamentComplete && (
             <div className="space-y-6">
               <RoundControls
@@ -1363,7 +1277,6 @@ export default function OnlineTournament() {
             </div>
           )}
 
-          {/* Tournament Complete Section */}
           {tournamentComplete && (
             <div className="text-center space-y-6">
               <div className="bg-[#1a1d23] rounded-lg p-8 border border-[#2a2f3a]">

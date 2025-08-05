@@ -1,4 +1,3 @@
-// modules/game/game.socket.ts
 import { Socket, Server } from 'socket.io'
 import { handleGameInvitation } from './game.socket.invitation'
 import { handleGameAcceptance } from './game.socket.acceptance'
@@ -11,7 +10,6 @@ import { registerTournamentLobbyHandlers } from './game.socket.tournament.lobby'
 import { registerTournamentMatchHandlers } from './game.socket.tournament.match'
 
 export function handleGameSocket(socket: Socket, io: Server) {
-  // Register all game socket handlers
   handleGameInvitation(socket, io)
   handleGameAcceptance(socket, io)
   handleGameplay(socket, io)

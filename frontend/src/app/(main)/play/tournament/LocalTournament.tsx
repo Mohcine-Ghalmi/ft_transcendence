@@ -8,8 +8,6 @@ import TournamentBracket from './TournamentBracket';
 import {PingPongGame} from '../game/PingPongGame';
 import { useAuthStore } from '@/(zustand)/useAuthStore'
 
-// Tournament Bracket Component for Local Tournament
-
 const ParticipantItem = ({ player, removeParticipant, changeParticipantName, changeParticipantNickname }: {
   player: any;
   removeParticipant: (id: string) => void;
@@ -134,7 +132,6 @@ const LocalTournamentMode = () => {
       });
     }
     
-    // Create placeholder matches for future rounds
     for (let round = 1; round < totalRounds; round++) {
       const matchesInRound = tournamentSize / Math.pow(2, round + 1);
       
@@ -154,7 +151,6 @@ const LocalTournamentMode = () => {
     setTournamentStarted(true);
   };
   
-  // Update match state and propagate winners to next round
   const handleMatchUpdate = (roundIndex: number, matchIndex: number, newState: string) => {
     setMatches(prevMatches => {
       const updatedMatches = [...prevMatches];
@@ -167,23 +163,16 @@ const LocalTournamentMode = () => {
       const matchToUpdate = { ...updatedMatches[matchToUpdateIndex] };
       matchToUpdate.state = newState;
       updatedMatches[matchToUpdateIndex] = matchToUpdate;
-      
-      // If we have a winner, update next round's match
       if (newState === MATCH_STATES.PLAYER1_WIN || newState === MATCH_STATES.PLAYER2_WIN) {
         const winner = newState === MATCH_STATES.PLAYER1_WIN ? matchToUpdate.player1 : matchToUpdate.player2;
-        
-        // Check if this is the final match
         if (roundIndex === totalRounds - 1) {
           setChampion(winner);
           setChampionCelebrating(true);
           setTournamentComplete(true);
-          
-          // Stop celebration after 5 seconds
           setTimeout(() => {
             setChampionCelebrating(false);
           }, 5000);
         }
-        // Calculate position in next round
         else if (roundIndex < totalRounds - 1) {
           const nextRound = roundIndex + 1;
           const nextMatchIndex = Math.floor(matchIndex / 2);
@@ -196,14 +185,11 @@ const LocalTournamentMode = () => {
           if (nextMatchIndex2 !== -1) {
             const nextMatch = { ...updatedMatches[nextMatchIndex2] };
             
-            // Update player1 or player2 based on which match this was
             if (isFirstMatchOfPair) {
               nextMatch.player1 = winner;
             } else {
               nextMatch.player2 = winner;
             }
-            
-            // If both players are now set, make the match ready to play
             if (nextMatch.player1 && nextMatch.player2) {
               nextMatch.state = MATCH_STATES.READY;
             }
@@ -212,14 +198,11 @@ const LocalTournamentMode = () => {
           }
         }
       }
-      
-      // Check if all matches in current round are complete and auto-advance
       const currentRoundMatches = updatedMatches.filter(m => m.round === roundIndex);
       const completedMatches = currentRoundMatches.filter(m => 
         m.state === MATCH_STATES.PLAYER1_WIN || m.state === MATCH_STATES.PLAYER2_WIN
       );
       
-      // Auto-advance to next round if all matches complete
       if (currentRoundMatches.length > 0 && completedMatches.length === currentRoundMatches.length) {
         if (roundIndex < totalRounds - 1) {
           setTimeout(() => setCurrentRound(roundIndex + 1), 500);
@@ -230,7 +213,6 @@ const LocalTournamentMode = () => {
     });
   };
   
-  // Check if all matches in current round are completed
   const canAdvanceRound = () => {
     const currentRoundMatches = matches.filter(m => m.round === currentRound);
     return currentRoundMatches.length > 0 && currentRoundMatches.every(m => 
@@ -238,11 +220,8 @@ const LocalTournamentMode = () => {
     );
   };
   
-  // Get players who are still in the tournament (not eliminated)
   const getActivePlayers = () => {
     const eliminatedPlayerIds = new Set();
-    
-    // Find all eliminated players
     matches.forEach(match => {
       if (match.state === MATCH_STATES.PLAYER1_WIN && match.player2) {
         eliminatedPlayerIds.add(match.player2.id);
@@ -251,7 +230,6 @@ const LocalTournamentMode = () => {
       }
     });
     
-    // Return active players
     return participants.filter(p => !eliminatedPlayerIds.has(p.id));
   };
   
@@ -308,15 +286,12 @@ const LocalTournamentMode = () => {
     setMatchWinner(null);
   };
 
-  // Start a match in PingPongGame
   const handlePlayMatch = (match: any) => {
-    // Only allow playing READY matches (both players available)
     if (match.state === MATCH_STATES.READY && match.player1 && match.player2) {
       setPlayingMatch(match);
     }
   };
 
-  // Handle winner from PingPongGame - Fixed with proper null checks
   const handleGameEnd = (winner?: any) => {
     if (!playingMatch) {
       return;
@@ -335,7 +310,6 @@ const LocalTournamentMode = () => {
     handleMatchUpdate(playingMatch.round, playingMatch.matchIndex, matchState);
   };
 
-  // Continue tournament after showing match result
   const handleContinueTournament = () => {
     setShowMatchResult(false);
     setMatchWinner(null);
@@ -485,7 +459,6 @@ const LocalTournamentMode = () => {
                 </div>
               )}
 
-              {/* If a match is being played, show PingPongGame */}
               {playingMatch && !showMatchResult ? (
                 <PingPongGame
                   player1={playingMatch.player1}
@@ -562,14 +535,11 @@ const LocalTournamentMode = () => {
             </div>
           )}
           
-          {/* Tournament Complete View */}
           {tournamentComplete && (
             <div className="text-center space-y-6 relative">
-              {/* Champion Celebration Overlay */}
               {championCelebrating && champion && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
                   <div className="relative">
-                    {/* Confetti Animation */}
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
                       {Array.from({ length: 50 }).map((_, i) => (
                         <div
@@ -601,7 +571,6 @@ const LocalTournamentMode = () => {
                       ))}
                     </div>
                     
-                    {/* Champion Spotlight */}
                     <div className="text-center animate-pulse">
                       <div className="text-6xl mb-4 animate-bounce">🏆</div>
                       <h1 className="text-6xl font-bold text-yellow-400 mb-4 animate-pulse">
@@ -621,7 +590,6 @@ const LocalTournamentMode = () => {
                             />
                           </div>
                         </div>
-                        {/* Crown animation */}
                         <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-4xl animate-bounce">
                           👑
                         </div>
@@ -670,8 +638,8 @@ const LocalTournamentMode = () => {
                 tournamentSize={tournamentSize}
                 matches={matches}
                 currentRound={currentRound}
-                onMatchUpdate={() => {}} // No more updates allowed
-                onPlayMatch={() => {}} // No more matches to play
+                onMatchUpdate={() => {}}
+                onPlayMatch={() => {}}
               />
               
               <div className="flex justify-center space-x-4">

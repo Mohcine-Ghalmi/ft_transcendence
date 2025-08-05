@@ -5,7 +5,6 @@ import OnlineTournament from "./OnlineTournament";
 import { notFound, useSearchParams } from 'next/navigation';
 
 
-// Main Component
 export default function TournamentPage() {
  const searchParams = useSearchParams();
   const [gameMode, setGameMode] = useState<"Local" | "Online" | null>(null);

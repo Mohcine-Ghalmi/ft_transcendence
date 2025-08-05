@@ -79,7 +79,6 @@ const TournamentCard = ({ tournament, onJoin, isJoining }: {
         </div>
       </div>
 
-      {/* Participants */}
       <div className="mb-4">
         <h4 className="text-white text-sm font-medium mb-2">Participants</h4>
         <div className="flex flex-wrap gap-2">
@@ -100,7 +99,6 @@ const TournamentCard = ({ tournament, onJoin, isJoining }: {
               </span>
             </div>
           ))}
-          {/* Empty slots */}
           {Array.from({ length: tournament.maxParticipants - tournament.currentParticipants }).map((_, index) => (
             <div key={`empty-${index}`} className="flex items-center border border-dashed border-[#3a3f4a] rounded-full px-3 py-1">
               <div className="w-6 h-6 rounded-full border border-dashed border-[#3a3f4a] mr-2"></div>
@@ -110,7 +108,6 @@ const TournamentCard = ({ tournament, onJoin, isJoining }: {
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="flex justify-end space-x-3">
         {isParticipant && (
           <button
@@ -144,7 +141,6 @@ const TournamentCard = ({ tournament, onJoin, isJoining }: {
         {(tournament.status === 'in_progress' || tournament.status === 'completed') && !isParticipant && (
           <button
             onClick={() => {
-              // Since we only show lobby tournaments, this won't be reached
               router.push(`/play/tournament/${tournament.tournamentId}`);
             }}
             disabled={isJoining}
@@ -189,7 +185,6 @@ export default function JoinTournamentPage() {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [socket, setSocket] = useState<any>(null);
 
-  // Fetch tournaments on mount
   useEffect(() => {
     const socketInstance = getGameSocketInstance();
     setSocket(socketInstance);
@@ -198,17 +193,14 @@ export default function JoinTournamentPage() {
       return;
     }
 
-    // Listen for tournament list
     const handleTournamentList = (data: any[]) => {
-      // Transform backend tournament data to match frontend interface
-      // Only show tournaments that are in lobby state (joinable)
       const transformedTournaments = (data || [])
-        .filter((tournament: any) => tournament.status === 'lobby') // Only show joinable tournaments
+        .filter((tournament: any) => tournament.status === 'lobby')
         .map((tournament: any) => ({
           tournamentId: tournament.tournamentId,
           name: tournament.name,
           hostEmail: tournament.hostEmail,
-          hostName: tournament.hostEmail, // Use email as name for now
+          hostName: tournament.hostEmail,
           maxParticipants: tournament.size,
           currentParticipants: tournament.participants?.length || 0,
           status: tournament.status,
@@ -227,11 +219,9 @@ export default function JoinTournamentPage() {
       setIsLoading(false);
     };
 
-    // Listen for join responses
     const handleJoinResponse = (data: { status: string; message: string; tournamentId?: string; tournamentStatus?: string }) => {
       if (data.status === 'success' && data.tournamentId) {
         setNotification({ message: 'Successfully joined tournament! Redirecting to tournament lobby...', type: 'success' });
-        // Navigate to the tournament page (lobby) immediately with shorter timeout for better UX
         setTimeout(() => {
           router.push(`/play/tournament/${data.tournamentId}`);
         }, 300);
@@ -241,25 +231,19 @@ export default function JoinTournamentPage() {
       setIsJoining(null);
     };
 
-    // Listen for tournament cancelled events
     const handleTournamentCancelled = (data: { tournamentId: string; tournamentName: string; message: string }) => {
       setNotification({ message: data.message || `Tournament "${data.tournamentName}" has been cancelled by the host.`, type: 'error' });
-      // Refresh the tournament list
       socketInstance.emit('ListTournaments');
     };
 
-    // Listen for redirect to play events
     const handleRedirectToPlay = (data: { message: string }) => {
       setNotification({ message: data.message, type: 'error' });
-      // Refresh the tournament list after a short delay
       setTimeout(() => {
         socketInstance.emit('ListTournaments');
       }, 2000);
     };
 
-    // Listen for tournament updated events
     const handleTournamentUpdated = (data: { tournamentId: string; tournament: any }) => {
-      // Refresh the tournament list when tournaments are updated
       socketInstance.emit('ListTournaments');
     };
 
@@ -269,10 +253,7 @@ export default function JoinTournamentPage() {
     socketInstance.on('RedirectToPlay', handleRedirectToPlay);
     socketInstance.on('TournamentUpdated', handleTournamentUpdated);
 
-    // Request tournament list
     socketInstance.emit('ListTournaments');
-
-    // Cleanup
     return () => {
       socketInstance.off('TournamentList', handleTournamentList);
       socketInstance.off('TournamentJoinResponse', handleJoinResponse);
@@ -281,20 +262,14 @@ export default function JoinTournamentPage() {
       socketInstance.off('TournamentUpdated', handleTournamentUpdated);
     };
   }, [router]);
-
-  // Filter tournaments based on search and status
   useEffect(() => {
     let filtered = tournaments;
-
-    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(tournament =>
         tournament.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         tournament.hostName.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-
-    // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(tournament => tournament.status === statusFilter);
     }
@@ -302,14 +277,12 @@ export default function JoinTournamentPage() {
     setFilteredTournaments(filtered);
   }, [tournaments, searchQuery, statusFilter]);
 
-  // Handle joining a tournament
   const handleJoinTournament = (tournamentId: string) => {
     if (!user || !socket) {
       setNotification({ message: 'Please log in to join tournaments', type: 'error' });
       return;
     }
 
-    // Try to get email from different possible fields
     const playerEmail = user.email || user.login || user.username;
     
     if (!playerEmail) {
@@ -332,7 +305,6 @@ export default function JoinTournamentPage() {
     socket.emit('JoinTournamentAsNewParticipant', joinData);
   };
 
-  // Clear notification after 3 seconds
   useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => {
@@ -345,7 +317,6 @@ export default function JoinTournamentPage() {
   return (
     <div className="min-h-screen text-white p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-4">
@@ -381,7 +352,6 @@ export default function JoinTournamentPage() {
             <EmptyState
               isLoading={isLoading}
               onCreateTest={() => {
-                // You can implement a test tournament creation handler here
                 setNotification({ message: 'Test tournament creation not implemented.', type: 'error' });
               }}
             />

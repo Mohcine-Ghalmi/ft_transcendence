@@ -15,7 +15,7 @@ interface ActiveTournament {
   maxParticipants: number;
   currentRound?: number;
   totalRounds?: number;
-  currentSessionId?: string; // Track which session is active for this tournament
+  currentSessionId?: string; 
 }
 
 export const TournamentRejoinHelper = () => {
@@ -37,17 +37,13 @@ export const TournamentRejoinHelper = () => {
     }
   }, []);
 
-  // Check if user is currently on a tournament page
   const isOnTournamentPage = pathname.includes('/tournament');
-  
-  // Check if user is currently on a game page
   const isOnGamePage = pathname.includes('/game');
 
   useEffect(() => {
     if (!socket || !user?.email) return;
 
     const fetchActiveTournaments = () => {
-      // Pass current socket ID to get session-specific data
       socket.emit('GetUserActiveTournaments', { 
         userEmail: user.email,
         socketId: socket.id 
@@ -56,18 +52,11 @@ export const TournamentRejoinHelper = () => {
 
     const handleActiveTournaments = (data: any) => {
       if (data.tournaments && Array.isArray(data.tournaments)) {
-        // Filter tournaments that need rejoin for THIS session
         const tournamentsNeedingRejoin = data.tournaments.filter((t: any) => {
-          // Only show if this session is the active session for the tournament
           return t.activeSessionId === socket.id || !t.activeSessionId;
         });
         
         setActiveTournaments(tournamentsNeedingRejoin);
-        
-        // Show rejoin helper if:
-        // 1. There are active tournaments for this session
-        // 2. User is NOT on a tournament page
-        // 3. User is NOT in a game
         const shouldShow = tournamentsNeedingRejoin.length > 0 && 
                           !isOnTournamentPage && 
                           !data.isInActiveGame;
@@ -81,17 +70,13 @@ export const TournamentRejoinHelper = () => {
     };
 
     const handleGameStatusUpdate = (data: any) => {
-      // Update game status when it changes
       setIsInGame(data.isInGame || false);
-      
-      // Hide rejoin helper if user enters a game
       if (data.isInGame) {
         setShowRejoin(false);
       }
     };
 
     const handleTournamentSessionUpdate = (data: any) => {
-      // Handle updates to tournament session ownership
       if (data.tournamentId && data.sessionId) {
         setActiveTournaments(prev => prev.map(t => {
           if (t.tournamentId === data.tournamentId) {
@@ -99,8 +84,6 @@ export const TournamentRejoinHelper = () => {
           }
           return t;
         }));
-        
-        // Hide if another session took over
         if (data.sessionId !== socket.id) {
           setActiveTournaments(prev => prev.filter(t => t.tournamentId !== data.tournamentId));
         }
@@ -167,19 +150,16 @@ export const TournamentRejoinHelper = () => {
 
     const handleGameEnded = (data: any) => {
       setIsInGame(false);
-      // Re-fetch tournaments after game ends
       fetchActiveTournaments();
     };
 
     const handleTournamentLeft = (data: any) => {
-      // Remove tournament from active list when user leaves
       if (data.tournamentId) {
         setActiveTournaments(prev => prev.filter(t => t.tournamentId !== data.tournamentId));
       }
     };
 
     const handleTournamentCompleted = (data: any) => {
-      // Remove completed tournament from active list
       if (data.tournamentId) {
         setActiveTournaments(prev => prev.filter(t => t.tournamentId !== data.tournamentId));
       }
@@ -198,8 +178,6 @@ export const TournamentRejoinHelper = () => {
     socket.on('TournamentCompleted', handleTournamentCompleted);
     
     fetchActiveTournaments();
-
-    // Check every 30 seconds for active tournaments
     const interval = setInterval(fetchActiveTournaments, 30000);
 
     return () => {
@@ -217,13 +195,10 @@ export const TournamentRejoinHelper = () => {
       clearInterval(interval);
     };
   }, [socket, user?.email, router, addNotification, isOnTournamentPage, isOnGamePage]);
-
-  // Hide rejoin helper when navigating to tournament or game pages
   useEffect(() => {
     if (isOnTournamentPage || isOnGamePage) {
       setShowRejoin(false);
     } else if (activeTournaments.length > 0 && !isInGame) {
-      // Re-check if we should show the helper when navigating away from tournament/game pages
       setShowRejoin(true);
     }
   }, [pathname, activeTournaments.length, isInGame, isOnTournamentPage, isOnGamePage]);
@@ -246,7 +221,6 @@ export const TournamentRejoinHelper = () => {
     }
   };
   
-  // Don't render if conditions aren't met
   if (!showRejoin || activeTournaments.length === 0) {
     return null;
   }
