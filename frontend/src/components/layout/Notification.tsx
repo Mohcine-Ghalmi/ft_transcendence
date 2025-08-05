@@ -89,7 +89,7 @@ export const NotificationItem = ({
                 {notification.title}
               </h4>
               <p className="text-gray-400 text-sm leading-relaxed">
-                {notification.message}
+                {notification.message.substring(0, 50) + '...'}
               </p>
             </div>
 
