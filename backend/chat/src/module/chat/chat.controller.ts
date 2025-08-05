@@ -1,13 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 import server, { db } from '../../app'
-import axios from 'axios'
 import { isBlockedStatus, getUserById, getFriend } from '../user/user.service'
-
-const fs = require('fs')
-const path = require('path')
-const { pipeline } = require('stream/promises')
-const crypto = require('crypto')
 
 export async function addMessage(
   myId: number,
@@ -251,59 +245,5 @@ export async function getMessages(req: FastifyRequest, rep: FastifyReply) {
     return rep
       .code(500)
       .send({ error: err.message || 'Internal server error', status: false })
-  }
-}
-
-export const generateUniqueFilename = (originalFilename: string) => {
-  const timestamp = Date.now()
-  const randomString = crypto.randomBytes(8).toString('hex')
-  const extension = path.extname(originalFilename) || '.png'
-  return `${timestamp}-${randomString}${extension}`
-}
-
-export async function hostImages(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    if (!request.isMultipart()) {
-      return reply
-        .status(400)
-        .send({ status: false, message: 'Request is not multipart' })
-    }
-
-    const data = await request.file()
-
-    if (!data) {
-      return reply
-        .status(400)
-        .send({ status: false, message: 'No file provided' })
-    }
-
-    const allowedMimeTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-    ]
-    if (!allowedMimeTypes.includes(data.mimetype)) {
-      return reply.status(400).send({
-        status: false,
-        message: 'Only JPEG, PNG, GIF and WebP images are allowed',
-      })
-    }
-
-    const filename = generateUniqueFilename(data.filename)
-
-    const filepath = path.join(__dirname, '../../../../uploads', filename)
-
-    await pipeline(data.file, fs.createWriteStream(filepath))
-
-    return {
-      success: true,
-      filename,
-    }
-  } catch (err: any) {
-    server.log.error(err.message)
-    return reply
-      .status(500)
-      .send({ status: false, message: err.message || 'Failed to upload image' })
   }
 }

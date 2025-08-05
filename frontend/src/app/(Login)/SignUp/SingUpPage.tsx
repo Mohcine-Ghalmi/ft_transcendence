@@ -1,11 +1,10 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import SignInWithOthers from '../SignInWithOthers'
-import { axiosInstance, useAuthStore } from '@/(zustand)/useAuthStore'
-import { toast } from 'react-toastify'
-import FA2 from '../FA2'
+import { useAuthStore } from '@/(zustand)/useAuthStore'
+import { useRouter } from 'next/navigation'
 
 export const CustomError = ({ message, isTouched }) => {
   return (
@@ -28,7 +27,6 @@ export default function Signup() {
     twoFactorCode: '',
   })
   const [currentStep, setCurrentStep] = useState(1)
-  const imageName = useRef('')
   const [errors, setErrors] = useState({
     username: '',
     email: '',
@@ -109,6 +107,8 @@ export default function Signup() {
     return error
   }
 
+  const router = useRouter()
+
   const handleInputChange = (e: any) => {
     const { name, value } = e.target
     setFormData((prev) => ({
@@ -177,7 +177,9 @@ export default function Signup() {
         !newErrors.confirmPassword
 
       if (isStep1Valid) {
-        await register({ ...formData, avatar: 'default.avif' })
+        await register({ ...formData, avatar: 'default.avif' }).then((res) => {
+          if (res) router.push('/dashboard')
+        })
       }
       //   setCurrentStep(2)
       // }
@@ -195,7 +197,9 @@ export default function Signup() {
   const handleSkipFor2FA = async () => {
     console.log('Skipping 2FA for now')
     // Complete registration without 2FA
-    await register({ ...formData, avatar: 'default.avif' })
+    await register({ ...formData, avatar: 'default.avif' }).then((res) => {
+      if (res) router.push('/dashboard')
+    })
   }
 
   const handle2FaVerify = (e: any) => {

@@ -225,6 +225,7 @@ server.decorate(
 
       req.user = decoded
     } catch (err: any) {
+      server.log.error('Authentication error:', err.message)
       rep.clearCookie('accessToken')
 
       return rep.code(401).send({
@@ -275,7 +276,7 @@ async function startServer() {
   try {
     const BACK_END_PORT = process.env.BACK_END_PORT as string
     if (!BACK_END_PORT) {
-      console.error('BACK_END_PORT environment variable is not set.')
+      server.log.error('BACK_END_PORT environment variable is not set.')
       process.exit(1)
     }
     await registerPlugins()
