@@ -387,13 +387,13 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
       ctx.shadowColor = "#20242a";
       ctx.shadowBlur = 7;
       ctx.fillRect(
-        10, 
+        0, 
         paddle1Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
       );
       ctx.fillRect(
-        canvasDims.width - PADDLE_WIDTH * scaleX - 10, 
+        canvasDims.width - PADDLE_WIDTH * scaleX, 
         paddle2Y.current * scaleY, 
         PADDLE_WIDTH * scaleX, 
         PADDLE_HEIGHT * scaleY
