@@ -11,6 +11,7 @@ import { getUserByEmail } from '../user/user.service'
 import { getPlayerData } from './game.socket.types'
 import redis, { getSocketIds } from '../../database/redis'
 import { activeGameSessions, userGameSessions, addUserToGameSession } from './game.socket.types'
+import server from '../../app'
 
 
 export const handleGameplay: GameSocketHandler = (
@@ -20,7 +21,6 @@ export const handleGameplay: GameSocketHandler = (
   socket.on('StartGame', async (data: { gameId: string }) => {
     try {
       const { gameId } = data
-  
       if (!gameId) {
         return socket.emit('GameStartResponse', {
           status: 'error',
@@ -29,17 +29,13 @@ export const handleGameplay: GameSocketHandler = (
       }
   
       const gameRoomData = await redis.get(`game_room:${gameId}`)
-  
       if (!gameRoomData) {
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Game room not found.',
         })
       }
-  
       const gameRoom: GameRoomData = JSON.parse(gameRoomData)
-  
-      // Get user email from socket data to verify authorization
       const userEmail = (socket as any).userEmail
   
       if (!userEmail) {
@@ -48,16 +44,12 @@ export const handleGameplay: GameSocketHandler = (
           message: 'User not authenticated.',
         })
       }
-  
-      // Verify that the user trying to start the game is the host
       if (userEmail !== gameRoom.hostEmail) {
         return socket.emit('GameStartResponse', {
           status: 'error',
           message: 'Only the host can start the game.',
         })
       }
-  
-      // CHECK SESSION BEFORE STARTING
       const currentGameId = userGameSessions.get(userEmail)
       if (currentGameId && currentGameId === gameId) {
         const existingSessions = activeGameSessions.get(gameId) || new Set()
@@ -68,14 +60,10 @@ export const handleGameplay: GameSocketHandler = (
           })
         }
       }
-  
-      // Update game status
       gameRoom.status = 'in_progress'
       gameRoom.startedAt = Date.now()
       await redis.setex(`game_room:${gameId}`, 3600, JSON.stringify(gameRoom))
       gameRooms.set(gameId, gameRoom)
-  
-      // Initialize game state
       const gameState: GameState = {
         gameId,
         ballX: 440,
@@ -90,14 +78,10 @@ export const handleGameplay: GameSocketHandler = (
       }
   
       activeGames.set(gameId, gameState)
-  
-      // Notify both players
       const hostSocketIds =
         (await getSocketIds(gameRoom.hostEmail, 'sockets')) || []
       const guestSocketIds =
         (await getSocketIds(gameRoom.guestEmail, 'sockets')) || []
-  
-      // Fetch user data for both players
       const [hostUser, guestUser] = await Promise.all([
         getUserByEmail(gameRoom.hostEmail),
         getUserByEmail(gameRoom.guestEmail),
@@ -135,7 +119,6 @@ export const handleGameplay: GameSocketHandler = (
     }
   })
 
-  // Handle game state updates
   socket.on(
     'GameStateUpdate',
     async (data: { gameId: string; gameState: GameState }) => {
@@ -145,34 +128,22 @@ export const handleGameplay: GameSocketHandler = (
         if (!gameId || !gameState) {
           return
         }
-
-        // Get current game state for comparison
         const currentGameState = activeGames.get(gameId)
         const currentTime = Date.now()
-
-        // Check if this is a score update (scores changed)
         const isScoreUpdate =
           currentGameState &&
           (currentGameState.scores.p1 !== gameState.scores.p1 ||
             currentGameState.scores.p2 !== gameState.scores.p2)
-
-        // Throttle regular updates but allow immediate score updates
         const lastUpdate = currentGameState?.lastUpdate || 0
         if (!isScoreUpdate && currentTime - lastUpdate < 30) {
           return
         }
-
-        // Update the game state
         activeGames.set(gameId, {
           ...gameState,
           lastUpdate: currentTime,
         })
-
-        // Get game room to find players
         const gameRoom = gameRooms.get(gameId)
         if (!gameRoom) return
-
-        // Broadcast to both players
         const hostSocketIds =
           (await getSocketIds(gameRoom.hostEmail, 'sockets')) || []
         const guestSocketIds =
@@ -182,13 +153,11 @@ export const handleGameplay: GameSocketHandler = (
           gameId,
           gameState: activeGames.get(gameId),
         })
-      } catch (error) {
-        // Error handling for GameStateUpdate
+      } catch (error: any) {
+        server.log.error(error.message || 'Failed in Game State update')
       }
     }
   )
-
-  // Handle paddle position updates from guest players
   socket.on(
     'PaddleUpdate',
     async (data: {
@@ -202,12 +171,8 @@ export const handleGameplay: GameSocketHandler = (
         if (!gameId || paddleY === undefined || !playerType) {
           return
         }
-
-        // Get game room to find players
         const gameRoom = gameRooms.get(gameId)
         if (!gameRoom) return
-
-        // Forward paddle update to host only
         const hostSocketIds =
           (await getSocketIds(gameRoom.hostEmail, 'sockets')) || []
 
@@ -216,13 +181,12 @@ export const handleGameplay: GameSocketHandler = (
           paddleY,
           playerType,
         })
-      } catch (error) {
-        // Error handling for PaddleUpdate
+      } catch (error: any) {
+        server.log.error(error.message || "failed in paddle update");
       }
     }
   )
 
-  // Handle player ready event
   socket.on(
     'PlayerReady',
     async (data: { gameId: string; playerEmail: string }) => {
@@ -232,26 +196,18 @@ export const handleGameplay: GameSocketHandler = (
         if (!gameId || !playerEmail) {
           return
         }
-
-        // Get game room
         const gameRoom = gameRooms.get(gameId)
         if (!gameRoom) {
           return
         }
-
-        // Verify player is part of this game
         if (
           gameRoom.hostEmail !== playerEmail &&
           gameRoom.guestEmail !== playerEmail
         ) {
           return
         }
-
-        // Store ready status in Redis
         const readyKey = `game_ready:${gameId}:${playerEmail}`
         await redis.setex(readyKey, 60, 'ready')
-
-        // Check if both players are ready
         const hostReady = await redis.get(
           `game_ready:${gameId}:${gameRoom.hostEmail}`
         )
@@ -260,7 +216,6 @@ export const handleGameplay: GameSocketHandler = (
         )
 
         if (hostReady && guestReady) {
-          // Notify both players that both are ready
           const hostSocketIds =
             (await getSocketIds(gameRoom.hostEmail, 'sockets')) || []
           const guestSocketIds =
@@ -271,8 +226,8 @@ export const handleGameplay: GameSocketHandler = (
             message: 'Both players are ready!',
           })
         }
-      } catch (error) {
-        // Error handling for PlayerReady
+      } catch (error: any) {
+        server.log.error(error.message || "failed in player ready check");
       }
     }
   )

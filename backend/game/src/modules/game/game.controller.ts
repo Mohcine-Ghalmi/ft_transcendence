@@ -15,7 +15,6 @@ interface GetTournamentParticipantParams {
 }
 
 export async function gameRoutes(fastify: FastifyInstance) {
-  // Get match history for a user
   fastify.get<{ Querystring: GetMatchHistoryParams }>(
     '/match-history',
     {
@@ -33,7 +32,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
       try {
         const { email } = request.query
         
-        // Verify user exists
         const user = await getUserByEmail(email)
         if (!user) {
           return reply.status(404).send({ error: 'User not found' })
@@ -69,7 +67,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
       try {
         const { email } = request.query
         
-        // Verify user exists
         const user = await getUserByEmail(email)
         if (!user) {
           return reply.status(404).send({ error: 'User not found' })
