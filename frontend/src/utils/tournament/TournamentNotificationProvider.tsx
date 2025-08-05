@@ -22,7 +22,7 @@ interface TournamentNotification {
   onJoin?: () => void;
   onIgnore?: () => void;
   onTimeout?: () => void;
-  isActiveSession?: boolean; // Track if this is the active session
+  isActiveSession?: boolean;
 }
 
 interface TournamentNotificationContextType {
@@ -162,7 +162,6 @@ export const TournamentNotificationProvider = () => {
   }, []);
 
   const addNotification = (notification: Omit<TournamentNotification, 'id'>) => {
-    // ✨ CRITICAL: Don't show notifications if tournament is in session conflict
     if (notification.tournamentId && activeSessionConflicts.has(notification.tournamentId)) {
       console.log(`Skipping notification for tournament ${notification.tournamentId} - active in another session`);
       return;
@@ -194,7 +193,6 @@ export const TournamentNotificationProvider = () => {
       });
     };
 
-    // ✨ CRITICAL: Only show match notifications to active sessions
     const handleMatchStartingSoon = (data: any) => {
       if (data.playerEmail === user?.email) {
         console.log('Match starting notification received for user:', user.email);
@@ -217,17 +215,13 @@ export const TournamentNotificationProvider = () => {
       }
     };
 
-    // ✨ NEW: Handle session conflicts
     const handleTournamentSessionConflict = (data: any) => {
       console.log('Tournament session conflict in notification provider:', data.type);
       
       if (data.tournamentId) {
         setActiveSessionConflicts(prev => new Set([...prev, data.tournamentId]));
         
-        // Clear any existing notifications for this tournament
         setNotifications(prev => prev.filter(n => n.tournamentId !== data.tournamentId));
-        
-        // Show a subtle info notification that tournament is active elsewhere
         if (data.type === 'match_starting_elsewhere') {
           addNotification({
             type: 'tournament_info',
@@ -250,7 +244,6 @@ export const TournamentNotificationProvider = () => {
       }
     };
 
-    // ✨ NEW: Handle session takeover
     const handleTournamentSessionTakenOver = (data: any) => {
       if (data.tournamentId) {
         setActiveSessionConflicts(prev => {
@@ -271,7 +264,6 @@ export const TournamentNotificationProvider = () => {
     
     const handleTournamentSessionConflictResolved = (data: any) => {
       if (data.status === 'success' && data.action === 'takeover_completed') {
-        // Clear conflict notifications and refresh the page or redirect
         clearAllNotifications();
         addNotification({
           type: 'tournament_info',
@@ -280,8 +272,6 @@ export const TournamentNotificationProvider = () => {
           autoClose: true,
           duration: 3000
         });
-        
-        // Remove from conflicts as this session is now active
         if (data.tournamentId) {
           setActiveSessionConflicts(prev => {
             const newSet = new Set(prev);
@@ -304,12 +294,10 @@ export const TournamentNotificationProvider = () => {
       });
     };
 
-    // ✨ ENHANCED: Global tournament notification with session awareness
     const handleGlobalTournamentNotification = (data: any) => {
       console.log('Global tournament notification received:', data);
       
       if (data.type === 'match_starting' && data.tournamentId && data.matchId && data.countdown) {
-        // Only show if this tournament is not in conflict
         if (!activeSessionConflicts.has(data.tournamentId)) {
           addNotification({
             type: 'match_starting',
@@ -355,7 +343,7 @@ export const TournamentNotificationProvider = () => {
   return (
     <>
       {notifications
-        .filter(notification => notification.isActiveSession !== false) // Only show active session notifications
+        .filter(notification => notification.isActiveSession !== false)
         .map(notification => (
         <GlobalTournamentNotification
           key={notification.id}
@@ -367,7 +355,6 @@ export const TournamentNotificationProvider = () => {
   );
 };
 
-// Context Provider Component (for wrapping app)
 export const TournamentNotificationContextProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<TournamentNotification[]>([]);
 

@@ -69,7 +69,7 @@ export const PingPongGame: React.FC<PingPongGameProps> = ({
 
   const fetchTournamentParticipant = async (email: string) => {
     try {
-      const response = await axiosGameInstance.get(`/api/game/tournament-participant?email=${encodeURIComponent(email)}`);
+      const response = await axiosGameInstance.get(`/tournament-participant?email=${encodeURIComponent(email)}`);
       return response.data.success ? response.data.data : null;
     } catch (error) {
       return null;

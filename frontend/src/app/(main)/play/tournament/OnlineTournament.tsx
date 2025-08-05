@@ -38,7 +38,7 @@ const OnlinePlayMode = ({
 }: OnlinePlayModeProps & {
   friends: Player[]
   invitingPlayers: Set<string>
-  participants: any[]=
+  participants: any[]
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const participantEmails = new Set(participants.map(p => p.email || p.id))

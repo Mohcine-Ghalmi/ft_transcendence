@@ -10,10 +10,7 @@ export interface ChallengePlayer {
   avatar?: string
 }
 
-// Track pending invitations to prevent duplicates
 const pendingInvitations = new Map<string, { gameId: string; timestamp: number }>()
-
-// Global event handlers management for multi-invite support
 let globalEventHandlersSetup = false
 const activeInvitations = new Map<string, {
   gameId: string
@@ -50,12 +47,10 @@ const setupGlobalEventHandlers = (socket: any) => {
   const handleInviteResponse = (data: any) => {
     console.log('Global invite response:', data)
     
-    // Find the invitation this response is for
     for (const [gameId, invitation] of activeInvitations.entries()) {
       if (data.gameId === gameId || data.guestEmail === invitation.player.email) {
         if (data.status === 'success' && data.type === 'invite_sent') {
           console.log('Invite sent successfully for:', gameId)
-          // Update the gameId if it was generated server-side
           if (data.gameId && data.gameId !== gameId) {
             const invitationData = activeInvitations.get(gameId)
             if (invitationData) {
@@ -88,9 +83,6 @@ const setupGlobalEventHandlers = (socket: any) => {
     }
 
     if (data.status === 'ready_to_start') {
-      console.log('Processing game acceptance for:', data.gameId)
-      
-      // Store game state for OneVsOne page
       const gameState = {
         gameId: data.gameId,
         gameState: 'waiting_to_start',
@@ -106,18 +98,12 @@ const setupGlobalEventHandlers = (socket: any) => {
       }
 
       sessionStorage.setItem('externalGameState', JSON.stringify(gameState))
-      
-      // Clean up this specific invitation
       cleanupInvitation(data.gameId)
-      
-      // Immediate redirect
-      console.log('Redirecting to game...')
       invitation.router.push('/play/OneVsOne?mode=Online')
     }
   }
 
   const handleGameInviteDeclined = (data: any) => {
-    console.log('Global game invite declined:', data)
     
     const invitation = activeInvitations.get(data.gameId)
     if (invitation) {
@@ -128,7 +114,6 @@ const setupGlobalEventHandlers = (socket: any) => {
   }
 
   const handleGameInviteTimeout = (data: any) => {
-    console.log('Global game invite timeout:', data)
     
     const invitation = activeInvitations.get(data.gameId)
     if (invitation) {
@@ -139,7 +124,6 @@ const setupGlobalEventHandlers = (socket: any) => {
   }
 
   const handleGameInviteCanceled = (data: any) => {
-    console.log('Global game invite canceled:', data)
     
     const invitation = activeInvitations.get(data.gameId)
     if (invitation) {
@@ -148,45 +132,34 @@ const setupGlobalEventHandlers = (socket: any) => {
     }
   }
 
-  // NEW: Handle comprehensive invitation cleanup
   const handleGameInvitationsCleanup = (data: any) => {
-    console.log('Global invitations cleanup:', data)
     
     if (data.reason === 'player_accepted_other_invitation') {
-      // Clean up all active invitations since the player accepted another game
       const invitationsToCleanup = Array.from(activeInvitations.keys())
       
       for (const gameId of invitationsToCleanup) {
         cleanupInvitation(gameId)
       }
       
-      // Show notification about cleanup
       toast.info(data.message || `${data.acceptingPlayer} accepted a game invitation. All pending challenges have been cleared.`)
     }
   }
 
-  // NEW: Handle individual invitation cleanup
   const handleGameInviteCleanup = (data: any) => {
     console.log('Game invite cleanup:', data)
-    
     if (data.gameId === 'multiple') {
-      // Multiple invitations cleanup
       const invitationsToCleanup = Array.from(activeInvitations.keys())
       for (const gameId of invitationsToCleanup) {
         cleanupInvitation(gameId)
       }
     } else if (data.gameId) {
-      // Single invitation cleanup
       cleanupInvitation(data.gameId)
     }
     
-    // Show appropriate message based on cleanup reason
     switch (data.action) {
       case 'accepted':
-        // Don't show message for accepted invitations (handled elsewhere)
         break
       case 'declined':
-        // Don't show message for declined invitations (handled elsewhere)
         break
       case 'canceled':
         toast.info('Invitation was canceled')
@@ -195,7 +168,6 @@ const setupGlobalEventHandlers = (socket: any) => {
         toast.warning('Invitation expired')
         break
       case 'auto_cleanup':
-        // Don't show individual messages for auto cleanup (bulk message shown instead)
         break
       case 'host_unavailable':
         toast.info(data.message || 'Host is no longer available')
@@ -207,14 +179,11 @@ const setupGlobalEventHandlers = (socket: any) => {
     }
   }
 
-  // Set up global listeners
   socket.on('InviteToGameResponse', handleInviteResponse)
   socket.on('GameInviteAccepted', handleGameInviteAccepted)
   socket.on('GameInviteDeclined', handleGameInviteDeclined)
   socket.on('GameInviteTimeout', handleGameInviteTimeout)
   socket.on('GameInviteCanceled', handleGameInviteCanceled)
-  
-  // NEW: Add comprehensive cleanup listeners
   socket.on('GameInvitationsCleanup', handleGameInvitationsCleanup)
   socket.on('GameInviteCleanup', handleGameInviteCleanup)
   
@@ -222,7 +191,6 @@ const setupGlobalEventHandlers = (socket: any) => {
   console.log('Global event handlers set up')
 }
 
-// Clean up a specific invitation
 const cleanupInvitation = (gameId: string) => {
   const invitation = activeInvitations.get(gameId)
   if (invitation) {
@@ -232,36 +200,29 @@ const cleanupInvitation = (gameId: string) => {
     console.log('Cleaned up invitation:', gameId)
   }
 }
-
-// NEW: Clean up all invitations for a user
 export const cleanupAllUserInvitations = () => {
   const invitationsToCleanup = Array.from(activeInvitations.keys())
   
   for (const gameId of invitationsToCleanup) {
     cleanupInvitation(gameId)
   }
-  
-  // Also clear pending invitations
   pendingInvitations.clear()
   
   console.log(`Cleaned up ${invitationsToCleanup.length} active invitations`)
 }
 
-// NEW: Force clear all cached invitation data (call this when returning to play page)
 export const forceClearInvitationCache = () => {
   pendingInvitations.clear()
   activeInvitations.clear()
   console.log('Force cleared all invitation cache')
 }
 
-// NEW: Check if invitation is actually still valid on server
 export const validateInvitationStatus = async (socket: any, inviteKey: string): Promise<boolean> => {
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
-      resolve(false) // Assume invalid if no response
+      resolve(false)
     }, 2000)
 
-    // Listen for validation response
     const handleValidation = (data: any) => {
       if (data.inviteKey === inviteKey) {
         clearTimeout(timeout)
@@ -286,26 +247,17 @@ export const challengePlayer = async (
     return false
   }
 
-  // Set up global event handlers if not already done
   setupGlobalEventHandlers(socket)
-
-  // Create a unique key for this invitation pair
   const inviteKey = `${user.email}:${player.email}`
-  
-  // Check if there's already a pending invitation to this player
   const existing = pendingInvitations.get(inviteKey)
-  if (existing && Date.now() - existing.timestamp < 30000) { // 30 seconds
-    // NEW: Validate if the invitation is actually still valid on server
+  if (existing && Date.now() - existing.timestamp < 30000) {
     const isValid = await validateInvitationStatus(socket, inviteKey)
     if (isValid) {
       toast.warning('Invitation already sent to this player. Please wait...')
       return false
     } else {
-      // Server says it's not valid, clean up local cache
-      console.log('Server validation failed, cleaning up stale invitation:', inviteKey)
       pendingInvitations.delete(inviteKey)
       
-      // Also clean up any related active invitations
       for (const [gameId, invitation] of activeInvitations.entries()) {
         if (invitation.inviteKey === inviteKey) {
           activeInvitations.delete(gameId)
@@ -320,12 +272,8 @@ export const challengePlayer = async (
     if (!encryptionKey) {
       throw new Error('Encryption key not found')
     }
-
-    // Generate gameId and track this invitation
     const newGameId = crypto.randomUUID()
     pendingInvitations.set(inviteKey, { gameId: newGameId, timestamp: Date.now() })
-
-    // Store this active invitation
     activeInvitations.set(newGameId, {
       gameId: newGameId,
       player,
@@ -335,7 +283,6 @@ export const challengePlayer = async (
       inviteKey
     })
 
-    // Auto cleanup after 35 seconds (longer than server timeout)
     setTimeout(() => {
       if (activeInvitations.has(newGameId)) {
         console.log('Auto cleanup - invitation timed out:', newGameId)
@@ -366,19 +313,13 @@ export const challengePlayer = async (
     return false
   }
 }
-
-// Helper function to clear stale invitations (call this periodically)
 export const clearStaleInvitations = () => {
   const now = Date.now()
-  
-  // Clear stale pending invitations
   for (const [key, data] of pendingInvitations.entries()) {
-    if (now - data.timestamp > 60000) { // 1 minute
+    if (now - data.timestamp > 60000) { 
       pendingInvitations.delete(key)
     }
   }
-  
-  // Clear stale active invitations
   for (const [gameId, invitation] of activeInvitations.entries()) {
     const pendingData = pendingInvitations.get(invitation.inviteKey)
     if (!pendingData || now - pendingData.timestamp > 60000) {
@@ -387,7 +328,6 @@ export const clearStaleInvitations = () => {
   }
 }
 
-// Function to cancel a specific invitation
 export const cancelInvitation = (socket: any, gameId: string, hostEmail: string) => {
   if (!socket || !gameId || !hostEmail) return
 
@@ -395,12 +335,8 @@ export const cancelInvitation = (socket: any, gameId: string, hostEmail: string)
     gameId,
     hostEmail
   })
-  
-  // Clean up local tracking
   cleanupInvitation(gameId)
 }
-
-// Function to get all active invitations for a user
 export const getActiveInvitations = (userEmail: string) => {
   const userInvitations = []
   for (const [gameId, invitation] of activeInvitations.entries()) {
@@ -416,42 +352,28 @@ export const getActiveInvitations = (userEmail: string) => {
   return userInvitations
 }
 
-// NEW: Clean up stale invitations on server
 export const cleanupStaleInvitations = (socket: any, userEmail: string) => {
   if (!socket || !userEmail) return
 
   socket.emit('CleanupStaleInvitations', { userEmail })
-  
-  // Also force clear local cache
   forceClearInvitationCache()
 }
-
-// NEW: Initialize invitation system (call this when user enters play page)
 export const initializeInvitationSystem = (socket: any, userEmail: string) => {
   if (!socket || !userEmail) return
 
   console.log('Initializing invitation system for user:', userEmail)
-  
-  // Setup event handlers
   setupGlobalEventHandlers(socket)
   setupGameStateCleanup(socket)
-  
-  // Clean up any stale data
   cleanupStaleInvitations(socket, userEmail)
-  
-  // Set up periodic cleanup
   const cleanupInterval = setInterval(() => {
     clearStaleInvitations()
-  }, 30000) // Every 30 seconds
+  }, 30000)
   
-  // Return cleanup function
   return () => {
     clearInterval(cleanupInterval)
     forceClearInvitationCache()
   }
 }
-
-// Function to clean up all invitations for a user (useful on logout) all invitations for a user (useful on logout)
 export const cleanupAllInvitations = (userEmail: string) => {
   const toDelete = []
   for (const [gameId, invitation] of activeInvitations.entries()) {
@@ -464,11 +386,8 @@ export const cleanupAllInvitations = (userEmail: string) => {
   console.log('Cleaned up all invitations for user:', userEmail)
 }
 
-// NEW: Setup cleanup listeners for when user accepts/joins games
 export const setupGameStateCleanup = (socket: any) => {
   if (!socket) return
-
-  // Clean up all invitations when user joins a game
   socket.on('GameStarted', () => {
     console.log('Game started - cleaning up all pending invitations')
     cleanupAllUserInvitations()
@@ -486,44 +405,36 @@ export const setupGameStateCleanup = (socket: any) => {
     }
   })
 
-  // Clean up when user goes to game page
   socket.on('PlayerReady', () => {
     console.log('Player ready - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
-  // NEW: Clean up when game ends
   socket.on('GameEnded', () => {
     console.log('Game ended - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
-  // NEW: Clean up when player leaves game
   socket.on('PlayerLeft', () => {
     console.log('Player left - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
-  // NEW: Clean up when game is canceled
   socket.on('GameCanceled', () => {
     console.log('Game canceled - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
-  // NEW: Clean up when returning to play page after game
   socket.on('GameSessionEnded', () => {
     console.log('Game session ended - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
-
-  // NEW: Clean up when match ends (matchmaking)
   socket.on('MatchEnded', () => {
     console.log('Match ended - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 }
 
-// NEW: Get invitation status for UI updates
 export const getInvitationStatus = (gameId: string) => {
   const invitation = activeInvitations.get(gameId)
   if (!invitation) return null
@@ -537,7 +448,6 @@ export const getInvitationStatus = (gameId: string) => {
   }
 }
 
-// NEW: Check if user has any pending invitations
 export const hasPendingInvitations = (userEmail: string): boolean => {
   for (const [gameId, invitation] of activeInvitations.entries()) {
     if (invitation.user.email === userEmail) {

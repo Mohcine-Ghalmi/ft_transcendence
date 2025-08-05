@@ -79,7 +79,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
           data: stats
         })
       } catch (error) {
-        console.error('Error fetching player stats:', error)
         return reply.status(500).send({ error: 'Internal server error' })
       }
     }
@@ -126,7 +125,6 @@ export async function gameRoutes(fastify: FastifyInstance) {
           }
         })
       } catch (error) {
-        console.error('Error fetching tournament participant data:', error)
         return reply.status(500).send({ error: 'Internal server error' })
       }
     }
