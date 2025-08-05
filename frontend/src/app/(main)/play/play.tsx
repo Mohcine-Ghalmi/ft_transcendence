@@ -126,36 +126,6 @@ export const LocalGames = () => {
           </Link>
         }
       />
-
-      {/* Play Against AI */}
-      <GameModeCard
-        title="Play Against AI"
-        description="Challenge an AI player."
-        subDescription="Test your skills against an AI opponent."
-        illustration={<AISphereIllustration />}
-        buttons={
-          <>
-            <button
-              onClick={() => handleLocalGame('AI', 'Easy')}
-              className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Easy
-            </button>
-            <button
-              onClick={() => handleLocalGame('AI', 'Medium')}
-              className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Medium
-            </button>
-            <button
-              onClick={() => handleLocalGame('AI', 'Hard')}
-              className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Hard
-            </button>
-          </>
-        }
-      />
     </div>
   )
 }
@@ -242,36 +212,6 @@ export const OnlineGames = () => {
                 Create One
               </button>
             </Link>
-          </>
-        }
-      />
-
-      {/* Online Play Against AI */}
-      <GameModeCard
-        title="Play Against AI"
-        description="Challenge an AI player."
-        subDescription="Test your skills against an AI opponent."
-        illustration={<AISphereIllustration />}
-        buttons={
-          <>
-            <button
-              onClick={() => handleOnlineGame('AI', 'Easy', null)}
-              className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Easy
-            </button>
-            <button
-              onClick={() => handleOnlineGame('AI', 'Medium', null)}
-              className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Medium
-            </button>
-            <button
-              onClick={() => handleOnlineGame('AI', 'Hard', null)}
-              className="bg-[#4a5568] hover:bg-[#5a6578] text-white px-6 py-3 rounded-lg transition-colors duration-300"
-            >
-              Hard
-            </button>
           </>
         }
       />

@@ -11,7 +11,7 @@ export const MatchHistory = () => {
       setMatchHistoryData(userDetails?.matchHistory || [])
   }, [userDetails])
   return (
-    <div className="flex flex-col overflow-hidden xl:w-[70%] w-full">
+    <div className="flex flex-col overflow-hidden w-full">
       <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white mb-3 sm:mb-4 p-2 flex-shrink-0">
         Match History
       </h3>

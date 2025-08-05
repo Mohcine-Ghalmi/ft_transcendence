@@ -45,7 +45,7 @@ const SignInWithOthers = () => {
 
     try {
       setIsProcessing(true)
-      router.replace(`${process.env.NEXT_PUBLIC_BACKEND}/login/google`)
+      router.replace(`/api/google/login`)
     } catch (err) {
       toast.error('Google login failed')
       setIsProcessing(false)

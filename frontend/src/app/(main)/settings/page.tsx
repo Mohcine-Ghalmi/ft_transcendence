@@ -487,10 +487,6 @@ export default function SettingsPage() {
             Security
           </button>
         )}
-
-        <button className="w-[200px] xl:py-4 xl:px-6 p-2  rounded-2xl border-1 border-gray-700 text-xs xl:text-md hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
-          Game Settings
-        </button>
       </div>
       {/* right side */}
       <div className="h-full w-full xl:w-[50%]">

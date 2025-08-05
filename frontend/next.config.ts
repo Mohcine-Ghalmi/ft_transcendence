@@ -30,6 +30,11 @@ const nextConfig: NextConfig = {
         source: '/api/user-service/:path*',
         destination: `${process.env.USER_BACKEND_URL}/api/user-service/:path*`,
       },
+      // google
+      {
+        source: '/api/google/login/:path*',
+        destination: `${process.env.USER_BACKEND_URL}/login/google/:path*`,
+      },
       // chat
       {
         source: '/api/chat-service/:path*',

@@ -93,14 +93,13 @@ interface UserState {
   isLoading: boolean
   user: any | null
   socketConnected: boolean
-  onlineUsers: string[] // lasdj@gmail.com asdasd@gaialcom
+  onlineUsers: string[]
   checkAuth: () => Promise<boolean>
   register: (data: any) => Promise<boolean>
   login: (data: any) => Promise<boolean>
   logout: () => Promise<void>
   connectSocket: () => void
   disconnectSocket: () => void
-  // googleLogin: (data: any) => Promise<void>
   notifications: any
   setNotifations: (data: any) => void
   seachedUsers: any
@@ -142,7 +141,8 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       const data: UserDetails = res.data
       get().setUserDetails(data)
     } catch (err) {
-      console.log(err)
+      get().setUserDetails(null)
+      toast.error('Failed to fetch user details')
     }
   },
 
@@ -166,7 +166,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     } catch (err) {
       get().setUser(null)
       get().logout()
-      console.log(err)
+      toast.error('Failed to fetch user data')
     }
   },
   checkAuth: async () => {
@@ -187,7 +187,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
       return false
     } catch (err) {
-      console.error('Auth check failed:', err)
       set({ user: null, isAuthenticated: false })
       localStorage.removeItem('accessToken')
       return false
@@ -204,7 +203,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
       const res = await axiosInstance.post(`/v2/api/users/register`, data)
-      console.log(res)
 
       if (!res.data) {
         toast.warning('Registration failed')
@@ -220,8 +218,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       get().connectSocket()
       return true
     } catch (err: any) {
-      console.log(err)
-
       toast.warning(err.response?.data?.message || err.message)
       return false
     } finally {
@@ -261,7 +257,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
       const res = await axiosInstance.post(`/v2/api/users/login`, data)
-      console.log(res.data)
 
       const { status, accessToken, ...user } = res.data
       if (!status) {
@@ -383,7 +378,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
             desc: notifications?.desc,
             senderEmail: notifications.senderEmail,
           }
-          console.log('friendNotification : ', friendNotification)
 
           if (friendNotification?.desc) {
             const {
@@ -466,9 +460,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
                     : tmp
                 )
               : []
-          console.log('searchedUsersGlobal : ', searchedUsersGlobal)
 
-          console.log('updatedUsers : ', updatedUsers)
           setRandomFriendsSuggestion(updatedUsersRandom)
           setSearchedUsersGlobal(updatedUsers)
         }
@@ -523,8 +515,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     //
     socketInstance.on('newNotification', onNewNotification)
     socketInstance.on('error-in-connection', (data) => {
-      console.log('Socket connection error:', data)
-
       toast.error(data.message || 'Socket connection error')
       get().disconnectSocket()
       get().logout()

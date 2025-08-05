@@ -17,7 +17,6 @@ export default function PasswordResetForm() {
     const password = e.target.value
     setNewPassword(password)
 
-    // Clear error first
     setErrors((prev) => ({ ...prev, newPassword: '' }))
 
     if (password.trim()) {
@@ -34,7 +33,6 @@ export default function PasswordResetForm() {
     const password = e.target.value
     setConfirmPassword(password)
 
-    // Clear error first
     setErrors((prev) => ({ ...prev, confirmPassword: '' }))
 
     if (password.trim() && newPassword.trim()) {
@@ -75,7 +73,6 @@ export default function PasswordResetForm() {
 
     setIsLoading(true)
 
-    // Simulate API call
     setTimeout(() => {
       setIsLoading(false)
       setIsSubmitted(true)

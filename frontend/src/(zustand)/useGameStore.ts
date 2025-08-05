@@ -60,11 +60,8 @@ export const useGameStore = create<UserState>()((set, get) => ({
   socketConnected: false,
 
   connectSocket: () => {
-    console.log('Connecting to game socket... : ', gameSocketInstance)
-
     if (gameSocketInstance?.connected) return
     const { user } = useAuthStore.getState()
-    console.log('user in connectSocket : ', user)
 
     if (!user) return
 
@@ -79,7 +76,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
       user.email,
       process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
     )
-    console.log('cryptedMail : ', cryptedMail)
 
     gameSocketInstance = io('/', {
       path: '/game-service/socket.io',
@@ -97,7 +93,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
     }
 
     const onConnectError = (err: Error) => {
-      console.log('Socket connection error:', err.message)
       set({ socketConnected: false })
     }
 
@@ -121,9 +116,7 @@ export const useGameStore = create<UserState>()((set, get) => ({
               ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
               : tmp
           )
-          console.log('searchedUsersGlobal : ', searchedUsersGlobal)
 
-          console.log('updatedUsers : ', updatedUsers)
           setRandomFriendsSuggestion(updatedUsersRandom)
           setSearchedUsersGlobal(updatedUsers)
         }
@@ -174,8 +167,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
 
     //
     gameSocketInstance.on('error-in-connection', (data) => {
-      console.log('Socket connection error:', data)
-
       toast.error(data.message || 'Socket connection error')
       get().disconnectSocket()
     })

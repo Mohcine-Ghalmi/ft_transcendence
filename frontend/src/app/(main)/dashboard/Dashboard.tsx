@@ -33,9 +33,9 @@ export default function PingPongDashboard() {
           <div className="xl:col-span-2 space-y-4 sm:space-y-6">
             <ProfileSection />
             <GameModeCards />
-            <div className="flex xl:flex-row flex-col w-full gap-4">
+            <div className="flex w-full gap-4">
               <MatchHistory />
-              <FriendSuggestions />
+              {/* <FriendSuggestions /> */}
             </div>
             <FriendsSection />
           </div>
