@@ -7,6 +7,16 @@ import {
   GameRoomData,
   getPlayerData,
   gameRooms,
+  tournamentActiveSessions,
+  getUserCurrentGame,
+} from './game.socket.types'
+import { 
+  setActiveTournamentSession,
+  getActiveTournamentSession, 
+  removeActiveTournamentSession,
+  cleanupTournamentSessions,
+  emitToActiveTournamentSessions,
+  emitToActiveUserSession
 } from './game.socket.types'
 import { v4 as uuidv4 } from 'uuid'
 import CryptoJS from 'crypto-js'
@@ -17,6 +27,144 @@ import { getUserByEmail, getFriend } from '../user/user.service'
 // Key prefix for tournaments in Redis
 const TOURNAMENT_PREFIX = 'tournament:';
 const TOURNAMENT_INVITE_PREFIX = 'tournament_invite:';
+
+// Helper function to handle participant disconnections
+async function handleParticipantDisconnect(tournamentId: string, tournament: Tournament, disconnectedUserEmail: string, io: Server) {
+  try {
+    
+    if (tournament.status !== 'in_progress') {
+      return;
+    }
+    
+    const activeMatch = tournament.matches.find(match => 
+      (match.player1?.email === disconnectedUserEmail || match.player2?.email === disconnectedUserEmail) &&
+      (match.state === 'in_progress' || match.state === 'waiting')
+    );
+    
+    if (!activeMatch) {
+      return;
+    }
+    
+    // Use the existing forfeit handler from tournament events
+    const { handleTournamentPlayerForfeit } = await import('./game.socket.tournament.events');
+    const { 
+      updatedTournament, 
+      affectedMatch, 
+      forfeitedPlayer, 
+      advancingPlayer 
+    } = handleTournamentPlayerForfeit(tournament, disconnectedUserEmail);
+    
+    // Update tournament in Redis
+    await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(updatedTournament));
+    
+    // Get all participant socket IDs for notifications
+    const allParticipantEmails = updatedTournament.participants.map(p => p.email);
+    const allSocketIds = [];
+    
+    for (const email of allParticipantEmails) {
+      const socketIds = await getSocketIds(email, 'sockets') || [];
+      allSocketIds.push(...socketIds);
+    }
+    
+    // Send tournament player forfeited notification (reusing existing event)
+    io.to(allSocketIds).emit('TournamentPlayerForfeited', {
+      tournamentId,
+      forfeitedPlayer,
+      advancingPlayer,
+      affectedMatch,
+      tournament: updatedTournament,
+      reason: 'disconnect',
+      message: `${forfeitedPlayer?.nickname} has disconnected. ${advancingPlayer?.nickname} advances to the next round.`
+    });
+    
+    // Check if tournament is complete after this disconnect
+    const totalRounds = Math.log2(updatedTournament.size);
+    const finalMatch = updatedTournament.matches.find(m => m.round === totalRounds - 1);
+    
+    if (finalMatch && 
+        (finalMatch.state === 'player1_win' || finalMatch.state === 'player2_win') && 
+        finalMatch.winner) {
+      // Tournament is complete
+      updatedTournament.status = 'completed';
+      updatedTournament.endedAt = Date.now();
+      updatedTournament.winner = finalMatch.winner;
+      
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(updatedTournament));
+      
+      io.to(allSocketIds).emit('TournamentCompleted', {
+        tournamentId,
+        tournament: updatedTournament,
+        winnerEmail: finalMatch.winner.email,
+        winner: finalMatch.winner,
+        message: `Tournament completed! ${finalMatch.winner.nickname} is the champion!`
+      });
+    }
+    
+    
+  } catch (error) {
+    console.error(`Error handling participant disconnect in tournament ${tournamentId}:`, error);
+  }
+}
+
+// Helper function to handle host disconnections
+async function handleHostDisconnect(tournamentId: string, tournament: Tournament, io: Server) {
+  try {
+    
+    // Only cancel if tournament is in lobby or early stage
+    if (tournament.status === 'lobby' || tournament.status === 'in_progress') {
+      // Get all participant emails for notification
+      const allParticipantEmails = tournament.participants.map(p => p.email);
+      const allSocketIds = [];
+      
+      for (const email of allParticipantEmails) {
+        const socketIds = await getSocketIds(email, 'sockets') || [];
+        allSocketIds.push(...socketIds);
+      }
+      
+      // Update tournament status
+      tournament.status = 'canceled';
+      tournament.endedAt = Date.now();
+      
+      // Save the canceled tournament state briefly for records
+      await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 300, JSON.stringify(tournament));
+      
+      // Notify all participants using the existing event structure
+      io.to(allSocketIds).emit('TournamentCanceled', {
+        tournamentId,
+        tournament: {
+          ...tournament,
+          status: 'canceled',
+          endedAt: Date.now(),
+        },
+        reason: 'Host disconnected',
+        message: 'Tournament has been canceled because the host disconnected.'
+      });
+      
+      // Redirect all participants to play page
+      io.to(allSocketIds).emit('RedirectToPlay', {
+        message: 'Tournament canceled due to host disconnection.'
+      });
+      
+      // Clean up tournament from active list after a delay
+      setTimeout(async () => {
+        try {
+          await redis.del(`${TOURNAMENT_PREFIX}${tournamentId}`);
+          cleanupTournamentSessions(tournamentId);
+        } catch (error) {
+          console.error(`Error cleaning up canceled tournament ${tournamentId}:`, error);
+        }
+      }, 2000);
+      
+      // Emit updated tournament list to all clients
+      const updatedTournaments = await getAllActiveTournaments();
+      io.emit('TournamentList', updatedTournaments);
+      
+    }
+  } catch (error) {
+    console.error(`Error handling host disconnect for tournament ${tournamentId}:`, error);
+  }
+}
+
 
 // Helper function to create tournament bracket
 function createTournamentBracket(participants: TournamentParticipant[], size: number): TournamentMatch[] {
@@ -90,7 +238,6 @@ async function getAllActiveTournaments(): Promise<Tournament[]> {
     }
     return tournaments;
   } catch (err) {
-    console.error('Error getting active tournaments:', err);
     return [];
   }
 }
@@ -116,7 +263,6 @@ async function isUserInActiveTournament(userEmail: string): Promise<{ isParticip
     }
     return { isParticipating: false };
   } catch (err) {
-    console.error('Error checking user tournament participation:', err);
     return { isParticipating: false };
   }
 }
@@ -131,10 +277,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
     size: number;
   }) => {
     try {
-      console.log('Tournament creation request received:', data);
       
       if (!data.name || !data.hostEmail || !data.hostNickname || !data.size) {
-        console.log('Missing required tournament data');
         return socket.emit('TournamentError', { message: 'Missing required tournament information.' });
       }
       
@@ -184,7 +328,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         createdAt: Date.now(),
       };
       
-      console.log('Creating tournament:', { tournamentId, name: data.name, hostEmail: data.hostEmail });
       
       await redis.setex(`${TOURNAMENT_PREFIX}${tournamentId}`, 3600, JSON.stringify(tournament));
       
@@ -195,9 +338,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const updatedTournaments = await getAllActiveTournaments();
       io.emit('TournamentList', updatedTournaments);
       
-      console.log('Tournament created successfully:', tournamentId);
     } catch (err) {
-      console.error('Tournament creation error:', err);
       socket.emit('TournamentError', { message: 'Failed to create tournament.' });
     }
   });
@@ -398,7 +539,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Clean up invite FIRST
       await Promise.all([
         redis.del(`${TOURNAMENT_INVITE_PREFIX}${inviteId}`),
-        redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${inviteeEmail}`) // Tournament-specific key
+        redis.del(`${TOURNAMENT_INVITE_PREFIX}${invite.tournamentId}:${inviteeEmail}`)
       ]);
       
       // Get tournament data
@@ -445,7 +586,10 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Update tournament in Redis
       await redis.setex(`${TOURNAMENT_PREFIX}${invite.tournamentId}`, 3600, JSON.stringify(tournament));
       
-      // Get ALL socket IDs for all participants (including the new one)
+      // ✨ KEY CHANGE: Set this socket as the active tournament session for this user
+      setActiveTournamentSession(invite.tournamentId, inviteeEmail, socket.id);
+      
+      // Get ALL socket IDs for all participants for general notifications
       const allParticipantEmails = tournament.participants.map(p => p.email);
       const allSocketIds = [];
       
@@ -454,29 +598,46 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         allSocketIds.push(...socketIds);
       }
       
-      // Get host socket IDs specifically
-      const hostSocketIds = await getSocketIds(invite.hostEmail, 'sockets') || [];
-      
       // Get ALL guest socket IDs to clean up invite from ALL sessions
       const guestSocketIds = await getSocketIds(inviteeEmail, 'sockets') || [];
       
-      // Emit to ALL participants (including host and new participant)
+      // Emit to ALL participants about the new participant joining
       io.to(allSocketIds).emit('TournamentInviteAccepted', { 
         inviteId, 
         inviteeEmail,
-        guestEmail: inviteeEmail, // Add this for compatibility
-        guestData: userData, // Add this for compatibility
+        guestEmail: inviteeEmail,
+        guestData: userData,
         tournamentId: invite.tournamentId,
         newParticipant,
         tournament
       });
       
-      // IMPORTANT: Clean up the invite from ALL guest sessions
+      // Clean up the invite from ALL guest sessions
       io.to(guestSocketIds).emit('TournamentInviteCleanup', {
         inviteId,
         action: 'accepted',
         message: 'Invite accepted in another session'
       });
+      
+      // ✨ ONLY send the accepting user (THIS specific session) to tournament lobby
+      socket.emit('TournamentInviteResponse', { 
+        status: 'success', 
+        message: 'Joined tournament successfully.',
+        tournamentId: invite.tournamentId,
+        tournament,
+        redirectToLobby: true // Signal that this session should redirect
+      });
+      
+      // Notify OTHER sessions of this user about the conflict (they should NOT redirect)
+      const otherGuestSockets = guestSocketIds.filter(socketId => socketId !== socket.id);
+      if (otherGuestSockets.length > 0) {
+        io.to(otherGuestSockets).emit('TournamentSessionConflict', {
+          type: 'another_session_joined',
+          message: 'Tournament joined in another session. This session will remain inactive.',
+          tournamentId: invite.tournamentId,
+          action: 'stay_idle'
+        });
+      }
       
       // Check if tournament is ready to start
       if (tournament.participants.length === tournament.size) {
@@ -491,16 +652,100 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       const updatedTournaments = await getAllActiveTournaments();
       io.emit('TournamentList', updatedTournaments);
       
-      // Send success response to the accepting player
-      socket.emit('TournamentInviteResponse', { 
-        status: 'success', 
-        message: 'Joined tournament successfully.',
-        tournamentId: invite.tournamentId,
-        tournament
-      });
-      
     } catch (error) {
       socket.emit('TournamentInviteResponse', { status: 'error', message: 'Failed to accept tournament invite.' });
+    }
+  });
+
+  socket.on('JoinTournament', async (data: { tournamentId: string; playerEmail: string }) => {
+    try {
+      const { tournamentId, playerEmail } = data;
+      
+      if (!tournamentId || !playerEmail) {
+        return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Missing info.' });
+      }
+      
+      // Get tournament data
+      const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+      if (!tournamentData) {
+        return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament not found.' });
+      }
+      
+      const tournament: Tournament = JSON.parse(tournamentData);
+      
+      // Check if player is a participant or host
+      const participant = tournament.participants.find(p => p.email === playerEmail);
+      const isHost = tournament.hostEmail === playerEmail;
+      
+      if (!participant && !isHost) {
+        return socket.emit('TournamentJoinResponse', { status: 'error', message: 'You are not a participant in this tournament.' });
+      }
+      
+      // For completed tournaments, allow viewing
+      if (tournament.status === 'completed') {
+        const tournamentRoom = `tournament:${tournamentId}`;
+        socket.join(tournamentRoom);
+        
+        return socket.emit('TournamentJoinResponse', { 
+          status: 'success', 
+          tournament,
+          message: 'completed',
+          currentMatch: null
+        });
+      }
+      
+      // Check if tournament is in a valid state for active participation
+      if (tournament.status === 'canceled') {
+        return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament was canceled.' });
+      }
+      
+      // ✨ KEY CHANGE: Check for existing active session
+      const existingActiveSession = getActiveTournamentSession(tournamentId, playerEmail);
+      if (existingActiveSession && existingActiveSession !== socket.id) {
+        // Another session is already active for this tournament
+        const userSockets = await getSocketIds(playerEmail, 'sockets') || [];
+        if (userSockets.includes(existingActiveSession)) {
+          return socket.emit('TournamentJoinResponse', { 
+            status: 'error', 
+            message: 'Tournament is already active in another session.',
+            sessionConflict: true,
+            conflictType: 'tournament_active_elsewhere'
+          });
+        } else {
+          // Clean up stale session and allow this one
+          removeActiveTournamentSession(tournamentId, playerEmail);
+        }
+      }
+      
+      // Set this socket as the active tournament session
+      setActiveTournamentSession(tournamentId, playerEmail, socket.id);
+      
+      // Join the socket to the tournament room for real-time updates
+      const tournamentRoom = `tournament:${tournamentId}`;
+      socket.join(tournamentRoom);
+      
+      // Send tournament data to the joining player
+      socket.emit('TournamentJoinResponse', { 
+        status: 'success', 
+        tournament,
+        currentMatch: tournament.status === 'in_progress' ? 
+          tournament.matches.find(m => 
+            (m.player1?.email === playerEmail || m.player2?.email === playerEmail) && 
+            m.state === 'waiting'
+          ) : null
+      });
+      
+      if (participant) {
+        socket.to(tournamentRoom).emit('TournamentPlayerJoined', {
+          tournamentId,
+          tournament,
+          joinedPlayer: participant,
+          message: `${participant.nickname} joined the tournament room!`
+        });
+      }
+      
+    } catch (error) {
+      socket.emit('TournamentJoinResponse', { status: 'error', message: 'Failed to join tournament.' });
     }
   });
   
@@ -724,13 +969,10 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
     }
   });
 
-  // NOTE: Removed StartNextRoundMatches handler - use StartCurrentRound instead
-  // The StartCurrentRound handler properly creates game rooms and sends GameFound events
-
-  // START CURRENT ROUND - Host starts matches in current round
   socket.on('StartCurrentRound', async (data: { tournamentId: string; hostEmail: string; round?: number; notifyCountdown?: number }) => {
     try {
       const { tournamentId, hostEmail, round, notifyCountdown = 10 } = data;
+      
       
       if (!tournamentId || !hostEmail) {
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Missing required data.' });
@@ -755,50 +997,94 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         match.round === currentRound && match.state === 'waiting' && match.player1 && match.player2
       );
       
+      
       if (currentRoundMatches.length === 0) {
         return socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'No matches ready to start in this round.' });
       }
 
-      // Send notifications to all players in these matches with countdown
       for (const match of currentRoundMatches) {
         if (!match.player1 || !match.player2) continue;
         
-        // Get socket IDs for both players
-        const player1Sockets = await getSocketIds(match.player1.email, 'sockets') || [];
-        const player2Sockets = await getSocketIds(match.player2.email, 'sockets') || [];
         
-        // Send global notification to both players
-        const allSockets = [...player1Sockets, ...player2Sockets];
+        const player1ActiveSession = getActiveTournamentSession(tournamentId, match.player1.email);
+        const player2ActiveSession = getActiveTournamentSession(tournamentId, match.player2.email);
         
-        allSockets.forEach(socketId => {
-          io.to(socketId).emit('GlobalTournamentNotification', {
-            type: 'match_starting',
-            title: 'Round Starting!',
-            message: `Round ${currentRound + 1} match will begin in ${notifyCountdown} seconds!`,
-            countdown: notifyCountdown,
-            tournamentId: tournamentId,
-            matchId: match.id,
-            autoClose: false,
-            timestamp: Date.now()
+        const player1AllSockets = await getSocketIds(match.player1.email, 'sockets') || [];
+        const player2AllSockets = await getSocketIds(match.player2.email, 'sockets') || [];
+        
+        const tournamentRoom = `tournament:${tournamentId}`;
+        
+        const notificationData = {
+          type: 'match_starting',
+          title: 'Your Match is Starting!',
+          message: `Your tournament match will begin in ${notifyCountdown} seconds!`,
+          countdown: notifyCountdown,
+          tournamentId: tournamentId,
+          matchId: match.id,
+          autoClose: false,
+          timestamp: Date.now()
+        };
+        
+        let player1Notified = false;
+        if (player1ActiveSession) {
+          io.to(player1ActiveSession).emit('GlobalTournamentNotification', {
+            ...notificationData,
+            playerEmail: match.player1.email
           });
+          player1Notified = true;
+        }
+        
+        if (!player1Notified && player1AllSockets.length > 0) {
+          player1AllSockets.forEach(socketId => {
+            io.to(socketId).emit('GlobalTournamentNotification', {
+              ...notificationData,
+              playerEmail: match.player1?.email
+            });
+          });
+          player1Notified = true;
+        }
+        
+        let player2Notified = false;
+        if (player2ActiveSession) {
+          io.to(player2ActiveSession).emit('GlobalTournamentNotification', {
+            ...notificationData,
+            playerEmail: match.player2.email
+          });
+          player2Notified = true;
+        }
+        
+        if (!player2Notified && player2AllSockets.length > 0) {
+          player2AllSockets.forEach(socketId => {
+            io.to(socketId).emit('GlobalTournamentNotification', {
+              ...notificationData,
+              playerEmail: match.player2?.email
+            });
+          });
+          player2Notified = true;
+        }
+        
+        io.to(tournamentRoom).emit('TournamentMatchCountdown', {
+          ...notificationData,
+          match: {
+            id: match.id,
+            player1: match.player1,
+            player2: match.player2
+          }
         });
         
-        // Auto-start the game after countdown - no manual join required
+       
         setTimeout(async () => {
           try {
-            // Get updated tournament data
+            
             const updatedTournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
             if (!updatedTournamentData) return;
             
             const updatedTournament: Tournament = JSON.parse(updatedTournamentData);
             const currentMatch = updatedTournament.matches.find(m => m.id === match.id);
             
-            // Only start if match is still waiting
             if (currentMatch && currentMatch.state === 'waiting') {
-              // Create game room automatically
               const gameRoomId = uuidv4();
               
-              // Create game room data
               const gameRoom: GameRoomData = {
                 gameId: gameRoomId,
                 hostEmail: match.player1!.email,
@@ -810,11 +1096,9 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
                 matchId: match.id
               };
               
-              // Save game room
               await redis.setex(`gameRoom:${gameRoomId}`, 3600, JSON.stringify(gameRoom));
               gameRooms.set(gameRoomId, gameRoom);
               
-              // Initialize game state
               const gameState = {
                 gameId: gameRoomId,
                 ballX: 440,
@@ -854,15 +1138,17 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
               const player1Data = getPlayerData(player1User);
               const player2Data = getPlayerData(player2User);
               
-              // Get socket IDs for both players
-              const player1Sockets = await getSocketIds(match.player1!.email, 'sockets') || [];
-              const player2Sockets = await getSocketIds(match.player2!.email, 'sockets') || [];
-              const allSockets = [...player1Sockets, ...player2Sockets];
+              // ✨ Use the same multi-approach for game redirection
+              const currentPlayer1ActiveSession = getActiveTournamentSession(tournamentId, match.player1!.email);
+              const currentPlayer2ActiveSession = getActiveTournamentSession(tournamentId, match.player2!.email);
               
-              // Send game events to redirect players immediately
-              allSockets.forEach(socketId => {
-                const isPlayer1 = player1Sockets.includes(socketId);
-                
+              const currentPlayer1AllSockets = await getSocketIds(match.player1!.email, 'sockets') || [];
+              const currentPlayer2AllSockets = await getSocketIds(match.player2!.email, 'sockets') || [];
+            
+              
+              // Redirect Player 1
+              const socketsToRedirectP1 = currentPlayer1ActiveSession ? [currentPlayer1ActiveSession] : currentPlayer1AllSockets;
+              socketsToRedirectP1.forEach(socketId => {
                 io.to(socketId).emit('MatchFound', {
                   gameId: gameRoomId,
                   hostEmail: match.player1!.email,
@@ -874,7 +1160,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
                   isTournament: true,
                   tournamentId: tournamentId,
                   matchId: match.id,
-                  playerPosition: isPlayer1 ? 'player1' : 'player2'
+                  playerPosition: 'player1'
                 });
                 
                 io.to(socketId).emit('GameStarting', {
@@ -887,14 +1173,45 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
                   isTournament: true,
                   tournamentId: tournamentId,
                   matchId: match.id,
-                  playerPosition: isPlayer1 ? 'player1' : 'player2'
+                  playerPosition: 'player1'
+                });
+              });
+              
+              // Redirect Player 2
+              const socketsToRedirectP2 = currentPlayer2ActiveSession ? [currentPlayer2ActiveSession] : currentPlayer2AllSockets;
+              socketsToRedirectP2.forEach(socketId => {
+                io.to(socketId).emit('MatchFound', {
+                  gameId: gameRoomId,
+                  hostEmail: match.player1!.email,
+                  guestEmail: match.player2!.email,
+                  hostData: player1Data,
+                  guestData: player2Data,
+                  status: 'match_found',
+                  message: 'Tournament match starting now!',
+                  isTournament: true,
+                  tournamentId: tournamentId,
+                  matchId: match.id,
+                  playerPosition: 'player2'
+                });
+                
+                io.to(socketId).emit('GameStarting', {
+                  gameId: gameRoomId,
+                  hostEmail: match.player1!.email,
+                  guestEmail: match.player2!.email,
+                  hostData: player1Data,
+                  guestData: player2Data,
+                  startedAt: gameRoom.startedAt,
+                  isTournament: true,
+                  tournamentId: tournamentId,
+                  matchId: match.id,
+                  playerPosition: 'player2'
                 });
               });
               
               // Send GameStarted after a brief delay
               setTimeout(() => {
-                allSockets.forEach(socketId => {
-                  const isPlayer1 = player1Sockets.includes(socketId);
+                [...socketsToRedirectP1, ...socketsToRedirectP2].forEach(socketId => {
+                  const isPlayer1 = socketsToRedirectP1.includes(socketId);
                   
                   io.to(socketId).emit('GameStarted', {
                     gameId: gameRoomId,
@@ -916,7 +1233,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
               }, 100);
               
               // Notify tournament participants
-              const tournamentRoom = `tournament:${tournamentId}`;
               io.to(tournamentRoom).emit('TournamentMatchStarted', {
                 tournamentId: tournamentId,
                 match: updatedMatch,
@@ -933,7 +1249,7 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       // Send success response to host
       socket.emit('StartCurrentRoundResponse', { 
         status: 'success', 
-        message: `Round ${currentRound + 1} will auto-start in ${notifyCountdown} seconds. Players will be automatically redirected.`,
+        message: `Round ${currentRound + 1} will auto-start in ${notifyCountdown} seconds. Players will be notified via multiple channels.`,
         round: currentRound,
         matchCount: currentRoundMatches.length
       });
@@ -941,6 +1257,82 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       socket.emit('StartCurrentRoundResponse', { status: 'error', message: 'Failed to start round.' });
     }
   });
+
+  socket.on('ResolveTournamentSessionConflict', async (data: { 
+    action: 'force_takeover' | 'cancel';
+    tournamentId: string;
+    playerEmail: string;
+  }) => {
+    try {
+      const { action, tournamentId, playerEmail } = data;
+      
+      if (action === 'force_takeover') {
+        // Force takeover of tournament session
+        const existingSession = getActiveTournamentSession(tournamentId, playerEmail);
+        if (existingSession) {
+          // Notify the existing session about takeover
+          io.to(existingSession).emit('TournamentSessionTakenOver', {
+            tournamentId,
+            message: 'Tournament session taken over by another browser/tab.'
+          });
+        }
+        
+        // Set this socket as the new active session
+        setActiveTournamentSession(tournamentId, playerEmail, socket.id);
+        
+        socket.emit('TournamentSessionConflictResolved', {
+          status: 'success',
+          action: 'takeover_completed',
+          message: 'Took over the tournament session.'
+        });
+      } else {
+        // Cancel and don't join
+        socket.emit('TournamentSessionConflictResolved', {
+          status: 'cancelled',
+          message: 'Tournament session conflict cancelled.'
+        });
+      }
+    } catch (error) {
+      socket.emit('TournamentSessionConflictResolved', {
+        status: 'error',
+        message: 'Failed to resolve session conflict.'
+      });
+    }
+  });
+
+  socket.on('disconnect', async () => {
+    try {
+      
+      for (const [tournamentId, userSessions] of tournamentActiveSessions.entries()) {
+        for (const [userEmail, socketId] of userSessions.entries()) {
+          if (socketId === socket.id) {
+            
+            // Get tournament data
+            const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
+            if (tournamentData) {
+              const tournament: Tournament = JSON.parse(tournamentData);
+              
+              // Check if disconnecting user is the host
+              if (tournament.hostEmail === userEmail) {
+                await handleHostDisconnect(tournamentId, tournament, io);
+              } else {
+                // Check if user is in an active match
+                await handleParticipantDisconnect(tournamentId, tournament, userEmail, io);
+              }
+            }
+            
+            // Clean up session tracking
+            removeActiveTournamentSession(tournamentId, userEmail);
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up tournament sessions on disconnect:', error);
+    }
+  });
+  
+  
 
   // Handle player response to match notification
   socket.on('JoinTournamentMatch', async (data: { tournamentId: string; matchId: string; playerEmail: string }) => {
@@ -951,27 +1343,35 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Missing required data.' });
       }
       
+      const activeSession = getActiveTournamentSession(tournamentId, playerEmail);
+      if (!activeSession || activeSession !== socket.id) {
+        return socket.emit('JoinTournamentMatchResponse', { 
+          status: 'error', 
+          message: 'This tournament is active in another session. Please use the active session to join matches.',
+          sessionConflict: true
+        });
+      }
+      
       // Get tournament data
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
-      if (!tournamentData) {
-        return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Tournament not found.' });
-      }
-      
-      const tournament: Tournament = JSON.parse(tournamentData);
-      const match = tournament.matches.find(m => m.id === matchId);
-      
-      if (!match) {
-        return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Match not found.' });
-      }
+    if (!tournamentData) {
+      return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Tournament not found.' });
+    }
+    
+    const tournament: Tournament = JSON.parse(tournamentData);
+    const match = tournament.matches.find(m => m.id === matchId);
+    
+    if (!match) {
+      return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Match not found.' });
+    }
       
       // Check if player is part of this match
       const isPlayer1 = match.player1?.email === playerEmail;
       const isPlayer2 = match.player2?.email === playerEmail;
-      
       if (!isPlayer1 && !isPlayer2) {
         return socket.emit('JoinTournamentMatchResponse', { status: 'error', message: 'Player not in this match.' });
       }
-      
+        
       // If match hasn't started yet, create the game room
       if (match.state === 'waiting') {
         // Create game room ID
@@ -1157,17 +1557,8 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
       if (tournament.status === 'canceled') {
         return socket.emit('TournamentJoinResponse', { status: 'error', message: 'Tournament was canceled.' });
       }
-
-
-      
-      // Join the socket to the tournament room for real-time updates
       const tournamentRoom = `tournament:${tournamentId}`;
       socket.join(tournamentRoom);
-
-
-
-      
-      // Send tournament data to the joining player
       socket.emit('TournamentJoinResponse', { 
         status: 'success', 
         tournament,
@@ -1178,10 +1569,6 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
           ) : null
       });
 
-
-      
-      // Notify all OTHER participants in the tournament room that this player joined
-      // Only notify if participant exists (not for host viewing completed tournaments)
       if (participant) {
         socket.to(tournamentRoom).emit('TournamentPlayerJoined', {
           tournamentId,
@@ -1888,12 +2275,23 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
   });
 
   // Get user's active tournaments for rejoin helper
-  socket.on('GetUserActiveTournaments', async (data: { userEmail: string }) => {
+  socket.on('GetUserActiveTournaments', async (data: { userEmail: string; socketId?: string }) => {
     try {
-      const { userEmail } = data;
+      const { userEmail, socketId } = data;
       
       if (!userEmail) {
-        return socket.emit('UserActiveTournaments', { tournaments: [] });
+        return socket.emit('UserActiveTournaments', { tournaments: [], isInActiveGame: false });
+      }
+      
+      // Check if user is currently in an active game
+      const currentGameId = getUserCurrentGame(userEmail);
+      let isInActiveGame = false;
+      
+      if (currentGameId) {
+        const gameRoom = gameRooms.get(currentGameId);
+        if (gameRoom && (gameRoom.status === 'in_progress' || gameRoom.status === 'accepted')) {
+          isInActiveGame = true;
+        }
       }
       
       const tournamentKeys = await redis.keys(`${TOURNAMENT_PREFIX}*`);
@@ -1904,39 +2302,64 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         if (!tournamentData) continue;
         
         const tournament = JSON.parse(tournamentData);
+        const tournamentId = key.replace(TOURNAMENT_PREFIX, '');
         
         // Check if user is participant in active tournaments (lobby or in_progress)
         const isParticipant = tournament.participants.some((p: any) => p.email === userEmail);
         if (isParticipant && (tournament.status === 'lobby' || tournament.status === 'in_progress')) {
           const isHost = tournament.hostEmail === userEmail;
           
-          activeTournaments.push({
-            tournamentId: key.replace(TOURNAMENT_PREFIX, ''),
-            tournamentName: tournament.name,
-            status: tournament.status,
-            isHost,
-            participantCount: tournament.participants.length,
-            maxParticipants: tournament.size,
-            currentRound: tournament.currentRound || 0,
-            totalRounds: Math.log2(tournament.size)
-          });
+          const activeSessionId = getActiveTournamentSession(tournamentId, userEmail);
+          const shouldInclude = !activeSessionId || 
+                              activeSessionId === socketId || 
+                              !socketId;
+          
+          if (shouldInclude) {
+            activeTournaments.push({
+              tournamentId: tournamentId,
+              tournamentName: tournament.name,
+              status: tournament.status,
+              isHost,
+              participantCount: tournament.participants.length,
+              maxParticipants: tournament.size,
+              currentRound: tournament.currentRound || 0,
+              totalRounds: Math.log2(tournament.size),
+              activeSessionId: activeSessionId || null
+            });
+          }
         }
       }
       
-      socket.emit('UserActiveTournaments', { tournaments: activeTournaments });
+      socket.emit('UserActiveTournaments', { 
+        tournaments: activeTournaments,
+        isInActiveGame,
+        currentSocketId: socket.id
+      });
       
     } catch (error) {
-      socket.emit('UserActiveTournaments', { tournaments: [] });
+      socket.emit('UserActiveTournaments', { tournaments: [], isInActiveGame: false });
     }
   });
 
   // Rejoin tournament (redirect user back to tournament)
-  socket.on('RejoinTournament', async (data: { tournamentId: string; playerEmail: string }) => {
+  socket.on('RejoinTournament', async (data: { tournamentId: string; playerEmail: string; socketId?: string }) => {
     try {
-      const { tournamentId, playerEmail } = data;
+      const { tournamentId, playerEmail, socketId } = data;
       
       if (!tournamentId || !playerEmail) {
         return socket.emit('RejoinTournamentResponse', { status: 'error', message: 'Missing required data.' });
+      }
+      
+      // Check if user is in a game
+      const currentGameId = getUserCurrentGame(playerEmail);
+      if (currentGameId) {
+        const gameRoom = gameRooms.get(currentGameId);
+        if (gameRoom && (gameRoom.status === 'in_progress' || gameRoom.status === 'accepted')) {
+          return socket.emit('RejoinTournamentResponse', { 
+            status: 'error', 
+            message: 'You cannot rejoin a tournament while in an active game.' 
+          });
+        }
       }
       
       const tournamentData = await redis.get(`${TOURNAMENT_PREFIX}${tournamentId}`);
@@ -1952,8 +2375,36 @@ export const handleTournament: GameSocketHandler = (socket: Socket, io: Server) 
         return socket.emit('RejoinTournamentResponse', { status: 'error', message: 'You are not a participant in this tournament.' });
       }
       
+      // Check for existing active session
+      const existingActiveSession = getActiveTournamentSession(tournamentId, playerEmail);
+      if (existingActiveSession && existingActiveSession !== socket.id) {
+        // Another session is already active
+        const userSockets = await getSocketIds(playerEmail, 'sockets') || [];
+        if (userSockets.includes(existingActiveSession)) {
+          return socket.emit('RejoinTournamentResponse', { 
+            status: 'error', 
+            message: 'This tournament is already active in another session.',
+            sessionConflict: true
+          });
+        }
+      }
+      
+      // Set this socket as the active tournament session
+      setActiveTournamentSession(tournamentId, playerEmail, socket.id);
+      
       // Make sure user joins the tournament room
       socket.join(`tournament:${tournamentId}`);
+      
+      // Notify other sessions about the session takeover
+      const allUserSockets = await getSocketIds(playerEmail, 'sockets') || [];
+      const otherSockets = allUserSockets.filter(sid => sid !== socket.id);
+      if (otherSockets.length > 0) {
+        io.to(otherSockets).emit('TournamentSessionUpdate', {
+          tournamentId,
+          sessionId: socket.id,
+          message: 'Tournament session taken over by another browser/tab'
+        });
+      }
       
       socket.emit('RejoinTournamentResponse', { 
         status: 'success', 

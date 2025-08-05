@@ -1,3 +1,5 @@
+// page.tsx - Enhanced with session conflict handling
+
 "use client"
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -12,14 +14,31 @@ export default function TournamentGamePage() {
   const router = useRouter()
   const tournamentId = params.tournamentId as string
   const { user } = useAuthStore()
-  const { socket } = useTournamentInvite()
+  const { socket, isTournamentInConflict, sessionConflicts } = useTournamentInvite()
   
   const [tournamentData, setTournamentData] = useState<any>(null)
   const [isHost, setIsHost] = useState(false)
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [authorizationChecked, setAuthorizationChecked] = useState(false)
   const [isStartingGame, setIsStartingGame] = useState(false)
+  const [sessionConflict, setSessionConflict] = useState(false)
+  const [conflictType, setConflictType] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null)
+
+  // ✨ NEW: Check for session conflicts
+  useEffect(() => {
+    if (tournamentId && isTournamentInConflict) {
+      const isInConflict = isTournamentInConflict(tournamentId);
+      setSessionConflict(isInConflict);
+      
+      if (isInConflict) {
+        setNotification({
+          message: 'This tournament is active in another browser/tab. Some features may be limited.',
+          type: 'info'
+        });
+      }
+    }
+  }, [tournamentId, isTournamentInConflict, sessionConflicts]);
 
   useEffect(() => {
     if (!socket || !tournamentId || !user?.email) return;
@@ -82,10 +101,34 @@ export default function TournamentGamePage() {
 
     const handleTournamentJoinResponse = (data: any) => {
       setAuthorizationChecked(true)
+      
+      // ✨ NEW: Handle session conflicts
+      if (data.sessionConflict) {
+        setSessionConflict(true);
+        setConflictType(data.conflictType);
+        
+        if (data.conflictType === 'tournament_active_elsewhere') {
+          setNotification({
+            message: 'Tournament is already active in another session. You can view but not interact.',
+            type: 'info'
+          });
+          
+          // Still allow viewing in read-only mode
+          setIsAuthorized(true);
+          setTournamentData(data.tournament);
+          setIsHost(false); // Disable host actions in conflicted session
+        } else {
+          setIsAuthorized(false);
+          setTimeout(() => router.push('/play'), 3000);
+        }
+        return;
+      }
+      
       if (data.status === 'success') {
         setIsAuthorized(true)
         setTournamentData(data.tournament)
         setIsHost(data.tournament.hostEmail === user?.email)
+        setSessionConflict(false);
         
       } else {
         if (data.message && data.message.includes('completed')) {
@@ -123,6 +166,47 @@ export default function TournamentGamePage() {
       }
     }
 
+    // ✨ NEW: Handle session conflict notifications
+    const handleTournamentSessionConflict = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setSessionConflict(true);
+        setConflictType(data.type);
+        
+        if (data.type === 'another_session_joined') {
+          setNotification({
+            message: 'Tournament joined in another session. This session is now in view-only mode.',
+            type: 'info'
+          });
+          setIsHost(false); // Disable host actions
+        } else if (data.type === 'match_starting_elsewhere') {
+          setNotification({
+            message: 'Your tournament match is starting in another session.',
+            type: 'info'
+          });
+        } else if (data.type === 'match_started_elsewhere') {
+          setNotification({
+            message: 'Your tournament match has started in another session.',
+            type: 'info'
+          });
+        }
+        
+        // Auto-clear notification after 5 seconds
+        setTimeout(() => setNotification(null), 5000);
+      }
+    };
+
+    // ✨ NEW: Handle session takeover notifications
+    const handleTournamentSessionTakenOver = (data: any) => {
+      if (data.tournamentId === tournamentId) {
+        setNotification({
+          message: 'Tournament session taken over by another browser/tab.',
+          type: 'info'
+        });
+        setSessionConflict(true);
+        setIsHost(false); // Disable host actions
+      }
+    };
+
     const handleTournamentUpdated = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
@@ -133,16 +217,18 @@ export default function TournamentGamePage() {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         
-        // Show notification that someone joined the tournament room
-        const playerName = data.joinedPlayer?.nickname || data.joinedPlayer?.login || 'A player'
-        const joinMessage = `🎮 ${playerName} joined the tournament room!`
-        
-        setNotification({ 
-          message: joinMessage, 
-          type: 'success' 
-        })
-        // Clear notification after 3 seconds
-        setTimeout(() => setNotification(null), 3000)
+        // Only show notification if this is the active session
+        if (!sessionConflict) {
+          const playerName = data.joinedPlayer?.nickname || data.joinedPlayer?.login || 'A player'
+          const joinMessage = `🎮 ${playerName} joined the tournament room!`
+          
+          setNotification({ 
+            message: joinMessage, 
+            type: 'success' 
+          })
+          // Clear notification after 3 seconds
+          setTimeout(() => setNotification(null), 3000)
+        }
       }
     }
 
@@ -150,17 +236,20 @@ export default function TournamentGamePage() {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         // Immediately update host's lobby and bracket
-        if (data.tournament.hostEmail === user?.email) {
+        if (data.tournament.hostEmail === user?.email && !sessionConflict) {
           setIsHost(true)
         }
-        // Show notification that someone accepted invitation
-        const playerName = data.newParticipant?.nickname || data.newParticipant?.login || data.inviteeEmail
-        const joinMessage = `🎮 ${playerName} accepted the invitation and joined!`
-        setNotification({ 
-          message: joinMessage, 
-          type: 'success' 
-        })
-        setTimeout(() => setNotification(null), 3000)
+        
+        // Only show notification if this is the active session
+        if (!sessionConflict) {
+          const playerName = data.newParticipant?.nickname || data.newParticipant?.login || data.inviteeEmail
+          const joinMessage = `🎮 ${playerName} accepted the invitation and joined!`
+          setNotification({ 
+            message: joinMessage, 
+            type: 'success' 
+          })
+          setTimeout(() => setNotification(null), 3000)
+        }
       }
     }
 
@@ -168,17 +257,18 @@ export default function TournamentGamePage() {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         
-        // Show notification to all participants
-        const notificationMessage = '🎯 Tournament has started! The bracket is now visible to all participants.'
-        setNotification({
-          type: 'success',
-          message: notificationMessage
-        });
-        
-        setTimeout(() => {
-          setNotification(null);
-        }, 5000)
-        
+        // Only show notification if this is the active session
+        if (!sessionConflict) {
+          const notificationMessage = '🎯 Tournament has started! The bracket is now visible to all participants.'
+          setNotification({
+            type: 'success',
+            message: notificationMessage
+          });
+          
+          setTimeout(() => {
+            setNotification(null);
+          }, 5000)
+        }
       } 
     }
 
@@ -188,36 +278,39 @@ export default function TournamentGamePage() {
           setTournamentData(data.tournament)
         }
         
-        if (data.reason === 'player_disconnected') {
-          setNotification({ 
-            message: 'A player disconnected in the tournament match.', 
-            type: 'info' 
-          })
-        } else {
-          const winnerName = data.winnerEmail === user?.email ? 'You' : 
-            (data.tournament?.participants.find((p: any) => p.email === data.winnerEmail)?.nickname || 'Unknown')
-          const loserName = data.loserEmail === user?.email ? 'You' : 
-            (data.tournament?.participants.find((p: any) => p.email === data.loserEmail)?.nickname || 'Unknown')
-          
-          if (data.winnerEmail === user?.email) {
+        // Only show notifications if this is the active session
+        if (!sessionConflict) {
+          if (data.reason === 'player_disconnected') {
             setNotification({ 
-              message: `Congratulations! You won against ${loserName}!`, 
-              type: 'success' 
-            })
-          } else if (data.loserEmail === user?.email) {
-            setNotification({ 
-              message: `You lost against ${winnerName}. Better luck next time!`, 
+              message: 'A player disconnected in the tournament match.', 
               type: 'info' 
             })
           } else {
-            setNotification({ 
-              message: `${winnerName} won against ${loserName}`, 
-              type: 'info' 
-            })
+            const winnerName = data.winnerEmail === user?.email ? 'You' : 
+              (data.tournament?.participants.find((p: any) => p.email === data.winnerEmail)?.nickname || 'Unknown')
+            const loserName = data.loserEmail === user?.email ? 'You' : 
+              (data.tournament?.participants.find((p: any) => p.email === data.loserEmail)?.nickname || 'Unknown')
+            
+            if (data.winnerEmail === user?.email) {
+              setNotification({ 
+                message: `Congratulations! You won against ${loserName}!`, 
+                type: 'success' 
+              })
+            } else if (data.loserEmail === user?.email) {
+              setNotification({ 
+                message: `You lost against ${winnerName}. Better luck next time!`, 
+                type: 'info' 
+              })
+            } else {
+              setNotification({ 
+                message: `${winnerName} won against ${loserName}`, 
+                type: 'info' 
+              })
+            }
           }
+          
+          setTimeout(() => setNotification(null), 5000)
         }
-        
-        setTimeout(() => setNotification(null), 5000)
       }
     }
 
@@ -225,6 +318,7 @@ export default function TournamentGamePage() {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         
+        // Show completion notification regardless of session conflict
         if (data.winnerEmail === user?.email) {
           setNotification({ 
             message: '🎉 Congratulations! You won the tournament!', 
@@ -241,18 +335,20 @@ export default function TournamentGamePage() {
       }
     }
 
+    // Rest of the existing event handlers...
     const handleTournamentParticipantLeft = (data: any) => {
       if (data.tournamentId === tournamentId) {
         setTournamentData(data.tournament)
         
-        const participantName = data.participant?.nickname || data.participantEmail
-        setNotification({ 
-          message: `${participantName} left the tournament.`, 
-          type: 'info' 
-        })
-        
-        // Clear notification after 3 seconds
-        setTimeout(() => setNotification(null), 3000)
+        if (!sessionConflict) {
+          const participantName = data.participant?.nickname || data.participantEmail
+          setNotification({ 
+            message: `${participantName} left the tournament.`, 
+            type: 'info' 
+          })
+          
+          setTimeout(() => setNotification(null), 3000)
+        }
       }
     }
 
@@ -263,7 +359,6 @@ export default function TournamentGamePage() {
           message: data.message || `Tournament "${data.tournamentName}" has been cancelled by the host.`
         });
         
-        // Redirect to play page after a short delay
         setTimeout(() => {
           router.push('/play');
         }, 3000);
@@ -276,21 +371,21 @@ export default function TournamentGamePage() {
         message: data.message || 'Redirecting to play page...'
       });
       
-      // Redirect to play page
       setTimeout(() => {
         router.push('/play');
       }, 2000);
     }
 
+    // Only handle match starting notifications if this is the active session
     const handleTournamentMatchGameStarted = (data: any) => {
       if (data.tournamentId === tournamentId && 
-          (data.hostEmail === user?.email || data.guestEmail === user?.email)) {
-        // Show notification that match is starting
+          (data.hostEmail === user?.email || data.guestEmail === user?.email) &&
+          !sessionConflict) { // Only handle if this is the active session
+        
         const opponentEmail = data.hostEmail === user?.email ? data.guestEmail : data.hostEmail;
         const opponentData = data.hostEmail === user?.email ? data.guestData : data.hostData;
         const opponentName = opponentData?.nickname || opponentData?.login || opponentEmail || 'your opponent';
         
-        // Determine player position for tournament consistency
         const isPlayer1 = data.hostEmail === user?.email;
         const positionText = isPlayer1 ? 'Player 1 (Left)' : 'Player 2 (Right)';
         
@@ -299,7 +394,6 @@ export default function TournamentGamePage() {
           type: 'success' 
         });
 
-        // Redirect to the game room with position info
         setTimeout(() => {
           router.push(`/play/game/${data.gameId}?tournament=true&position=${isPlayer1 ? 'player1' : 'player2'}`);
         }, 1500);
@@ -307,10 +401,9 @@ export default function TournamentGamePage() {
     }
 
     const handleTournamentNextMatchReady = (data: any) => {
-      if (data.tournamentId === tournamentId) {
+      if (data.tournamentId === tournamentId && !sessionConflict) {
         setTournamentData(data.tournament)
         
-        // Show notification about next match
         if (data.nextMatch) {
           const isInNextMatch = data.nextMatch.player1?.email === user?.email || 
                                data.nextMatch.player2?.email === user?.email
@@ -330,32 +423,37 @@ export default function TournamentGamePage() {
     }
 
     const handleStartCurrentRoundResponse = (data: any) => {
-      if (data.status === 'success') {
-        setNotification({
-          type: 'success',
-          message: data.message || '⚔️ Current round started! All matches are now active.'
-        });
-      } else {
-        setNotification({
-          type: 'error',
-          message: data.message || 'Failed to start current round.'
-        });
+      // Only handle if this is the host and active session
+      if (isHost && !sessionConflict) {
+        if (data.status === 'success') {
+          setNotification({
+            type: 'success',
+            message: data.message || '⚔️ Current round started! All matches are now active.'
+          });
+        } else {
+          setNotification({
+            type: 'error',
+            message: data.message || 'Failed to start current round.'
+          });
+        }
       }
     };
 
     const handleTournamentStartResponse = (data: any) => {
-      setIsStartingGame(false);
-      
-      if (data.status === 'success') {
-        setNotification({
-          type: 'success',
-          message: '🎯 Tournament started successfully! The bracket is now visible to all participants.'
-        });
-      } else {
-        setNotification({
-          type: 'error',
-          message: data.message
-        });
+      if (isHost && !sessionConflict) {
+        setIsStartingGame(false);
+        
+        if (data.status === 'success') {
+          setNotification({
+            type: 'success',
+            message: '🎯 Tournament started successfully! The bracket is now visible to all participants.'
+          });
+        } else {
+          setNotification({
+            type: 'error',
+            message: data.message
+          });
+        }
       }
     };
 
@@ -368,14 +466,13 @@ export default function TournamentGamePage() {
     };
 
     const handleGameFound = (data: any) => {
-      const gameId = data.gameId || data.gameRoomId; // Support both field names for compatibility
-      if (gameId) {
+      const gameId = data.gameId || data.gameRoomId;
+      if (gameId && !sessionConflict) {
         setNotification({
           type: 'success',
           message: `🎮 Your match is starting! Redirecting to game...`
         });
         
-        // Redirect to the game room
         setTimeout(() => {
           router.push(`/play/game/${gameId}`);
         }, 1500);
@@ -384,7 +481,7 @@ export default function TournamentGamePage() {
 
     const handleGameStarting = (data: any) => {
       const gameId = data.gameId || data.gameRoomId;
-      if (gameId) {
+      if (gameId && !sessionConflict) {
         setNotification({
           type: 'success',
           message: `🎮 Your tournament match is starting! Redirecting to game...`
@@ -396,49 +493,50 @@ export default function TournamentGamePage() {
 
     const handleTournamentRoundStarted = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        // Update tournament data
         if (data.tournament) {
           setTournamentData(data.tournament);
         }
         
-        setNotification({
-          type: 'success',
-          message: data.message || `⚔️ Round ${data.round + 1} has started!`
-        });
-        
-        setTimeout(() => setNotification(null), 5000);
+        if (!sessionConflict) {
+          setNotification({
+            type: 'success',
+            message: data.message || `⚔️ Round ${data.round + 1} has started!`
+          });
+          
+          setTimeout(() => setNotification(null), 5000);
+        }
       }
     };
 
     const handleTournamentPlayerForfeited = (data: any) => {
       if (data.tournamentId === tournamentId) {
-        // Update tournament data
         if (data.tournament) {
           setTournamentData(data.tournament)
         }
         
-        const forfeitedPlayerName = data.forfeitedPlayer?.nickname || 'A player'
-        const advancingPlayerName = data.advancingPlayer?.nickname || 'opponent'
-        
-        if (data.forfeitedPlayer?.email === user?.email) {
-          setNotification({
-            message: '❌ You have forfeited the tournament match.',
-            type: 'error'
-          })
-        } else if (data.advancingPlayer?.email === user?.email) {
-          setNotification({
-            message: `🎉 Your opponent ${forfeitedPlayerName} forfeited. You advance to the next round!`,
-            type: 'success'
-          })
-        } else {
-          setNotification({
-            message: `⚠️ ${forfeitedPlayerName} forfeited. ${advancingPlayerName} advances to the next round.`,
-            type: 'info'
-          })
+        if (!sessionConflict) {
+          const forfeitedPlayerName = data.forfeitedPlayer?.nickname || 'A player'
+          const advancingPlayerName = data.advancingPlayer?.nickname || 'opponent'
+          
+          if (data.forfeitedPlayer?.email === user?.email) {
+            setNotification({
+              message: '❌ You have forfeited the tournament match.',
+              type: 'error'
+            })
+          } else if (data.advancingPlayer?.email === user?.email) {
+            setNotification({
+              message: `🎉 Your opponent ${forfeitedPlayerName} forfeited. You advance to the next round!`,
+              type: 'success'
+            })
+          } else {
+            setNotification({
+              message: `⚠️ ${forfeitedPlayerName} forfeited. ${advancingPlayerName} advances to the next round.`,
+              type: 'info'
+            })
+          }
+          
+          setTimeout(() => setNotification(null), 5000)
         }
-        
-        // Clear notification after 5 seconds
-        setTimeout(() => setNotification(null), 5000)
       }
     }
 
@@ -449,7 +547,6 @@ export default function TournamentGamePage() {
           message: data.message || 'Left tournament successfully'
         });
         
-        // Redirect to play page after leaving
         setTimeout(() => {
           router.push('/play');
         }, 2000);
@@ -463,8 +560,11 @@ export default function TournamentGamePage() {
       setTimeout(() => setNotification(null), 2000);
     };
 
+    // Add all event listeners
     socket.on('TournamentJoinResponse', handleTournamentJoinResponse)
     socket.on('TournamentDataResponse', handleTournamentDataResponse)
+    socket.on('TournamentSessionConflict', handleTournamentSessionConflict)
+    socket.on('TournamentSessionTakenOver', handleTournamentSessionTakenOver)
     socket.on('TournamentPlayerJoined', handleTournamentPlayerJoined)
     socket.on('TournamentUpdated', handleTournamentUpdated)
     socket.on('TournamentInviteAccepted', handleTournamentInviteAccepted)
@@ -488,6 +588,8 @@ export default function TournamentGamePage() {
     return () => {
       socket.off('TournamentJoinResponse', handleTournamentJoinResponse)
       socket.off('TournamentDataResponse', handleTournamentDataResponse)
+      socket.off('TournamentSessionConflict', handleTournamentSessionConflict)
+      socket.off('TournamentSessionTakenOver', handleTournamentSessionTakenOver)
       socket.off('TournamentPlayerJoined', handleTournamentPlayerJoined)
       socket.off('TournamentUpdated', handleTournamentUpdated)
       socket.off('TournamentInviteAccepted', handleTournamentInviteAccepted)
@@ -508,10 +610,10 @@ export default function TournamentGamePage() {
       socket.off('TournamentPlayerForfeited', handleTournamentPlayerForfeited)
       socket.off('TournamentLeaveResponse', handleTournamentLeaveResponse)
     }
-  }, [socket, tournamentId, user?.email, router])
+  }, [socket, tournamentId, user?.email, router, isHost, sessionConflict])
 
   const handleStartTournament = () => {
-    if (!socket || !tournamentId || !user?.email) return;
+    if (!socket || !tournamentId || !user?.email || sessionConflict) return;
     
     setIsStartingGame(true);
     
@@ -530,13 +632,11 @@ export default function TournamentGamePage() {
   };
 
   const handleStartCurrentRound = () => {
-    if (!socket || !tournamentId || !user?.email) return;
+    if (!socket || !tournamentId || !user?.email || sessionConflict) return;
     
-    // Calculate the current round based on tournament data
     const currentRound = (() => {
       if (!tournamentData?.matches) return 0;
       
-      // Find the current round based on matches that are waiting or in progress
       const waitingMatches = tournamentData.matches.filter((m: any) => 
         m.state === MATCH_STATES.WAITING || m.state === MATCH_STATES.IN_PROGRESS
       );
@@ -545,7 +645,6 @@ export default function TournamentGamePage() {
         return Math.min(...waitingMatches.map((m: any) => m.round));
       }
       
-      // If no waiting matches, find the highest round with completed matches + 1
       const completedMatches = tournamentData.matches.filter((m: any) => 
         m.state === MATCH_STATES.PLAYER1_WIN || m.state === MATCH_STATES.PLAYER2_WIN
       );
@@ -563,6 +662,18 @@ export default function TournamentGamePage() {
       round: currentRound 
     });
   };
+
+  // ✨ NEW: Handle session conflict resolution
+  const handleResolveSessionConflict = (action: 'force_takeover' | 'cancel') => {
+    if (!socket || !tournamentId || !user?.email) return;
+    
+    socket.emit('ResolveTournamentSessionConflict', {
+      action,
+      tournamentId,
+      playerEmail: user.email
+    });
+  };
+
   useEffect(() => {
     if (!socket || !tournamentId || !user?.email || !tournamentData) return;
 
@@ -575,10 +686,10 @@ export default function TournamentGamePage() {
         const isLeavingToGame = newPath.includes('/play/game/');
         const isStayingInTournament = newPath.includes(`/play/tournament/${tournamentId}`);
         const isGoingToPlay = newPath === '/play';
-        const isInternalRoute = newPath.startsWith('/play/') || newPath.startsWith('/another-internal-route/'); // Add your internal routes here
+        const isInternalRoute = newPath.startsWith('/play/') || newPath.startsWith('/another-internal-route/');
         
         if (!isLeavingToGame && !isStayingInTournament && !isGoingToPlay && !isInternalRoute) {
-          if (isHost && tournamentData?.status === 'lobby') {
+          if (isHost && tournamentData?.status === 'lobby' && !sessionConflict) {
             socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
           }
         }
@@ -587,12 +698,12 @@ export default function TournamentGamePage() {
     };
 
     const handleBeforeUnload = () => {
-      if (isHost && tournamentData?.status === 'lobby') {
+      if (isHost && tournamentData?.status === 'lobby' && !sessionConflict) {
         socket.emit('CancelTournament', { tournamentId, hostEmail: user.email });
       }
     };
 
-    if (isHost && tournamentData?.status === 'lobby') {
+    if (isHost && tournamentData?.status === 'lobby' && !sessionConflict) {
       window.addEventListener('popstate', handleRouteChange);
       window.addEventListener('beforeunload', handleBeforeUnload);
 
@@ -600,11 +711,11 @@ export default function TournamentGamePage() {
       const originalReplaceState = history.replaceState;
 
       history.pushState = function(...args) {
-        originalPushState.apply(history, args);
+        originalPushState.apply(history, arguments);
         handleRouteChange();
       };
       history.replaceState = function(...args) {
-        originalReplaceState.apply(history, args);
+        originalReplaceState.apply(history, arguments);
         handleRouteChange();
       };
 
@@ -615,16 +726,14 @@ export default function TournamentGamePage() {
         history.replaceState = originalReplaceState;
       };
     }
-  }, [socket, tournamentId, user?.email, isHost, tournamentData]);
+  }, [socket, tournamentId, user?.email, isHost, tournamentData, sessionConflict]);
 
   const handleCancelTournament = () => {
-    if (!socket || !tournamentId || !isHost) return;
+    if (!socket || !tournamentId || !isHost || sessionConflict) return;
     
     socket.emit('CancelTournament', { tournamentId, hostEmail: user?.email });
     setNotification({ message: 'Canceling tournament...', type: 'info' });
   }
-
-  
 
   // Loading state
   if (!authorizationChecked) {
@@ -655,6 +764,28 @@ export default function TournamentGamePage() {
     )
   }
 
+  // ✨ NEW: Session conflict resolution UI
+  if (sessionConflict && conflictType === 'tournament_active_elsewhere') {
+    return (
+      <div className="flex items-center justify-center min-h-screen ">
+        <div className="text-center max-w-md">
+          <h2 className="text-white text-2xl font-bold mb-4">Tournament Session Conflict</h2>
+          <p className="text-gray-300 mb-6">
+            This tournament is already active in another browser or tab. 
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={() => router.push('/play')}
+              className="w-full bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              Back to Play
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Tournament lobby or bracket view
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
@@ -666,6 +797,15 @@ export default function TournamentGamePage() {
             notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
           }`}>
             {notification.message}
+          </div>
+        )}
+
+        {/* ✨ NEW: Session conflict banner */}
+        {sessionConflict && (
+          <div className="fixed top-16 right-4 z-40 p-3 bg-yellow-600 text-white rounded-lg shadow-lg max-w-sm">
+            <p className="text-sm">
+              ⚠️ This tournament is active in another session. You're in view-only mode.
+            </p>
           </div>
         )}
 
@@ -681,7 +821,7 @@ export default function TournamentGamePage() {
           </div>
         </div>
 
-        {/* Tournament Bracket - Show to all participants immediately */}
+        {/* Tournament Bracket */}
         <div className="bg-[#1a1d23] rounded-lg p-6 border border-gray-700/50">
           <h2 className="text-2xl font-semibold text-white mb-6">Tournament Bracket</h2>
           
@@ -728,7 +868,6 @@ export default function TournamentGamePage() {
                    'Completed'}
                 </span>
                 
-                {/* Only show waiting message when tournament is in lobby and not full */}
                 {tournamentData?.status === 'lobby' && tournamentData?.participants?.length < (tournamentData?.size || 0) && (
                   <span className="text-yellow-400 text-sm">
                     Waiting for {tournamentData?.size - tournamentData?.participants?.length} more players...
@@ -736,8 +875,8 @@ export default function TournamentGamePage() {
                 )}
               </div>
               
-              {/* Host Controls */}
-              {isHost && tournamentData?.status === 'lobby' && tournamentData?.participants?.length === tournamentData?.size && (
+              {/* Host Controls - Only show if this is the active session */}
+              {isHost && !sessionConflict && tournamentData?.status === 'lobby' && tournamentData?.participants?.length === tournamentData?.size && (
                 <button
                   onClick={handleStartTournament}
                   disabled={isStartingGame}
@@ -747,7 +886,7 @@ export default function TournamentGamePage() {
                 </button>
             )}
             
-              {isHost && tournamentData?.status === 'in_progress' && (
+              {isHost && !sessionConflict && tournamentData?.status === 'in_progress' && (
                 <div className="flex gap-2">
                   <button
                     onClick={handleStartCurrentRound}
@@ -765,7 +904,9 @@ export default function TournamentGamePage() {
                 <p className="text-gray-300 text-sm">
                   {tournamentData.participants.find(p => p.email === user?.email)?.status === 'eliminated' 
                     ? '❌ You have been eliminated from the tournament. You can still watch the bracket progress.'
-                    : '⏳ You are in the tournament room. The host will start your round when ready. You will be automatically moved to your match when it begins.'
+                    : sessionConflict 
+                      ? '👁️ You are viewing the tournament. Your active session is in another browser/tab.'
+                      : '⏳ You are in the tournament room. The host will start your round when ready. You will be automatically moved to your match when it begins.'
                   }
                 </p>
               </div>
@@ -775,16 +916,19 @@ export default function TournamentGamePage() {
             {!isHost && tournamentData?.status === 'lobby' && (
               <div className="mt-4 p-3 bg-[#1a1d23] rounded-lg border border-gray-600">
                 <p className="text-gray-300 text-sm">
-                  🎮 You are in the tournament room. The host will start the tournament when all players have joined.
-                  {tournamentData?.participants?.length < tournamentData?.size && 
-                    ` Waiting for ${tournamentData?.size - tournamentData?.participants?.length} more players...`
+                  {sessionConflict 
+                    ? '👁️ You are viewing the tournament lobby. Your active session is in another browser/tab.'
+                    : `🎮 You are in the tournament room. The host will start the tournament when all players have joined.
+                      ${tournamentData?.participants?.length < tournamentData?.size && 
+                        ` Waiting for ${tournamentData?.size - tournamentData?.participants?.length} more players...`
+                      }`
                   }
                 </p>
               </div>
             )}
             
-            {/* Cancel Tournament Button - Only show when tournament is in lobby */}
-            {isHost && tournamentData?.status === 'lobby' && (
+            {/* Cancel Tournament Button - Only show for active host session */}
+            {isHost && !sessionConflict && tournamentData?.status === 'lobby' && (
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={handleCancelTournament}
@@ -796,9 +940,8 @@ export default function TournamentGamePage() {
             )}
           </div>
             
-            {/* Tournament Bracket Component */}
+          {/* Tournament Bracket Component */}
           {tournamentData?.status === 'in_progress' || tournamentData?.status === 'completed' ? (
-            // Show bracket when tournament is in progress or completed
             tournamentData?.matches && tournamentData.matches.length > 0 ? (
               <div className="overflow-x-auto">
                 <TournamentBracket
@@ -806,14 +949,12 @@ export default function TournamentGamePage() {
                   tournamentSize={tournamentData.size}
                   matches={tournamentData.matches}
                   currentRound={(() => {
-                    // Find the current round based on matches that are waiting or in progress
                     const waitingMatches = tournamentData.matches.filter((m: any) => 
                       m.state === MATCH_STATES.WAITING || m.state === MATCH_STATES.IN_PROGRESS
                     )
                     if (waitingMatches.length > 0) {
                       return Math.min(...waitingMatches.map((m: any) => m.round))
                     }
-                    // If no waiting matches, find the highest round with completed matches
                     const completedMatches = tournamentData.matches.filter((m: any) => 
                       m.state === MATCH_STATES.PLAYER1_WIN || m.state === MATCH_STATES.PLAYER2_WIN
                     )
@@ -823,7 +964,7 @@ export default function TournamentGamePage() {
                     return 0
                   })()}
                   onMatchUpdate={() => {}}
-                  onPlayMatch={null} // Disable match clicking for participants
+                  onPlayMatch={null}
                 />
               </div>
             ) : (

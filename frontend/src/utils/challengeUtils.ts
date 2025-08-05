@@ -24,7 +24,26 @@ const activeInvitations = new Map<string, {
   inviteKey: string
 }>()
 
-// Set up global event handlers once
+export const getInvitedPlayersEmails = (userEmail: string): string[] => {
+  const invitedEmails: string[] = []
+  
+  for (const [gameId, invitation] of activeInvitations.entries()) {
+    if (invitation.user.email === userEmail) {
+      invitedEmails.push(invitation.player.email)
+    }
+  }
+  
+  return invitedEmails
+}
+
+export const isPlayerInvited = (userEmail: string, playerEmail: string): boolean => {
+  const inviteKey = `${userEmail}:${playerEmail}`
+  return pendingInvitations.has(inviteKey) || 
+         Array.from(activeInvitations.values()).some(
+           invitation => invitation.user.email === userEmail && 
+                        invitation.player.email === playerEmail
+         )
+}
 const setupGlobalEventHandlers = (socket: any) => {
   if (globalEventHandlersSetup) return
 
@@ -49,7 +68,10 @@ const setupGlobalEventHandlers = (socket: any) => {
           }
         } else if (data.status === 'error') {
           toast.warning(data.message)
-          cleanupInvitation(gameId)
+          
+          if (!data.message.includes('already sent an invitation')) {
+            cleanupInvitation(gameId)
+          }
         }
         break
       }
