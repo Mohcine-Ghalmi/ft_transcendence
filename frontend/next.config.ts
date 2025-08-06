@@ -41,6 +41,26 @@ const nextConfig: NextConfig = {
         source: '/api/game-service/:path*',
         destination: `${process.env.GAME_BACKEND_URL}/api/game-service/:path*`,
       },
+
+      // auth routes - Google OAuth
+      {
+        source: '/login/google',
+        destination: `${process.env.USER_BACKEND_URL}/login/google`,
+      },
+      {
+        source: '/login/google/callback',
+        destination: `${process.env.USER_BACKEND_URL}/login/google/callback`,
+      },
+
+      // auth routes - 42 OAuth
+      {
+        source: '/login/42',
+        destination: `${process.env.USER_BACKEND_URL}/login/42`,
+      },
+      {
+        source: '/login/42/callback',
+        destination: `${process.env.USER_BACKEND_URL}/login/42/callback`,
+      },
     ]
   },
 }

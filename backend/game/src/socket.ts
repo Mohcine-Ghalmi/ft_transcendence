@@ -100,7 +100,7 @@ export async function setupSocketIO(server: FastifyInstance) {
       handleGameSocket(socket, io)
 
       socket.on('disconnect', async () => {
-        if (me.userEmail) {
+        if (me.email) {
           await removeSocketId(me.email, socket.id, 'sockets')
         }
       })

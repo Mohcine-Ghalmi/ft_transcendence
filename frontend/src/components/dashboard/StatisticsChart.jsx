@@ -31,21 +31,25 @@ export const StatisticsChart = ({
     return () => window.removeEventListener('resize', updateSize)
   }, [])
 
-  const maxValue = Math.max(
-    ...chartData.map((item) => Math.max(item.wins, item.losses))
-  )
+  const maxValue =
+    chartData.length > 0
+      ? Math.max(
+          ...chartData.map((item) => Math.max(item.wins || 0, item.losses || 0))
+        )
+      : 1
 
   const generatePath = (data, width, height, key) => {
-    if (data?.length === 0) return ''
+    if (!data || data.length === 0) return ''
 
     const padding = 20
     const chartWidth = width - padding * 2
     const chartHeight = height - padding
 
     const points = data.map((item, index) => {
+      const value = item[key] || 0
       const x = padding + index * (chartWidth / (data.length - 1))
-      const y = height - padding - (item[key] / maxValue) * chartHeight
-      return `${x} ${y}`
+      const y = height - padding - (value / maxValue) * chartHeight
+      return `${x} ${isNaN(y) ? height - padding : y}`
     })
 
     let path = `M ${points[0]}`
@@ -60,8 +64,13 @@ export const StatisticsChart = ({
   }
 
   const { width, height } = dimensions
-  const winsPath = generatePath(chartData, width, height, 'wins')
-  const lossesPath = generatePath(chartData, width, height, 'losses')
+  const hasValidData = chartData && chartData.length > 0
+  const winsPath = hasValidData
+    ? generatePath(chartData, width, height, 'wins')
+    : ''
+  const lossesPath = hasValidData
+    ? generatePath(chartData, width, height, 'losses')
+    : ''
 
   return (
     <div
@@ -83,67 +92,84 @@ export const StatisticsChart = ({
           className="h-16 sm:h-20 lg:h-24 xl:h-28 2xl:h-32 mb-3 sm:mb-4 relative"
           style={{ height: `${height}px` }}
         >
-          <svg
-            className="w-full h-full"
-            viewBox={`0 0 ${width} ${height}`}
-            width={width}
-            height={height}
-            preserveAspectRatio="none"
-          >
-            <path
-              d={winsPath}
-              stroke="#3B82F6"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            {chartType !== 'bar' && (
+          {hasValidData ? (
+            <svg
+              className="w-full h-full"
+              viewBox={`0 0 ${width} ${height}`}
+              width={width}
+              height={height}
+              preserveAspectRatio="none"
+            >
               <path
-                d={lossesPath}
-                stroke="#EF4444"
+                d={winsPath}
+                stroke="#3B82F6"
                 strokeWidth="2"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-            )}
-          </svg>
+              {chartType !== 'bar' && (
+                <path
+                  d={lossesPath}
+                  stroke="#EF4444"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+            </svg>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
+              No data available
+            </div>
+          )}
         </div>
       ) : (
         <div
           className="h-16 sm:h-20 lg:h-24 xl:h-28 2xl:h-32 flex items-end justify-between gap-1 overflow-hidden"
           style={{ height: `${height}px` }}
         >
-          {chartData.map((item, index) => {
-            const total = item.wins + item.losses
-            return (
-              <div
-                key={index}
-                className="flex-1 flex flex-col items-center gap-1"
-              >
+          {hasValidData ? (
+            chartData.map((item, index) => {
+              const total = (item.wins || 0) + (item.losses || 0)
+              const maxVal = maxValue || 1
+              return (
                 <div
-                  className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-sm"
-                  style={{
-                    height: `${Math.max(
-                      (total / maxValue) * height - 20,
-                      4
-                    )}px`,
-                    minHeight: '4px',
-                  }}
-                />
-              </div>
-            )
-          })}
+                  key={index}
+                  className="flex-1 flex flex-col items-center gap-1"
+                >
+                  <div
+                    className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-sm"
+                    style={{
+                      height: `${Math.max(
+                        (total / maxVal) * height - 20,
+                        4
+                      )}px`,
+                      minHeight: '4px',
+                    }}
+                  />
+                </div>
+              )
+            })
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
+              No data available
+            </div>
+          )}
         </div>
       )}
 
       <div className="flex justify-between text-xs sm:text-sm lg:text-base xl:text-lg text-gray-400">
-        {chartData.map((item, index) => (
-          <span key={index} className="truncate">
-            {item.label}
-          </span>
-        ))}
+        {hasValidData ? (
+          chartData.map((item, index) => (
+            <span key={index} className="truncate">
+              {item.label || `Item ${index + 1}`}
+            </span>
+          ))
+        ) : (
+          <span className="text-center w-full">No labels available</span>
+        )}
       </div>
     </div>
   )

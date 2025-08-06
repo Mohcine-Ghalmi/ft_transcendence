@@ -54,23 +54,35 @@ interface UserState {
   socketConnected: boolean
   connectSocket: () => void
   disconnectSocket: () => void
+  forceDisconnect: () => void
+  isGameSocketConnected: () => boolean
 }
 
 export const useGameStore = create<UserState>()((set, get) => ({
   socketConnected: false,
 
   connectSocket: () => {
-    if (gameSocketInstance?.connected) return
-    const { user } = useAuthStore.getState()
+    if (gameSocketInstance?.connected) {
+      return
+    }
 
-    if (!user) return
+    const { user } = useAuthStore.getState()
+    if (!user) {
+      return
+    }
 
     if (gameSocketInstance) {
+      gameSocketInstance.removeAllListeners()
       gameSocketInstance.off('connect')
       gameSocketInstance.off('disconnect')
       gameSocketInstance.off('connect_error')
+      gameSocketInstance.off('reconnect')
+      gameSocketInstance.off('reconnecting')
+      gameSocketInstance.off('reconnect_error')
+      gameSocketInstance.off('reconnect_failed')
       gameSocketInstance.off('getOnlineUsers')
       gameSocketInstance.disconnect()
+      gameSocketInstance = null
     }
     const cryptedMail = CryptoJs.AES.encrypt(
       user.email,
@@ -80,7 +92,13 @@ export const useGameStore = create<UserState>()((set, get) => ({
     gameSocketInstance = io('/', {
       path: '/game-service/socket.io',
       withCredentials: true,
-      reconnection: false,
+      reconnection: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 60000,
+      forceNew: true,
+      transports: ['websocket', 'polling'],
       query: { cryptedMail },
     })
 
@@ -88,12 +106,25 @@ export const useGameStore = create<UserState>()((set, get) => ({
       set({ socketConnected: true })
     }
 
-    const onDisconnect = () => {
+    const onDisconnect = (reason: string) => {
       set({ socketConnected: false })
     }
 
     const onConnectError = (err: Error) => {
       set({ socketConnected: false })
+    }
+
+    const onReconnect = (attemptNumber: number) => {
+      set({ socketConnected: true })
+    }
+
+    const onReconnecting = (attemptNumber: number) => {}
+
+    const onReconnectError = (err: Error) => {}
+
+    const onReconnectFailed = () => {
+      set({ socketConnected: false })
+      toast.error('Unable to connect to game service. Please refresh the page.')
     }
 
     const onaddFriendResponse = (data: any) => {
@@ -161,32 +192,63 @@ export const useGameStore = create<UserState>()((set, get) => ({
     gameSocketInstance.on('connect', onConnect)
     gameSocketInstance.on('disconnect', onDisconnect)
     gameSocketInstance.on('connect_error', onConnectError)
+    gameSocketInstance.on('reconnect', onReconnect)
+    gameSocketInstance.on('reconnecting', onReconnecting)
+    gameSocketInstance.on('reconnect_error', onReconnectError)
+    gameSocketInstance.on('reconnect_failed', onReconnectFailed)
     //
     gameSocketInstance.on('friendResponse', onaddFriendResponse)
     gameSocketInstance.on('blockResponse', onBlockResponse)
 
     //
     gameSocketInstance.on('error-in-connection', (data) => {
+      console.error('Game socket error-in-connection:', data.message)
       toast.error(data.message || 'Socket connection error')
-      get().disconnectSocket()
+      get().forceDisconnect()
     })
   },
 
   disconnectSocket: () => {
     if (gameSocketInstance) {
+      set({ socketConnected: false })
+
       gameSocketInstance.off('connect')
       gameSocketInstance.off('disconnect')
       gameSocketInstance.off('connect_error')
+      gameSocketInstance.off('reconnect')
+      gameSocketInstance.off('reconnecting')
+      gameSocketInstance.off('reconnect_error')
+      gameSocketInstance.off('reconnect_failed')
       gameSocketInstance.off('error-in-connection')
       gameSocketInstance.off('InviteToGameResponse')
-
       gameSocketInstance.off('searchResults')
       gameSocketInstance.off('friendResponse')
+      gameSocketInstance.off('blockResponse')
+
+      gameSocketInstance.removeAllListeners()
+      gameSocketInstance.disconnect()
+
+      gameSocketInstance = null
+    }
+  },
+
+  forceDisconnect: () => {
+    if (gameSocketInstance) {
+      set({ socketConnected: false })
+
+      gameSocketInstance.io.reconnection(false)
+
+      gameSocketInstance.removeAllListeners()
 
       gameSocketInstance.disconnect()
+
       gameSocketInstance = null
-      set({ socketConnected: false })
+      console.log('Game socket force disconnected and cleared')
     }
+  },
+
+  isGameSocketConnected: () => {
+    return gameSocketInstance?.connected || false
   },
 }))
 

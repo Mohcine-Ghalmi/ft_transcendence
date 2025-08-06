@@ -100,6 +100,8 @@ interface UserState {
   logout: () => Promise<void>
   connectSocket: () => void
   disconnectSocket: () => void
+  forceDisconnect: () => void
+  isAuthSocketConnected: () => boolean
   notifications: any
   setNotifations: (data: any) => void
   seachedUsers: any
@@ -304,18 +306,27 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   connectSocket: () => {
-    if (socketInstance?.connected) return
-    const { user } = get()
+    console.log('Attempting to connect auth socket...')
+    if (socketInstance?.connected) {
+      console.log('Auth socket already connected')
+      return
+    }
 
-    if (!user) return
+    const { user } = get()
+    if (!user) {
+      console.log('No user found, cannot connect auth socket')
+      return
+    }
 
     if (socketInstance) {
+      socketInstance.removeAllListeners()
       socketInstance.off('connect')
       socketInstance.off('disconnect')
       socketInstance.off('connect_error')
       socketInstance.off('getOnlineUsers')
-      useGameStore.getState().disconnectSocket()
+      useGameStore.getState().forceDisconnect()
       socketInstance.disconnect()
+      socketInstance = null
     }
     const cryptedMail = CryptoJs.AES.encrypt(
       user.email,
@@ -325,7 +336,13 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     socketInstance = io('/', {
       path: '/user-service/socket.io',
       withCredentials: true,
-      reconnection: false,
+      reconnection: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 60000,
+      forceNew: true,
+      transports: ['websocket', 'polling'],
       query: { cryptedMail },
     })
 
@@ -338,12 +355,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       set({ onlineUsers })
     }
 
-    const onDisconnect = () => {
+    const onDisconnect = (reason: string) => {
       set({ socketConnected: false })
     }
 
     const onConnectError = (err: Error) => {
-      console.log('Socket connection error:', err.message)
       set({ socketConnected: false })
       get().logout()
     }
@@ -515,15 +531,19 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     //
     socketInstance.on('newNotification', onNewNotification)
     socketInstance.on('error-in-connection', (data) => {
+      console.error('Auth socket error-in-connection:', data.message)
       toast.error(data.message || 'Socket connection error')
-      get().disconnectSocket()
+      get().forceDisconnect()
       get().logout()
     })
   },
 
   disconnectSocket: () => {
-    useGameStore.getState().disconnectSocket()
+    useGameStore.getState().forceDisconnect()
+
     if (socketInstance) {
+      set({ socketConnected: false })
+
       socketInstance.off('connect')
       socketInstance.off('disconnect')
       socketInstance.off('connect_error')
@@ -531,14 +551,37 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.off('newNotification')
       socketInstance.off('error-in-connection')
       socketInstance.off('InviteToGameResponse')
-
       socketInstance.off('searchResults')
       socketInstance.off('friendResponse')
+      socketInstance.off('blockResponse')
+
+      socketInstance.removeAllListeners()
+      socketInstance.disconnect()
+
+      socketInstance = null
+      console.log('Auth socket disconnected and cleared')
+    }
+  },
+
+  forceDisconnect: () => {
+    console.log('Force disconnecting auth socket...')
+    useGameStore.getState().forceDisconnect()
+
+    if (socketInstance) {
+      set({ socketConnected: false })
+
+      socketInstance.io.reconnection(false)
+
+      socketInstance.removeAllListeners()
 
       socketInstance.disconnect()
+
       socketInstance = null
-      set({ socketConnected: false })
     }
+  },
+
+  isAuthSocketConnected: () => {
+    return socketInstance?.connected || false
   },
 
   hasStoredToken: () => {

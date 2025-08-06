@@ -221,7 +221,15 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     chatSocket = io('/chat', {
       path: '/chat-service/socket.io',
       withCredentials: true,
-      reconnection: false,
+      reconnection: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 60000,
+      forceNew: false,
+      upgrade: true,
+      rememberUpgrade: true,
+      transports: ['websocket', 'polling'],
       query: { cryptedMail },
     })
 

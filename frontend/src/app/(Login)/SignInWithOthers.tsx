@@ -45,7 +45,7 @@ const SignInWithOthers = () => {
 
     try {
       setIsProcessing(true)
-      router.replace(`${process.env.NEXT_PUBLIC_BACKEND_ALL}/login/google`)
+      router.replace('/login/google')
     } catch (err) {
       toast.error('Google login failed')
       setIsProcessing(false)
@@ -57,7 +57,7 @@ const SignInWithOthers = () => {
 
     try {
       setIsProcessing(true)
-      router.replace(`${process.env.NEXT_PUBLIC_BACKEND_ALL}/login/42`)
+      router.replace('/login/42')
     } catch (err) {
       toast.error('42 School login failed')
       setIsProcessing(false)
