@@ -306,7 +306,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   connectSocket: () => {
-    console.log('Attempting to connect auth socket...')
     if (socketInstance?.connected) {
       console.log('Auth socket already connected')
       return
@@ -427,9 +426,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
                       : tmp
                   )
                 : []
-            console.log('searchedUsersGlobal : ', searchedUsersGlobal)
 
-            console.log('updatedUsers : ', updatedUsers)
             setRandomFriendsSuggestion(updatedUsersRandom)
             setSearchedUsersGlobal(updatedUsers)
           }
@@ -445,43 +442,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
     const onsearchResults = (seachedUsers: any) => {
       set({ seachedUsers })
-    }
-
-    const onaddFriendResponse = (data: any) => {
-      if (data.status === 'error') {
-        toast.warning(data.message)
-      } else {
-        if (data?.desc) {
-          const {
-            searchedUsersGlobal,
-            setSearchedUsersGlobal,
-            randomFriendsSuggestions,
-            setRandomFriendsSuggestion,
-          } = useSearchStore.getState()
-
-          const updatedUsers =
-            searchedUsersGlobal.length > 0
-              ? searchedUsersGlobal.map((tmp) =>
-                  tmp.email === data.hisEmail
-                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-                    : tmp
-                )
-              : []
-
-          const updatedUsersRandom =
-            randomFriendsSuggestions.length > 0
-              ? randomFriendsSuggestions.map((tmp) =>
-                  tmp.email === data.hisEmail
-                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-                    : tmp
-                )
-              : []
-
-          setRandomFriendsSuggestion(updatedUsersRandom)
-          setSearchedUsersGlobal(updatedUsers)
-        }
-        toast.success(data.message)
-      }
     }
 
     const onBlockResponse = (data) => {
@@ -519,6 +479,34 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
     }
 
+    const onaddFriendResponse = (data: any) => {
+      if (data.status === 'error') {
+        toast.warning(data.message)
+      } else {
+        if (data?.desc) {
+          const { searchedUsersGlobal, setSearchedUsersGlobal } =
+            useSearchStore.getState()
+          const { randomFriendsSuggestions, setRandomFriendsSuggestion } =
+            useSearchStore.getState()
+
+          const updatedUsers = searchedUsersGlobal.map((tmp) =>
+            tmp.email === data.hisEmail
+              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+              : tmp
+          )
+          const updatedUsersRandom = randomFriendsSuggestions.map((tmp) =>
+            tmp.email === data.hisEmail
+              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+              : tmp
+          )
+
+          setRandomFriendsSuggestion(updatedUsersRandom)
+          setSearchedUsersGlobal(updatedUsers)
+        }
+        toast.success(data.message)
+      }
+    }
+
     socketInstance.on('connect', onConnect)
     socketInstance.on('getOnlineUsers', onOnlineUsers)
     socketInstance.on('disconnect', onDisconnect)
@@ -526,6 +514,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     //
     socketInstance.on('searchResults', onsearchResults)
     socketInstance.on('friendResponse', onaddFriendResponse)
+
     socketInstance.on('blockResponse', onBlockResponse)
 
     //

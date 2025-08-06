@@ -127,34 +127,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
       toast.error('Unable to connect to game service. Please refresh the page.')
     }
 
-    const onaddFriendResponse = (data: any) => {
-      if (data.status === 'error') {
-        toast.warning(data.message)
-      } else {
-        if (data?.desc) {
-          const { searchedUsersGlobal, setSearchedUsersGlobal } =
-            useSearchStore.getState()
-          const { randomFriendsSuggestions, setRandomFriendsSuggestion } =
-            useSearchStore.getState()
-
-          const updatedUsers = searchedUsersGlobal.map((tmp) =>
-            tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-              : tmp
-          )
-          const updatedUsersRandom = randomFriendsSuggestions.map((tmp) =>
-            tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-              : tmp
-          )
-
-          setRandomFriendsSuggestion(updatedUsersRandom)
-          setSearchedUsersGlobal(updatedUsers)
-        }
-        toast.success(data.message)
-      }
-    }
-
     const onBlockResponse = (data) => {
       if (data.status === 'error') {
         toast.warning(data.message)
@@ -197,7 +169,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
     gameSocketInstance.on('reconnect_error', onReconnectError)
     gameSocketInstance.on('reconnect_failed', onReconnectFailed)
     //
-    gameSocketInstance.on('friendResponse', onaddFriendResponse)
     gameSocketInstance.on('blockResponse', onBlockResponse)
 
     //
@@ -222,7 +193,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
       gameSocketInstance.off('error-in-connection')
       gameSocketInstance.off('InviteToGameResponse')
       gameSocketInstance.off('searchResults')
-      gameSocketInstance.off('friendResponse')
       gameSocketInstance.off('blockResponse')
 
       gameSocketInstance.removeAllListeners()

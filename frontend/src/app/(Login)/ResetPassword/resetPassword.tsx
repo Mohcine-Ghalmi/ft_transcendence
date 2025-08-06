@@ -65,7 +65,7 @@ export default function ResetPassword({ setShowRestpassword }) {
   return (
     <div className="w-full text-white absolute top-0 left-0 backdrop-blur-xl">
       {/* Main Content */}
-      <div className="flex items-center justify-center min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-80px)] px-4 sm:px-6 py-8">
+      <div className="flex items-center justify-center min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-8vh)] px-4 sm:px-6 py-8">
         <div className="relative bg-black/20 backdrop-blur-3xl rounded-2xl p-4 w-full max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <div className="absolute top-3 right-4 cursor-pointer">
             <Image

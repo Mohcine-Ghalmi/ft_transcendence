@@ -12,7 +12,7 @@ interface MatchmakingProps {
 const SessionConflictModal = ({
   isVisible,
   conflictType,
-  onResolve
+  onResolve,
 }: {
   isVisible: boolean
   conflictType: string
@@ -37,10 +37,10 @@ const SessionConflictModal = ({
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
       <div className="bg-[#1a1d23] rounded-lg p-8 border border-gray-700/50 max-w-md w-full mx-4">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white mb-4">Session Conflict</h2>
-          <p className="text-gray-300 mb-6">
-            {getConflictMessage()}
-          </p>
+          <h2 className="text-2xl font-bold text-white mb-4">
+            Session Conflict
+          </h2>
+          <p className="text-gray-300 mb-6">{getConflictMessage()}</p>
         </div>
         <div className="flex flex-col space-y-3">
           <button
@@ -69,7 +69,7 @@ const SessionConflictModal = ({
 //     if (isVisible) {
 //       setCountdown(3)
 //       setShouldComplete(false)
-      
+
 //       const timer = setInterval(() => {
 //         setCountdown((prev) => {
 //           if (prev <= 1) {
@@ -90,7 +90,7 @@ const SessionConflictModal = ({
 //       const timeoutId = setTimeout(() => {
 //         onComplete()
 //       }, 0)
-      
+
 //       return () => clearTimeout(timeoutId)
 //     }
 //   }, [shouldComplete, onComplete])
@@ -116,11 +116,7 @@ const SessionConflictModal = ({
 //   )
 // }
 
-const MatchmakingStatus = ({
-  status,
-}: {
-  status: string
-}) => {
+const MatchmakingStatus = ({ status }: { status: string }) => {
   return (
     <div className="text-center py-8">
       <div className="mb-4">
@@ -152,7 +148,7 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     loserName: string
   } | null>(null)
   const [roomPreparationCountdown, setRoomPreparationCountdown] = useState(5)
-  
+
   const isActiveRef = useRef(true)
   const currentStatusRef = useRef(matchmakingStatus)
   const sessionIdRef = useRef<string>(Date.now().toString())
@@ -171,106 +167,112 @@ export default function Matchmaking({ onBack }: MatchmakingProps) {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
 
-useEffect(() => {
-  if (typeof window === 'undefined') return
+    const currentPath = window.location.pathname
 
-  const currentPath = window.location.pathname
-  
-  const handleRouteChange = () => {
-    const newPath = window.location.pathname
-    
-    if (newPath !== currentPath) {
-      if (matchmakingStatus === 'waiting_to_start' && gameId) {
+    const handleRouteChange = () => {
+      const newPath = window.location.pathname
+
+      if (newPath !== currentPath) {
+        if (matchmakingStatus === 'waiting_to_start' && gameId) {
+          if (socket && user?.email) {
+            socket.emit('PlayerLeftBeforeGameStart', {
+              gameId: gameId,
+              leaver: user.email,
+            })
+          }
+        } else if (matchmakingStatus === 'in_game' && gameId) {
+          if (socket && user?.email) {
+            socket.emit('LeaveGame', {
+              gameId,
+              playerEmail: user.email,
+            })
+          }
+        } else if (
+          matchmakingStatus === 'searching' ||
+          matchmakingStatus === 'preparing'
+        ) {
+          if (socket && user?.email) {
+            socket.emit('LeaveMatchmaking', { email: user.email })
+          }
+        }
+      }
+    }
+
+    const handlePopState = () => {
+      handleRouteChange()
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    const originalPushState = history.pushState
+    const originalReplaceState = history.replaceState
+
+    history.pushState = function (...args) {
+      originalPushState.apply(history, args)
+      setTimeout(handleRouteChange, 0)
+    }
+
+    history.replaceState = function (...args) {
+      originalReplaceState.apply(history, args)
+      setTimeout(handleRouteChange, 0)
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+
+      // Restore original methods
+      history.pushState = originalPushState
+      history.replaceState = originalReplaceState
+    }
+  }, [matchmakingStatus, gameId, socket, user])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (
+        matchmakingStatus === 'preparing' ||
+        matchmakingStatus === 'searching'
+      ) {
         if (socket && user?.email) {
-          socket.emit('PlayerLeftBeforeGameStart', { 
-            gameId: gameId, 
-            leaver: user.email 
+          socket.emit('LeaveMatchmaking', { email: user.email })
+        }
+      } else if (matchmakingStatus === 'waiting_to_start' && gameId) {
+        e.preventDefault()
+        e.returnValue = 'Leaving now will result in a loss. Are you sure?'
+
+        if (socket && user?.email) {
+          socket.emit('PlayerLeftBeforeGameStart', {
+            gameId: gameId,
+            leaver: user.email,
           })
         }
+
+        return 'Leaving now will result in a loss. Are you sure?'
       } else if (matchmakingStatus === 'in_game' && gameId) {
+        e.preventDefault()
+        e.returnValue =
+          'Are you sure you want to leave the game? This will result in a loss.'
+
         if (socket && user?.email) {
           socket.emit('LeaveGame', {
             gameId,
             playerEmail: user.email,
           })
         }
-      } else if (matchmakingStatus === 'searching' || matchmakingStatus === 'preparing') {
-        if (socket && user?.email) {
-          socket.emit('LeaveMatchmaking', { email: user.email })
-        }
+
+        return 'Are you sure you want to leave the game? This will result in a loss.'
       }
     }
-  }
 
-  const handlePopState = () => {
-    handleRouteChange()
-  }
+    window.addEventListener('beforeunload', handleBeforeUnload)
 
-  window.addEventListener('popstate', handlePopState)
-  const originalPushState = history.pushState
-  const originalReplaceState = history.replaceState
-
-  history.pushState = function(...args) {
-    originalPushState.apply(history, args)
-    setTimeout(handleRouteChange, 0)
-  }
-
-  history.replaceState = function(...args) {
-    originalReplaceState.apply(history, args)
-    setTimeout(handleRouteChange, 0)
-  }
-
-  return () => {
-    window.removeEventListener('popstate', handlePopState)
-    
-    // Restore original methods
-    history.pushState = originalPushState
-    history.replaceState = originalReplaceState
-  }
-}, [matchmakingStatus, gameId, socket, user])
-
-useEffect(() => {
-  if (typeof window === 'undefined') return
-
-  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-    if (matchmakingStatus === 'preparing' || matchmakingStatus === 'searching') {
-      if (socket && user?.email) {
-        socket.emit('LeaveMatchmaking', { email: user.email })
-      }
-    } else if (matchmakingStatus === 'waiting_to_start' && gameId) {
-      e.preventDefault()
-      e.returnValue = 'Leaving now will result in a loss. Are you sure?'
-      
-      if (socket && user?.email) {
-        socket.emit('PlayerLeftBeforeGameStart', { 
-          gameId: gameId, 
-          leaver: user.email 
-        })
-      }
-      
-      return 'Leaving now will result in a loss. Are you sure?'
-    } else if (matchmakingStatus === 'in_game' && gameId) {
-      e.preventDefault()
-      e.returnValue = 'Are you sure you want to leave the game? This will result in a loss.'
-
-      if (socket && user?.email) {
-        socket.emit('LeaveGame', {
-          gameId,
-          playerEmail: user.email,
-        })
-      }
-
-      return 'Are you sure you want to leave the game? This will result in a loss.'
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }
-
-  window.addEventListener('beforeunload', handleBeforeUnload)
-
-  return () => {
-    window.removeEventListener('beforeunload', handleBeforeUnload)
-  }
-}, [matchmakingStatus, gameId, socket, user])
+  }, [matchmakingStatus, gameId, socket, user])
   const handleGameExit = () => {
     if (socket && gameId && user?.email) {
       if (matchmakingStatus === 'in_game') {
@@ -281,17 +283,19 @@ useEffect(() => {
       } else if (matchmakingStatus === 'searching') {
         socket.emit('LeaveMatchmaking', { email: user.email })
       } else if (matchmakingStatus === 'waiting_to_start') {
-        socket.emit('PlayerLeftBeforeGameStart', { 
-          gameId: gameId, 
-          leaver: user.email 
+        socket.emit('PlayerLeftBeforeGameStart', {
+          gameId: gameId,
+          leaver: user.email,
         })
       }
     }
   }
 
-  const handleSessionConflictResolve = (action: 'force_takeover' | 'cancel') => {
+  const handleSessionConflictResolve = (
+    action: 'force_takeover' | 'cancel'
+  ) => {
     setShowSessionConflict(false)
-    
+
     if (action === 'cancel') {
       onBack()
       return
@@ -300,7 +304,7 @@ useEffect(() => {
     if (socket && user?.email) {
       socket.emit('ResolveMatchmakingConflict', {
         action,
-        email: user.email
+        email: user.email,
       })
     }
   }
@@ -311,7 +315,7 @@ useEffect(() => {
     }
 
     setShowResultPopup(false)
-    
+
     if (pendingRedirect) {
       const { isWinner, winnerName, loserName } = pendingRedirect
       setMatchmakingStatus('idle')
@@ -320,7 +324,7 @@ useEffect(() => {
       setOpponent(null)
       setIsHost(false)
       setPendingRedirect(null)
-      
+
       if (isWinner) {
         router.push(
           `/play/result/win?winner=${encodeURIComponent(
@@ -398,7 +402,7 @@ useEffect(() => {
 
     const handleQueueStatusResponse = (data: any) => {
       if (!isActiveRef.current) return
-      
+
       if (data.status === 'success') {
         setQueuePosition(data.queuePosition || 0)
         setTotalInQueue(data.totalInQueue || 0)
@@ -431,7 +435,7 @@ useEffect(() => {
 
     const handleGameStarting = (data: any) => {
       if (!isActiveRef.current) return
-      
+
       setGameId(data.gameId)
       setMatchmakingStatus('in_game')
     }
@@ -444,8 +448,16 @@ useEffect(() => {
       setShowResultPopup(true)
       setPendingRedirect({
         isWinner: data.winner === user?.email,
-        winnerName: data.winnerName || (data.winner === user?.email ? (user?.username || user?.email || 'You') : 'Opponent'),
-        loserName: data.loserName || (data.loser === user?.email ? (user?.username || user?.email || 'You') : 'Opponent'),
+        winnerName:
+          data.winnerName ||
+          (data.winner === user?.email
+            ? user?.username || user?.email || 'You'
+            : 'Opponent'),
+        loserName:
+          data.loserName ||
+          (data.loser === user?.email
+            ? user?.username || user?.email || 'You'
+            : 'Opponent'),
       })
     }
 
@@ -462,7 +474,7 @@ useEffect(() => {
         setErrorMessage('Opponent disconnected before the game started.')
         setMatchmakingStatus('idle')
       }
-      
+
       setGameId(null)
       setMatchData(null)
       setOpponent(null)
@@ -487,7 +499,7 @@ useEffect(() => {
           }
         }, 3000)
       }
-      
+
       setMatchmakingStatus('idle')
       setGameId(null)
       setMatchData(null)
@@ -596,13 +608,13 @@ useEffect(() => {
         socket.emit('LeaveMatchmaking', { email: user.email })
       }
     }
-    
+
     setMatchmakingStatus('idle')
     setGameId(null)
     setMatchData(null)
     setOpponent(null)
     setIsHost(false)
-    
+
     setTimeout(() => {
       onBack()
     }, 100)
@@ -612,7 +624,7 @@ useEffect(() => {
     return (
       <div className="h-full text-white">
         {/* Main Content */}
-        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+        <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
           <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
             <PingPongGame
               player1={user}
@@ -635,7 +647,7 @@ useEffect(() => {
   }
 
   return (
-    <div className="h-full text-white flex flex-col items-center justify-center min-h-[calc(100vh-80px)]">
+    <div className="h-full text-white flex flex-col items-center justify-center min-h-[calc(100vh-8vh)]">
       {/* Main Content */}
       <div className="flex items-center justify-center w-full h-full px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl flex flex-col items-center justify-center">

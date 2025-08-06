@@ -56,10 +56,14 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
           message: 'User Not Found',
         })
 
-      const userSockets = await getSocketIds(invitedUser.email, 'sockets')
+      const [userSockets, mySockets] = await Promise.all([
+        getSocketIds(invitedUser.email, 'sockets'),
+        getSocketIds(me.email, 'sockets'),
+      ])
+
       const isAdded = addFriendRequest(myEmail, toEmail)
       isAdded
-        ? socket.emit('friendResponse', {
+        ? io.to(mySockets).emit('friendResponse', {
             status: 'success',
             desc: 'PENDING',
             message: 'Friend Request sent',
@@ -69,13 +73,13 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
             message: 'Failed to send Friend Request',
           })
 
-      if (isAdded && userSockets?.length)
+      if (isAdded && userSockets?.length) {
         io.to(userSockets).emit('newNotification', {
           type: 'friend_request',
           message: `You Recieved A friend request from ${me.login}`,
-          desc: 'PENDING',
           senderEmail: myEmail,
         })
+      }
     } catch (err: any) {
       server.log.error('addFriend : ', err.message)
       socket.emit('friendResponse', {
@@ -101,18 +105,22 @@ export function setupFriendsSocket(socket: Socket, io: Server) {
       if (changeFriendStatus(myEmail, inviter, 'ACCEPTED')) {
         socket.emit('friendResponse', {
           status: 'success',
-          desc: 'ACCEPTED',
           message: 'Friend Request Accepted',
         })
         const userSockets = await getSocketIds(inviter, 'sockets')
         if (userSockets)
-          io.to(userSockets).emit('newNotification', {
+          io.to(userSockets).emit('friendResponse', {
             status: 'success',
-            type: 'friend_request',
             message: `${myEmail} Accept Your Friend Request`,
             desc: 'ACCEPTED',
             hisEmail: myEmail,
           })
+        io.to(userSockets).emit('newNotification', {
+          status: 'success',
+          message: `${myEmail} Accept Your Friend Request`,
+          desc: 'ACCEPTED',
+          hisEmail: myEmail,
+        })
       } else {
         socket.emit('friendResponse', {
           status: 'error',

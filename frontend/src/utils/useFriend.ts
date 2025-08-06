@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useChatStore } from '@/(zustand)/useChatStore'
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import { useSearchStore } from '@/(zustand)/useSearchStore'
 
 export const useFriend = (user) => {
   const [status, setStatus] = useState('')
-  const { user: me } = useAuthStore()
+  const { setNotifations, notifications, user: me } = useAuthStore()
   const { setSelectedConversationId } = useChatStore()
   const router = useRouter()
 
@@ -37,7 +38,6 @@ export const useFriend = (user) => {
         break
 
       case 'ACCEPTED':
-        // Handle accepted state if needed
         // socketInstance.emit('removeFriend', user.email)
         // setStatus('')
         break

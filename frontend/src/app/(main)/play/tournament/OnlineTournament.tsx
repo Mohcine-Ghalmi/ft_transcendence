@@ -41,10 +41,11 @@ const OnlinePlayMode = ({
   participants: any[]
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
-  const participantEmails = new Set(participants.map(p => p.email || p.id))
-  const filteredPlayers = friends.filter((player) =>
-    player.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-    !participantEmails.has(player.email)
+  const participantEmails = new Set(participants.map((p) => p.email || p.id))
+  const filteredPlayers = friends.filter(
+    (player) =>
+      player.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      !participantEmails.has(player.email)
   )
   return (
     <div className="bg-[#0f1419] rounded-lg p-6 border border-[#2a2f3a]">
@@ -418,8 +419,8 @@ export default function OnlineTournament() {
   }
 
   const handleInvitePlayer = async (player: Player) => {
-    const isAlreadyParticipant = participants.some(p => 
-      p.email === player.email || p.id === player.email
+    const isAlreadyParticipant = participants.some(
+      (p) => p.email === player.email || p.id === player.email
     )
     if (participants.length >= tournamentSize || !tournamentId || !socket) {
       return
@@ -742,7 +743,6 @@ export default function OnlineTournament() {
       }
     }
 
-
     const handleStartCurrentRoundResponse = (data: any) => {
       if (data.status === 'error') {
         console.error('❌ Start current round failed:', data.message)
@@ -901,24 +901,33 @@ export default function OnlineTournament() {
     }
 
     const handleRouteChange = () => {
-      if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
-        const isHost = participants.some(p => 
-          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
-        );
-        
+      if (
+        tournamentState === 'lobby' &&
+        tournamentId &&
+        user?.email &&
+        socket
+      ) {
+        const isHost = participants.some(
+          (p) =>
+            (p.id === user.id ||
+              p.id === user.email ||
+              (p as any).email === user.email) &&
+            p.isHost
+        )
+
         if (isHost) {
           socket.emit('CancelTournament', {
             tournamentId,
-            hostEmail: user.email
-          });
+            hostEmail: user.email,
+          })
         } else {
           socket.emit('LeaveTournament', {
             tournamentId,
-            playerEmail: user.email
-          });
+            playerEmail: user.email,
+          })
         }
       }
-    };
+    }
 
     const isHost = participants.some(
       (p) =>
@@ -967,7 +976,7 @@ export default function OnlineTournament() {
 
   return (
     <div className="h-full w-full text-white">
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl">
           <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">
             {tournamentState === 'setup' ? 'Online Tournament' : tournamentName}

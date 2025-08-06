@@ -49,7 +49,7 @@ export default function ChooseYourGame() {
   }, [])
   return (
     <div className="h-full text-white">
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4 py-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4 py-4">
         <div className="w-full max-w-7xl">
           <h1 className="text-3xl sm:text-4xl font-bold text-center mb-8">
             Choose Your Game

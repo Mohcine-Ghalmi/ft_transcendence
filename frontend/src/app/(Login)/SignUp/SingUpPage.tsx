@@ -249,7 +249,7 @@ export default function Signup() {
       </header>
 
       {/* Main Content */}
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <h1 className="text-2xl md:text-3xl xl:text-5xl font-bold text-center mb-8">
             {currentStep === 1

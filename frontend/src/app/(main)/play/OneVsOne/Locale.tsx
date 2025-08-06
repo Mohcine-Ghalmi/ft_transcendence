@@ -205,14 +205,15 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
               window.location.href.includes('OneVsOne?mode=Online')
                 ? `/images/${player.avatar}`
                 : playerNumber === 2
-                  ? player.avatar?.startsWith('data:')
-                    ? player.avatar
-                    : (player.avatar === 'Default.avif' || player.avatar === 'Default.svg')
-                      ? `/avatar/${player.avatar}`
-                      : player.avatar?.startsWith('/')
-                        ? player.avatar
-                        : `/avatar/Default.avif`
-                  : `/images/${player.avatar}`
+                ? player.avatar?.startsWith('data:')
+                  ? player.avatar
+                  : player.avatar === 'Default.avif' ||
+                    player.avatar === 'Default.svg'
+                  ? `/avatar/${player.avatar}`
+                  : player.avatar?.startsWith('/')
+                  ? player.avatar
+                  : `/avatar/Default.avif`
+                : `/images/${player.avatar}`
             }
             alt={player.login}
             className="w-full h-full rounded-full object-cover border-4 border-[#4a5568]"
@@ -226,7 +227,6 @@ export const PlayerCard = ({ player, playerNumber, onAddPlayer = null }) => {
     </div>
   )
 }
-
 
 export default function Local1v1() {
   const [player2, setPlayer2] = useState(null)
@@ -250,7 +250,7 @@ export default function Local1v1() {
 
   if (showGame && player2) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
         <PingPongGame
           player1={user}
           player2={player2}
@@ -263,7 +263,7 @@ export default function Local1v1() {
   return (
     <div className="h-full text-white">
       {/* Main Content */}
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
         <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
           <h1 className="text-4xl md:text-6xl font-bold text-center mb-12 md:mb-20">
             Local 1v1

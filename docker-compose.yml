@@ -36,6 +36,8 @@ services:
     env_file:
       - ./backend/.env
     volumes:
+      - ./backend/main:/app
+      - /app/node_modules
       - sqlite_storage:/db
     depends_on:
       sqlite:
@@ -155,5 +157,5 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: ../sqlite_db
+      device: /goinfre/${USER}/sqlite_db
       o: bind
