@@ -42,7 +42,6 @@ async function checkSocketConnection(socket: any) {
     userEmail = CryptoJS.AES.decrypt(cryptedMail as string, key).toString(
       CryptoJS.enc.Utf8
     )
-    console.log('userEmail : ', userEmail)
 
     if (!userEmail) {
       socket.emit('error-in-connection', {
@@ -53,7 +52,6 @@ async function checkSocketConnection(socket: any) {
       return null
     }
     const me = await getUserByEmail(userEmail)
-    console.log('me : ', me)
 
     if (!me) {
       socket.emit('error-in-connection', {
@@ -95,8 +93,6 @@ export async function setupSocketIO(server: FastifyInstance) {
 
       if (!me) return
 
-      console.log('me : ', me)
-
       addSocketId(me.email, socket.id, 'sockets')
       ;(socket as any).userEmail = me.email
       socket.data = { userEmail: me.email }
@@ -105,7 +101,7 @@ export async function setupSocketIO(server: FastifyInstance) {
 
       socket.on('disconnect', async () => {
         if (me.userEmail) {
-          removeSocketId(me.email, socket.id, 'sockets')
+          await removeSocketId(me.email, socket.id, 'sockets')
         }
       })
     } catch (error) {

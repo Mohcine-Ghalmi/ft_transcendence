@@ -149,7 +149,7 @@ export async function setupSocketIO(server: FastifyInstance) {
 
       socket.on('disconnect', async () => {
         if (me.email) {
-          removeSocketId(me.email, socket.id, 'sockets')
+          await removeSocketId(me.email, socket.id, 'sockets')
           const redisKeys = await redis.keys('sockets:*')
           const onlineUsers = redisKeys.map((key) => key.split(':')[1])
 

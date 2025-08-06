@@ -4,7 +4,7 @@ CREATE TABLE "User" (
     "username" TEXT NOT NULL,
     "salt" TEXT NOT NULL,
     "password" TEXT NOT NULL,
-    "login" TEXT NOT NULL UNIQUE,
+    "login" TEXT NOT NULL,
     "level" INTEGER DEFAULT 0,
     "xp" INTEGER DEFAULT 0,
     "avatar" TEXT,
