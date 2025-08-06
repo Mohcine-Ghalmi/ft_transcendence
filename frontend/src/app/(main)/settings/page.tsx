@@ -346,8 +346,12 @@ const PassowrdSettings = () => {
     let error = ''
     if (!value.trim()) {
       error = `${name} is required`
-    } else if (name === 'newPassword' && value.length < 6) {
-      error = 'New password must be at least 6 characters'
+    } else if (name === 'newPassword' && value.length < 8) {
+      error = 'New password must be at least 8 characters'
+    } else if (name === 'newPassword' &&
+      !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)) {
+        error =
+            'Password must contain at least one uppercase letter, one lowercase letter, and one number'
     } else if (name === 'confirmPassword' && value !== newPassword) {
       error = 'Passwords do not match'
     }
@@ -371,7 +375,6 @@ const PassowrdSettings = () => {
       newPassword: '',
       confirmPassword: '',
     })
-    // Handle password change logic here
   }
 
   return (

@@ -410,9 +410,6 @@ export default function OnlineTournament() {
     if (!tournamentId || !socket) {
       return
     }
-
-   
-
     socket.emit('StartCurrentRound', {
       tournamentId,
       hostEmail: user.email,
@@ -904,33 +901,24 @@ export default function OnlineTournament() {
     }
 
     const handleRouteChange = () => {
-      const currentPath = window.location.pathname
-      const isTournamentPage =
-        currentPath.includes('/tournament') || currentPath.includes('/play')
-
-      if (
-        tournamentState === 'lobby' &&
-        tournamentId &&
-        user?.email &&
-        socket &&
-        !isTournamentPage
-      ) {
-        const isHost = participants.some(
-          (p) =>
-            (p.id === user.id ||
-              p.id === user.email ||
-              (p as any).email === user.email) &&
-            p.isHost
-        )
-
+      if (tournamentState === 'lobby' && tournamentId && user?.email && socket) {
+        const isHost = participants.some(p => 
+          (p.id === user.id || p.id === user.email || (p as any).email === user.email) && p.isHost
+        );
+        
         if (isHost) {
           socket.emit('CancelTournament', {
             tournamentId,
-            hostEmail: user.email,
-          })
+            hostEmail: user.email
+          });
+        } else {
+          socket.emit('LeaveTournament', {
+            tournamentId,
+            playerEmail: user.email
+          });
         }
       }
-    }
+    };
 
     const isHost = participants.some(
       (p) =>
