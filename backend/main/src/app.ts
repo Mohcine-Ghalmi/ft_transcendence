@@ -114,6 +114,12 @@ async function registerPlugins() {
         process.env.GAME_BACKEND_URL,
         process.env.CHAT_BACKEND_URL_PATH,
         process.env.GAME_BACKEND_URL_PATH,
+        'https://api.intra.42.fr',
+        'https:/nginx',
+        'http:/nginx',
+        'http:/frontend:3000',
+        'https://accounts.google.com',
+        'https://oauth2.googleapis.com',
       ].filter(Boolean) as string[]
 
       if (!origin || allowedOrigins.includes(origin)) {

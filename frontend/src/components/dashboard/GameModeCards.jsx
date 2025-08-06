@@ -4,7 +4,7 @@ import Link from 'next/link'
 
 export const GameModeCards = () => {
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,_minmax(400px,_1fr))] items-center justify-center gap-2">
+    <div className="grid grid-cols-[repeat(auto-fit,_minmax(300px,_1fr))] items-center justify-center gap-2">
       {/* 1v1 Mode */}
       <Link href="/play/OneVsOne?mode=Online">
         <div className="group relative bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-slate-500 transition-all duration-300 hover:shadow-xl hover:shadow-slate-900/50">
@@ -13,8 +13,8 @@ export const GameModeCards = () => {
               src="/game/1v1.png"
               alt="Play 1v1"
               fill
-              className="object-cover group-hover:scale-105 transition-transform duration-500"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              className="object-cover group-hover:scale-105 transition-transform duration-500 w-full h-full"
+              // sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               priority
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
@@ -67,8 +67,8 @@ export const GameModeCards = () => {
               src="/game/Tournemant.png"
               alt="Tournament"
               fill
-              className="object-cover group-hover:scale-105 transition-transform duration-500"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              className="object-cover group-hover:scale-105 transition-transform duration-500 w-full h-full"
+              // sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               priority
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>

@@ -251,11 +251,13 @@ export default function Local1v1() {
   if (showGame && player2) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
-        <PingPongGame
-          player1={user}
-          player2={player2}
-          onExit={handleExitGame}
-        />
+        <div className="w-full max-w-7xl">
+          <PingPongGame
+            player1={user}
+            player2={player2}
+            onExit={handleExitGame}
+          />
+        </div>
       </div>
     )
   }

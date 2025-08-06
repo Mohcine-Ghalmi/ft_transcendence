@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { user } from '@/data/mockData'
 import { MATCH_STATES } from '../../../../data/mockData'
 import TournamentBracket from './TournamentBracket'
 import { PingPongGame } from '../game/PingPongGame'
