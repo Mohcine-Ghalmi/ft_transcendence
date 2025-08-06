@@ -480,6 +480,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
 
     const onaddFriendResponse = (data: any) => {
+      console.log('Friend response received:', data)
       if (data.status === 'error') {
         toast.warning(data.message)
       } else {
@@ -510,6 +511,19 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
           setRandomFriendsSuggestion(updatedUsersRandom)
           setSearchedUsersGlobal(updatedUsers)
+
+          // Remove friend request notification when accepted or rejected
+          if (data.desc === 'ACCEPTED' || data.desc === 'REJECTED') {
+            const currentNotifications = get().notifications || []
+            const filteredNotifications = currentNotifications.filter(
+              (notification) =>
+                !(
+                  notification.type === 'friend_request' &&
+                  notification.senderEmail === data.hisEmail
+                )
+            )
+            set({ notifications: filteredNotifications })
+          }
         }
         if (data.message) {
           toast.success(data.message)
