@@ -257,7 +257,7 @@ export async function changePassword(
     )
 
     if (!correctPassword) {
-      return rep.code(401).send({ status: false, message: 'Invalid Password' })
+      return rep.code(200).send({ status: false, message: 'Invalid Password' })
     }
 
     const { hash, salt } = hashPassword(newPassword)

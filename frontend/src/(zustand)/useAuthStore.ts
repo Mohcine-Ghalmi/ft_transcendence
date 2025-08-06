@@ -233,8 +233,8 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     try {
       const res = await axiosInstance.post(`/users/changePassword`, data)
       if (res?.status === 200) {
-        toast.success('Password changed successfully!')
-        return true
+        toast.success(res.data.message)
+        return res.data.status
       } else {
         toast.warning(res.data?.message || 'Password change failed')
         return false
