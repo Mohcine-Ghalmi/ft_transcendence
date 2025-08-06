@@ -117,6 +117,7 @@ async function registerPlugins() {
         'http://nginx',
         'https://nginx',
         'http://frontend:3000',
+        'https://locahost',
       ].filter(Boolean) as string[]
 
       if (!origin || allowedOrigins.includes(origin)) {
