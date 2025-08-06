@@ -4,6 +4,7 @@ import { Bell, Check, MessageCircle, X } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
+import { toast } from 'react-toastify'
 
 export const NotificationItem = ({
   notification,
@@ -32,9 +33,13 @@ export const NotificationItem = ({
     }
   }
   const handleAction = (action: string, hisEmail: string, type: string) => {
+    console.log('Handling action:', { action, hisEmail, type })
     switch (action) {
       case 'friend_request':
-        if (!socketInstance?.connected) break
+        if (!socketInstance?.connected) {
+          toast.error('Not connected to server')
+          break
+        }
         if (type === 'decline') {
           socketInstance.emit('rejectFriend', hisEmail)
           setAcceptBtn('Declined')
@@ -45,6 +50,7 @@ export const NotificationItem = ({
         break
 
       case 'game_invitation':
+        // Handle game invitation logic here
         break
     }
   }
@@ -98,8 +104,7 @@ export const NotificationItem = ({
           </div>
 
           {/* Action Buttons */}
-          {(notification.type === 'friend_request' ||
-            notification.type === 'game_invitation') &&
+          {notification.type === 'friend_request' &&
             notification.status !== 'accepted' &&
             notification.status !== 'declined' && (
               <div className="flex gap-2 mt-3">
@@ -130,11 +135,23 @@ export const NotificationItem = ({
               </div>
             )}
 
-          {/* Status Text for accepted notifications */}
-          {notification.status === 'accepted' && (
+          {/* Status Text for accepted/rejected notifications */}
+          {(notification.type === 'friend_accepted' ||
+            notification.type === 'friend_rejected' ||
+            notification.status === 'accepted') && (
             <div className="mt-2">
-              <span className="text-green-400 text-xs font-medium bg-green-400/10 px-2 py-1 rounded-md">
-                Accepted
+              <span
+                className={`text-xs font-medium px-2 py-1 rounded-md ${
+                  notification.type === 'friend_accepted' ||
+                  notification.status === 'accepted'
+                    ? 'text-green-400 bg-green-400/10'
+                    : 'text-red-400 bg-red-400/10'
+                }`}
+              >
+                {notification.type === 'friend_accepted' ||
+                notification.status === 'accepted'
+                  ? 'Accepted'
+                  : 'Declined'}
               </span>
             </div>
           )}

@@ -483,7 +483,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       if (data.status === 'error') {
         toast.warning(data.message)
       } else {
-        if (data?.desc) {
+        if (data?.desc && data?.hisEmail) {
           const { searchedUsersGlobal, setSearchedUsersGlobal } =
             useSearchStore.getState()
           const { randomFriendsSuggestions, setRandomFriendsSuggestion } =
@@ -491,19 +491,29 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
           const updatedUsers = searchedUsersGlobal.map((tmp) =>
             tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+              ? {
+                  ...tmp,
+                  status: data.desc,
+                  fromEmail: data.fromEmail || data.hisEmail,
+                }
               : tmp
           )
           const updatedUsersRandom = randomFriendsSuggestions.map((tmp) =>
             tmp.email === data.hisEmail
-              ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
+              ? {
+                  ...tmp,
+                  status: data.desc,
+                  fromEmail: data.fromEmail || data.hisEmail,
+                }
               : tmp
           )
 
           setRandomFriendsSuggestion(updatedUsersRandom)
           setSearchedUsersGlobal(updatedUsers)
         }
-        toast.success(data.message)
+        if (data.message) {
+          toast.success(data.message)
+        }
       }
     }
 
