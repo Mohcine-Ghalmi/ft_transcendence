@@ -68,8 +68,10 @@ const TopProfile = ({ user }) => {
         height={1000}
         className="w-60 h-60 rounded-full object-cover"
       />
-      <h2 className="text-4xl">{user.username}</h2>
-      <h3 className="text-gray-400 text-xl my-2">@{user.login}</h3>
+      <h2 className="text-4xl">{user.username.substring(0, 20)}</h2>
+      <h3 className="text-gray-400 text-xl my-2">
+        @{user.login.substring(0, 50)}
+      </h3>
 
       {me.email === user.email ? (
         <Link

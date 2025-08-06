@@ -7,19 +7,6 @@ import {
   OtpSchema,
 } from '../Mail/mail.schema'
 
-// user :  {
-//   first_name: 'Mohamed',
-//   last_name: 'Sarda',
-//   email: 'msarda@student.1337.ma',
-//   avatar: 'https://cdn.intra.42.fr/users/bc95ebcdf28f6bfccca53360bc341a32/msarda.jpg',
-//   isOnline: true,
-//   type: 2,
-//   login: 'msarda',
-//   level: 1,
-//   resetOtp: '',
-//   resetOtpExpireAt: ''
-// }
-
 const userCore = {
   username: z
     .string()

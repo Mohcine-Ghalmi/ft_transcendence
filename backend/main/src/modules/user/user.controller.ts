@@ -308,8 +308,6 @@ export async function getMe(
   rep: FastifyReply
 ) {
   try {
-    console.log('req.user : ', req.user)
-
     const { email }: any = req.user
 
     const user: any = await getUserByEmail(email)
@@ -382,7 +380,6 @@ export async function updateUserData(
     if (avatar && oldAvatar !== 'default.avif') {
       try {
         const filePath = path.join(__dirname, '../media', oldAvatar)
-        console.log('Deleting file at:', filePath)
         await fsPromises.access(filePath)
         await fsPromises.unlink(filePath)
       } catch (err: any) {
@@ -399,6 +396,15 @@ export async function updateUserData(
         )
         sql.run(login, username, avatar, currentEmail)
       } else {
+        if (
+          (login.length < 3 || login.length > 20) &&
+          (username.length < 3 || username.length > 20)
+        ) {
+          return rep.code(200).send({
+            status: false,
+            message: 'Login and username must be less than 20 characters',
+          })
+        }
         const sql = db.prepare(
           `UPDATE User SET login = ?, username = ? WHERE email = ?`
         )
@@ -411,6 +417,12 @@ export async function updateUserData(
         )
         sql.run(username, avatar, currentEmail)
       } else {
+        if (username.length < 3 || username.length > 20) {
+          return rep.code(200).send({
+            status: false,
+            message: 'Login and username must be less than 20 characters',
+          })
+        }
         const sql = db.prepare(`UPDATE User SET username = ? WHERE email = ?`)
         sql.run(username, currentEmail)
       }
@@ -421,6 +433,15 @@ export async function updateUserData(
         )
         sql.run(username, login, avatar, currentEmail)
       } else {
+        if (
+          (login.length < 3 || login.length > 20) &&
+          (username.length < 3 || username.length > 20)
+        ) {
+          return rep.code(200).send({
+            status: false,
+            message: 'Login and username must be less than 20 characters',
+          })
+        }
         const sql = db.prepare(
           `UPDATE User SET username = ?, login = ? WHERE email = ?`
         )
@@ -499,7 +520,6 @@ export async function getUserDetails(
     const match_history_sql = db.prepare(
       'SELECT * FROM match_history WHERE winner = ? OR loser = ? ORDER BY created_at DESC LIMIT 5'
     )
-    console.log('email : ', email)
 
     const matchHistory = match_history_sql.all(email, email)
     const sql: any = db.prepare(`

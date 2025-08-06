@@ -167,7 +167,7 @@ async function registerPlugins() {
     startRedirectPath: '/login/42',
     callbackUri: process.env.FRONTEND_URL
       ? `${process.env.FRONTEND_URL}/login/42/callback`
-      : 'https://localhost/login/42/callback',
+      : 'https://e3r10p6.1337.ma/login/42/callback',
   })
   await server.register(fastifyOauth2, {
     name: 'googleOAuth2',
@@ -182,7 +182,7 @@ async function registerPlugins() {
     startRedirectPath: '/login/google',
     callbackUri: process.env.FRONTEND_URL
       ? `${process.env.FRONTEND_URL}/login/google/callback`
-      : 'https://localhost/login/google/callback',
+      : 'https://e3r10p6.1337.ma/login/google/callback',
   })
 
   await server.register(rateLimit, {

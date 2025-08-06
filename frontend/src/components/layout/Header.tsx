@@ -158,7 +158,7 @@ export const Header = () => {
   if (!user) return null
 
   return (
-    <header className="h-[8vh] top-0 left-0 right-0 z-50 w-full bg-[#121417] border-b border-gray-700 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+    <header className="h-[8vh] top-0 left-0 right-0 z-50 w-full bg-[#121417] border-b border-gray-700 px-3 sm:px-4 lg:px-6 py-3 sm:py-4  flex items-center justify-center">
       <div className="flex items-center justify-between">
         {/* Mobile Menu */}
         <MobileMenu
@@ -168,7 +168,7 @@ export const Header = () => {
         />
 
         {/* Logo */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/dashboard"
             className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity"
@@ -184,7 +184,7 @@ export const Header = () => {
               PingPong
             </h1>
           </Link>
-        </div>
+        </div> */}
 
         {/* Desktop Navigation */}
         <Navigation

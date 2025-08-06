@@ -76,7 +76,6 @@ export default function PasswordResetForm() {
     setTimeout(() => {
       setIsLoading(false)
       setIsSubmitted(true)
-      console.log('Password reset successfully')
     }, 1500)
   }
 

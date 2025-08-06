@@ -271,7 +271,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         return true
       }
     } catch (err: any) {
-      console.log(err)
       toast.warning(err.response?.data?.message || err.message)
       return false
     } finally {
@@ -288,7 +287,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning(res.data?.message || 'Logout failed')
       }
     } catch (err) {
-      console.error('Logout failed:', err)
       toast.warning('Logout failed')
     } finally {
       get().disconnectSocket()
@@ -307,13 +305,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
   connectSocket: () => {
     if (socketInstance?.connected) {
-      console.log('Auth socket already connected')
       return
     }
 
     const { user } = get()
     if (!user) {
-      console.log('No user found, cannot connect auth socket')
       return
     }
 
@@ -480,7 +476,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     }
 
     const onaddFriendResponse = (data: any) => {
-      console.log('Friend response received:', data)
       if (data.status === 'error') {
         toast.warning(data.message)
       } else {
@@ -572,12 +567,10 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.disconnect()
 
       socketInstance = null
-      console.log('Auth socket disconnected and cleared')
     }
   },
 
   forceDisconnect: () => {
-    console.log('Force disconnecting auth socket...')
     useGameStore.getState().forceDisconnect()
 
     if (socketInstance) {

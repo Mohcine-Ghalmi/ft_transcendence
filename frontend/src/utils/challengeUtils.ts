@@ -23,21 +23,21 @@ const activeInvitations = new Map<string, {
 
 export const getInvitedPlayersEmails = (userEmail: string): string[] => {
   const invitedEmails: string[] = []
-  
+
   for (const [gameId, invitation] of activeInvitations.entries()) {
     if (invitation.user.email === userEmail) {
       invitedEmails.push(invitation.player.email)
     }
   }
-  
+
   return invitedEmails
 }
 
 export const isPlayerInvited = (userEmail: string, playerEmail: string): boolean => {
   const inviteKey = `${userEmail}:${playerEmail}`
-  return pendingInvitations.has(inviteKey) || 
+  return pendingInvitations.has(inviteKey) ||
          Array.from(activeInvitations.values()).some(
-           invitation => invitation.user.email === userEmail && 
+           invitation => invitation.user.email === userEmail &&
                         invitation.player.email === playerEmail
          )
 }
@@ -45,12 +45,10 @@ const setupGlobalEventHandlers = (socket: any) => {
   if (globalEventHandlersSetup) return
 
   const handleInviteResponse = (data: any) => {
-    console.log('Global invite response:', data)
-    
+
     for (const [gameId, invitation] of activeInvitations.entries()) {
       if (data.gameId === gameId || data.guestEmail === invitation.player.email) {
         if (data.status === 'success' && data.type === 'invite_sent') {
-          console.log('Invite sent successfully for:', gameId)
           if (data.gameId && data.gameId !== gameId) {
             const invitationData = activeInvitations.get(gameId)
             if (invitationData) {
@@ -63,7 +61,7 @@ const setupGlobalEventHandlers = (socket: any) => {
           }
         } else if (data.status === 'error') {
           toast.warning(data.message)
-          
+
           if (!data.message.includes('already sent an invitation')) {
             cleanupInvitation(gameId)
           }
@@ -74,11 +72,9 @@ const setupGlobalEventHandlers = (socket: any) => {
   }
 
   const handleGameInviteAccepted = (data: any) => {
-    console.log('Global game invite accepted:', data)
-    
+
     const invitation = activeInvitations.get(data.gameId)
     if (!invitation) {
-      console.log('No active invitation found for gameId:', data.gameId)
       return
     }
 
@@ -104,7 +100,7 @@ const setupGlobalEventHandlers = (socket: any) => {
   }
 
   const handleGameInviteDeclined = (data: any) => {
-    
+
     const invitation = activeInvitations.get(data.gameId)
     if (invitation) {
       const friendName = invitation.player.username || invitation.player.name || invitation.player.email
@@ -114,7 +110,7 @@ const setupGlobalEventHandlers = (socket: any) => {
   }
 
   const handleGameInviteTimeout = (data: any) => {
-    
+
     const invitation = activeInvitations.get(data.gameId)
     if (invitation) {
       const friendName = invitation.player.username || invitation.player.name || invitation.player.email
@@ -124,7 +120,7 @@ const setupGlobalEventHandlers = (socket: any) => {
   }
 
   const handleGameInviteCanceled = (data: any) => {
-    
+
     const invitation = activeInvitations.get(data.gameId)
     if (invitation) {
       toast.info('Game invitation was canceled')
@@ -133,20 +129,19 @@ const setupGlobalEventHandlers = (socket: any) => {
   }
 
   const handleGameInvitationsCleanup = (data: any) => {
-    
+
     if (data.reason === 'player_accepted_other_invitation') {
       const invitationsToCleanup = Array.from(activeInvitations.keys())
-      
+
       for (const gameId of invitationsToCleanup) {
         cleanupInvitation(gameId)
       }
-      
+
       toast.info(data.message || `${data.acceptingPlayer} accepted a game invitation. All pending challenges have been cleared.`)
     }
   }
 
   const handleGameInviteCleanup = (data: any) => {
-    console.log('Game invite cleanup:', data)
     if (data.gameId === 'multiple') {
       const invitationsToCleanup = Array.from(activeInvitations.keys())
       for (const gameId of invitationsToCleanup) {
@@ -155,7 +150,7 @@ const setupGlobalEventHandlers = (socket: any) => {
     } else if (data.gameId) {
       cleanupInvitation(data.gameId)
     }
-    
+
     switch (data.action) {
       case 'accepted':
         break
@@ -186,9 +181,8 @@ const setupGlobalEventHandlers = (socket: any) => {
   socket.on('GameInviteCanceled', handleGameInviteCanceled)
   socket.on('GameInvitationsCleanup', handleGameInvitationsCleanup)
   socket.on('GameInviteCleanup', handleGameInviteCleanup)
-  
+
   globalEventHandlersSetup = true
-  console.log('Global event handlers set up')
 }
 
 const cleanupInvitation = (gameId: string) => {
@@ -197,24 +191,21 @@ const cleanupInvitation = (gameId: string) => {
     pendingInvitations.delete(invitation.inviteKey)
     invitation.onStatusChange?.(invitation.player.email, 'idle')
     activeInvitations.delete(gameId)
-    console.log('Cleaned up invitation:', gameId)
   }
 }
 export const cleanupAllUserInvitations = () => {
   const invitationsToCleanup = Array.from(activeInvitations.keys())
-  
+
   for (const gameId of invitationsToCleanup) {
     cleanupInvitation(gameId)
   }
   pendingInvitations.clear()
-  
-  console.log(`Cleaned up ${invitationsToCleanup.length} active invitations`)
+
 }
 
 export const forceClearInvitationCache = () => {
   pendingInvitations.clear()
   activeInvitations.clear()
-  console.log('Force cleared all invitation cache')
 }
 
 export const validateInvitationStatus = async (socket: any, inviteKey: string): Promise<boolean> => {
@@ -257,7 +248,7 @@ export const challengePlayer = async (
       return false
     } else {
       pendingInvitations.delete(inviteKey)
-      
+
       for (const [gameId, invitation] of activeInvitations.entries()) {
         if (invitation.inviteKey === inviteKey) {
           activeInvitations.delete(gameId)
@@ -285,7 +276,6 @@ export const challengePlayer = async (
 
     setTimeout(() => {
       if (activeInvitations.has(newGameId)) {
-        console.log('Auto cleanup - invitation timed out:', newGameId)
         const friendName = player.username || player.email
         toast.warning(`Challenge to ${friendName} timed out`)
         cleanupInvitation(newGameId)
@@ -296,18 +286,16 @@ export const challengePlayer = async (
       myEmail: user.email,
       hisEmail: player.email,
     }
-    
+
     const encrypted = CryptoJS.AES.encrypt(
       JSON.stringify(inviteData),
       encryptionKey
     ).toString()
-    
-    console.log('Sending invitation to:', player.email, 'gameId:', newGameId)
+
     socket.emit('InviteToGame', encrypted)
 
     return true
   } catch (error) {
-    console.error('Failed to send challenge:', error)
     pendingInvitations.delete(inviteKey)
     onStatusChange?.(player.email, 'idle')
     return false
@@ -316,7 +304,7 @@ export const challengePlayer = async (
 export const clearStaleInvitations = () => {
   const now = Date.now()
   for (const [key, data] of pendingInvitations.entries()) {
-    if (now - data.timestamp > 60000) { 
+    if (now - data.timestamp > 60000) {
       pendingInvitations.delete(key)
     }
   }
@@ -361,14 +349,13 @@ export const cleanupStaleInvitations = (socket: any, userEmail: string) => {
 export const initializeInvitationSystem = (socket: any, userEmail: string) => {
   if (!socket || !userEmail) return
 
-  console.log('Initializing invitation system for user:', userEmail)
   setupGlobalEventHandlers(socket)
   setupGameStateCleanup(socket)
   cleanupStaleInvitations(socket, userEmail)
   const cleanupInterval = setInterval(() => {
     clearStaleInvitations()
   }, 30000)
-  
+
   return () => {
     clearInterval(cleanupInterval)
     forceClearInvitationCache()
@@ -381,56 +368,46 @@ export const cleanupAllInvitations = (userEmail: string) => {
       toDelete.push(gameId)
     }
   }
-  
+
   toDelete.forEach(gameId => cleanupInvitation(gameId))
-  console.log('Cleaned up all invitations for user:', userEmail)
 }
 
 export const setupGameStateCleanup = (socket: any) => {
   if (!socket) return
   socket.on('GameStarted', () => {
-    console.log('Game started - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
   socket.on('MatchFound', () => {
-    console.log('Match found - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
   socket.on('GameInviteAccepted', (data: any) => {
     if (data.isHostNotification) {
-      console.log('Host received acceptance - cleaning up other invitations')
       cleanupAllUserInvitations()
     }
   })
 
   socket.on('PlayerReady', () => {
-    console.log('Player ready - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
   socket.on('GameEnded', () => {
-    console.log('Game ended - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
   socket.on('PlayerLeft', () => {
-    console.log('Player left - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
   socket.on('GameCanceled', () => {
-    console.log('Game canceled - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 
   socket.on('GameSessionEnded', () => {
-    console.log('Game session ended - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
   socket.on('MatchEnded', () => {
-    console.log('Match ended - cleaning up all pending invitations')
     cleanupAllUserInvitations()
   })
 }

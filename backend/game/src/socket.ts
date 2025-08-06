@@ -16,7 +16,6 @@ export async function cleanupStaleSocketsOnStartup() {
       await redis.del(key)
     }
 
-    console.log(`Cleaned up ${redisChatKeys.length} game room keys on startup`)
   } catch (error) {
     console.error('Error cleaning up stale sockets and game rooms:', error)
   }

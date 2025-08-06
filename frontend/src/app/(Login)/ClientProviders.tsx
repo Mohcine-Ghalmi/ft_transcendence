@@ -39,7 +39,6 @@ export default function ClientProviders({
           }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error)
         localStorage.removeItem('accessToken')
       } finally {
         setAuthChecked(true)

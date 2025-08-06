@@ -3,11 +3,11 @@ import { MatchHistory, GameState, GameResult } from './game.schema'
 
 export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promise<MatchHistory> {
   const db = getDatabase()
-  
+
   try {
     const existingStmt = db.prepare('SELECT id FROM match_history WHERE game_id = ?')
     const existing = existingStmt.get(match.gameId) as { id: number } | undefined
-    
+
     if (existing) {
 
       return {
@@ -15,14 +15,14 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
         ...match
       }
     }
-    
+
     const stmt = db.prepare(`
       INSERT INTO match_history (
         game_id, player1_email, player2_email, player1_score, player2_score,
         winner, loser, game_duration, started_at, ended_at, game_mode, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    
+
     const result = stmt.run(
       match.gameId,
       match.player1Email,
@@ -37,10 +37,10 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
       match.gameMode,
       match.status
     )
-    
+
     await updateUserXP(match.winner, true)  // Winner gets +30 XP
     await updateUserXP(match.loser, false)  // Loser gets -15 XP
-    
+
     return {
       id: result.lastInsertRowid as number,
       ...match
@@ -53,7 +53,7 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
         return existing
       }
     }
-    
+
     throw error
   }
 }
@@ -61,40 +61,40 @@ export async function createMatchHistory(match: Omit<MatchHistory, 'id'>): Promi
 export async function getMatchHistoryByUser(email: string, limit: number = 20): Promise<MatchHistory[]> {
   const db = getDatabase()
   const stmt = db.prepare(`
-    SELECT * FROM match_history 
+    SELECT * FROM match_history
     WHERE player1_email = ? OR player2_email = ?
     ORDER BY ended_at DESC
     LIMIT ?
   `)
-  
+
   return stmt.all(email, email, limit) as MatchHistory[]
 }
 
 export async function getMatchHistoryById(id: number): Promise<MatchHistory | null> {
   const db = getDatabase()
-  
+
   const stmt = db.prepare('SELECT * FROM match_history WHERE id = ?')
   const result = stmt.get(id) as MatchHistory | undefined
-  
+
   return result || null
 }
 
 export async function updateMatchHistory(id: number, updates: Partial<MatchHistory>): Promise<boolean> {
   const db = getDatabase()
-  
+
   const fields = Object.keys(updates)
     .filter(key => key !== 'id')
     .map(key => `${key.replace(/([A-Z])/g, '_$1').toLowerCase()} = ?`)
     .join(', ')
-  
+
   if (!fields) return false
-  
+
   const values = Object.values(updates).filter(value => value !== undefined)
   values.push(id)
-  
+
   const stmt = db.prepare(`UPDATE match_history SET ${fields} WHERE id = ?`)
   const result = stmt.run(...values)
-  
+
   return result.changes > 0
 }
 
@@ -106,24 +106,24 @@ export async function getPlayerStats(email: string): Promise<{
   averageScore: number
 }> {
   const db = getDatabase()
-  
+
   const stmt = db.prepare(`
-    SELECT 
+    SELECT
       COUNT(*) as totalMatches,
       SUM(CASE WHEN winner = ? THEN 1 ELSE 0 END) as wins,
       SUM(CASE WHEN loser = ? THEN 1 ELSE 0 END) as losses,
       AVG(CASE WHEN winner = ? THEN player1_score ELSE player2_score END) as averageScore
-    FROM match_history 
+    FROM match_history
     WHERE player1_email = ? OR player2_email = ?
   `)
-  
+
   const result = stmt.get(email, email, email, email, email) as any
-  
+
   const totalMatches = result.totalMatches || 0
   const wins = result.wins || 0
   const losses = result.losses || 0
   const winRate = totalMatches > 0 ? (wins / totalMatches) * 100 : 0
-  
+
   return {
     totalMatches,
     wins,
@@ -135,7 +135,7 @@ export async function getPlayerStats(email: string): Promise<{
 
 export async function initializeMatchHistoryTable(): Promise<void> {
   const db = getDatabase()
-  
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS match_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +154,7 @@ export async function initializeMatchHistoryTable(): Promise<void> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `)
-  
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_match_history_player1 ON match_history(player1_email);
     CREATE INDEX IF NOT EXISTS idx_match_history_player2 ON match_history(player2_email);
@@ -165,12 +165,12 @@ export async function initializeMatchHistoryTable(): Promise<void> {
 
 export async function updateUserXP(userEmail: string, isWinner: boolean): Promise<void> {
   const db = getDatabase()
-  
+
   try {
     const xpChange = isWinner ? 30 : -15
     const getUserStmt = db.prepare('SELECT id, xp, level FROM User WHERE email = ?')
     const user = getUserStmt.get(userEmail) as { id: number; xp: number; level: number } | undefined
-    
+
     if (!user) {
       return
     }
@@ -178,8 +178,7 @@ export async function updateUserXP(userEmail: string, isWinner: boolean): Promis
     const newLevel = Math.floor(newXP / 100)
     const updateStmt = db.prepare('UPDATE User SET xp = ?, level = ? WHERE email = ?')
     updateStmt.run(newXP, newLevel, userEmail)
-    
+
   } catch (error) {
-    console.error(`Error updating XP for user ${userEmail}:`, error)
   }
 }

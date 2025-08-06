@@ -43,7 +43,6 @@ const Page = () => {
         toast.warning('Invalid code. Please try again.')
       }
     } catch (err) {
-      console.log('Error during verification:', err)
       toast.warning('Failed to enable 2FA. Please try again.')
     }
   }
@@ -58,7 +57,6 @@ const Page = () => {
         toast.warning('Failed to disable 2FA. Please try again.')
       }
     } catch (err) {
-      console.log('Error during disabling 2FA:', err)
       toast.warning('Failed to disable 2FA. Please try again.')
     }
   }

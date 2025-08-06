@@ -23,7 +23,6 @@ export const FriendsSection = () => {
     if (!socket) return
 
     const handleGameInviteDeclined = (data) => {
-      console.log('Game invite declined:', data)
       const declinedByEmail = data.declinedBy || data.guestEmail
 
       if (declinedByEmail) {
@@ -46,7 +45,6 @@ export const FriendsSection = () => {
     }
 
     const handleGameInviteTimeout = (data) => {
-      console.log('Game invite timeout:', data)
       const guestEmail = data.guestEmail
 
       if (guestEmail) {
@@ -74,7 +72,6 @@ export const FriendsSection = () => {
     }
 
     const handleGameInviteCanceled = (data) => {
-      console.log('Game invite canceled:', data)
       // This handles when someone else cancels the invite
       toast.info('Game invitation was canceled')
       setChallengingFriends(new Set())
@@ -102,7 +99,6 @@ export const FriendsSection = () => {
   const handleChallenge = async (friend) => {
     // Prevent multiple clicks for the same friend
     if (challengingFriends.has(friend.email)) {
-      console.log('Already challenging this friend, please wait...')
       return
     }
 
@@ -143,7 +139,6 @@ export const FriendsSection = () => {
       }
       // Note: Don't automatically remove on success - let the callback handle it
     } catch (error) {
-      console.error('Error challenging friend:', error)
       // Remove from challenging set on error
       setChallengingFriends((prev) => {
         const newSet = new Set(prev)

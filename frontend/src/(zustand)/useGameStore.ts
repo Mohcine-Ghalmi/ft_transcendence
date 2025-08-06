@@ -173,7 +173,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
 
     //
     gameSocketInstance.on('error-in-connection', (data) => {
-      console.error('Game socket error-in-connection:', data.message)
       toast.error(data.message || 'Socket connection error')
       get().forceDisconnect()
     })
@@ -213,7 +212,6 @@ export const useGameStore = create<UserState>()((set, get) => ({
       gameSocketInstance.disconnect()
 
       gameSocketInstance = null
-      console.log('Game socket force disconnected and cleared')
     }
   },
 

@@ -35,7 +35,6 @@ export const NotificationItem = ({
     }
   }
   const handleAction = (action: string, hisEmail: string, type: string) => {
-    console.log('Handling action:', { action, hisEmail, type })
     switch (action) {
       case 'friend_request':
         if (!socketInstance?.connected) {
@@ -108,7 +107,7 @@ export const NotificationItem = ({
                 {notification.title}
               </h4>
               <p className="text-gray-400 text-sm leading-relaxed">
-                {notification.message.substring(0, 50) + '...'}
+                {notification.message.substring(0, 40) + '...'}
               </p>
             </div>
 

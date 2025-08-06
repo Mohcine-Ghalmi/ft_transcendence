@@ -81,7 +81,9 @@ export default function LeaderboardPage() {
                         height={80}
                         className="w-16 h-16 object-cover rounded-full mx-auto mb-2 border-4 border-gray-400"
                       />
-                      <h3 className="font-bold text-lg">{data[1].username}</h3>
+                      <h3 className="font-bold text-lg">
+                        {data[1].username.substring(0, 50)}
+                      </h3>
                       <p
                         className={`text-2xl font-bold ${getWinRateColor(
                           data[1].win_rate_percentage || 0
@@ -141,7 +143,9 @@ export default function LeaderboardPage() {
                         height={80}
                         className="w-16 h-16 object-cover rounded-full mx-auto mb-2 border-4 border-amber-600"
                       />
-                      <h3 className="font-bold text-lg">{data[2].username}</h3>
+                      <h3 className="font-bold text-lg">
+                        {data[2].username.substring(0, 20)}
+                      </h3>
                       <p
                         className={`text-2xl font-bold ${getWinRateColor(
                           data[2].win_rate_percentage || 0
@@ -199,10 +203,10 @@ export default function LeaderboardPage() {
                           />
                           <div>
                             <h3 className="font-semibold xl:text-lg text-xs">
-                              {user.username}
+                              {user.username.substring(0, 15)}
                             </h3>
                             <p className="text-gray-400 xl:text-sm text-[8px]">
-                              {user.login}
+                              {user.login.substring(0, 15)}
                             </p>
                           </div>
                         </div>

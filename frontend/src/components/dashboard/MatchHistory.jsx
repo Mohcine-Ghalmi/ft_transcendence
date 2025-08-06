@@ -46,8 +46,8 @@ export const MatchHistory = () => {
                     </td>
                     <td className="py-2 sm:py-3 lg:py-4 xl:py-5 px-2 sm:px-3 lg:px-4 xl:px-5 text-white font-medium text-xs sm:text-sm md:text-base ">
                       {match.player1_email === user.email
-                        ? match.player2_email
-                        : match.player1_email}
+                        ? match.player2_email.substring(0, 40)
+                        : match.player1_email.substring(0, 40)}
                     </td>
                     <td className="py-2 sm:py-3 lg:py-4 xl:py-5 px-2 sm:px-3 lg:px-4 xl:px-5">
                       <span

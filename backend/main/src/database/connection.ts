@@ -20,10 +20,8 @@ export function initializeDatabase(): Database.Database {
 
     db.pragma('foreign_keys = ON')
 
-    console.log('Database connected successfully')
     return db
   } catch (error) {
-    console.error('Failed to initialize database:', error)
     process.exit(1)
   }
 }
@@ -31,7 +29,6 @@ export function initializeDatabase(): Database.Database {
 export function closeDatabase(): void {
   if (db) {
     db.close()
-    console.log('Database connection closed')
   }
 }
 

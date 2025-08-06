@@ -36,7 +36,7 @@ async function isUserInActiveGame(userEmail: string): Promise<{
       if (gameRoomData) {
         try {
           const gameRoom: GameRoomData = JSON.parse(gameRoomData);
-          if ((gameRoom.hostEmail === userEmail || gameRoom.guestEmail === userEmail) && 
+          if ((gameRoom.hostEmail === userEmail || gameRoom.guestEmail === userEmail) &&
               (gameRoom.status === 'accepted' || gameRoom.status === 'in_progress')) {
             return {
               isInGame: true,
@@ -72,12 +72,12 @@ async function cleanupAllUserInvitations(userEmail: string, acceptedGameId?: str
       otherPlayerEmail: string;
     }> = [];
     const affectedPlayers = new Set<string>();
-    
+
     for (const key of allInviteKeys) {
       if (acceptedGameId && key === `game_invite:${acceptedGameId}`) {
         continue;
       }
-      
+
       const inviteData = await redis.get(key);
       if (inviteData) {
         try {
@@ -105,7 +105,7 @@ async function cleanupAllUserInvitations(userEmail: string, acceptedGameId?: str
         }
       }
     }
-    
+
     return { cleanedInvitations, affectedPlayers };
   } catch (error) {
     return { cleanedInvitations: [], affectedPlayers: new Set() };
@@ -126,7 +126,7 @@ async function notifyAffectedPlayers(
     gameId: string;
     type: 'sent' | 'received';
   }>>();
-  
+
   for (const invitation of cleanedInvitations) {
     if (!playerInvitations.has(invitation.otherPlayerEmail)) {
       playerInvitations.set(invitation.otherPlayerEmail, []);
@@ -136,7 +136,7 @@ async function notifyAffectedPlayers(
       type: invitation.type === 'sent' ? 'received' : 'sent'
     });
   }
-  
+
   for (const [playerEmail, invitations] of playerInvitations.entries()) {
     const playerSocketIds = await getSocketIds(playerEmail, 'sockets') || [];
     if (playerSocketIds.length > 0) {
@@ -148,7 +148,7 @@ async function notifyAffectedPlayers(
         message: `${acceptingPlayerName} accepted a game invitation. All other pending invitations have been cleared.`,
         timestamp: Date.now()
       });
-      
+
       for (const invitation of invitations) {
         if (invitation.type === 'received') {
           io.to(playerSocketIds).emit('GameInviteDeclined', {
@@ -165,7 +165,7 @@ async function notifyAffectedPlayers(
             message: `${acceptingPlayerName} accepted another invitation`
           });
         }
-        
+
         io.to(playerSocketIds).emit('GameInviteCleanup', {
           gameId: invitation.gameId,
           action: 'auto_cleanup',
@@ -214,7 +214,7 @@ export const handleGameAcceptance: GameSocketHandler = (
         if (hostGameStatus.isInGame) {
           await Promise.all([
             redis.del(`game_invite:${gameId}`),
-            redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
+            redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`),
             redis.del(`game_invite:${guestEmail}:${invite.hostEmail}`),
           ]);
 
@@ -230,7 +230,7 @@ export const handleGameAcceptance: GameSocketHandler = (
         if (guestGameStatus.isInGame) {
           await Promise.all([
             redis.del(`game_invite:${gameId}`),
-            redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
+            redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`),
             redis.del(`game_invite:${guestEmail}:${invite.hostEmail}`),
           ]);
 
@@ -274,7 +274,7 @@ export const handleGameAcceptance: GameSocketHandler = (
 
         await Promise.all([
           redis.del(`game_invite:${gameId}`),
-          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`), 
+          redis.del(`game_invite:${invite.hostEmail}:${guestEmail}`),
           redis.del(`game_invite:${guestEmail}:${invite.hostEmail}`),
         ])
 
@@ -417,7 +417,6 @@ export const handleGameAcceptance: GameSocketHandler = (
           message: 'Invitation declined.',
         })
       } catch (error) {
-        console.error('Error declining game invite:', error);
         socket.emit('GameInviteResponse', {
           status: 'error',
           message: 'Failed to decline invitation.',

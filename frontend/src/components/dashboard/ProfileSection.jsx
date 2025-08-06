@@ -17,7 +17,7 @@ export const ProfileSection = () => {
       </div>
       <div className="flex-1">
         <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">
-          {user.username}
+          {user.username.substring(0, 20)}
         </h2>
         <p className="text-green-400 font-medium sm:text-xs">
           {onlineUsers.includes(useAuthStore.getState().user?.email)

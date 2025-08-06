@@ -49,7 +49,10 @@ export default function Signup() {
       case 'username':
         if (!value || (typeof value === 'string' && !value.trim())) {
           error = 'Username is required'
-        } else if (typeof value === 'string' && value.length < 3) {
+        } else if (
+          typeof value === 'string' &&
+          (value.length < 3 || value.length > 20)
+        ) {
           error = 'Username must be at least 3 characters'
         } else if (
           typeof value === 'string' &&
@@ -195,8 +198,6 @@ export default function Signup() {
   const { register } = useAuthStore()
 
   const handleSkipFor2FA = async () => {
-    console.log('Skipping 2FA for now')
-    // Complete registration without 2FA
     await register({ ...formData, avatar: 'default.avif' }).then((res) => {
       if (res) router.push('/dashboard')
     })
@@ -214,8 +215,6 @@ export default function Signup() {
       twoFactorCode: error,
     }))
     if (!error) {
-      // 2FA code is valid
-      // You can add further logic here (e.g., redirect, API call)
     }
   }
 
