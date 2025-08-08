@@ -13,8 +13,6 @@ export async function cleanupStaleSocketsOnStartup() {
     for (const key of redisChatKeys) {
       await redis.del(key)
     }
-
-    console.log(`Cleaned up ${redisChatKeys.length} chat keys on startup`)
   } catch (error) {
     console.error('Error cleaning up stale sockets and game rooms:', error)
   }

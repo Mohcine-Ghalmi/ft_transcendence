@@ -346,8 +346,14 @@ const PassowrdSettings = () => {
     let error = ''
     if (!value.trim()) {
       error = `${name} is required`
-    } else if (name === 'newPassword' && value.length < 6) {
-      error = 'New password must be at least 6 characters'
+    } else if (name === 'newPassword' && value.length < 8) {
+      error = 'New password must be at least 8 characters'
+    } else if (
+      name === 'newPassword' &&
+      !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)
+    ) {
+      error =
+        'Password must contain at least one uppercase letter, one lowercase letter, and one number'
     } else if (name === 'confirmPassword' && value !== newPassword) {
       error = 'Passwords do not match'
     }
@@ -371,7 +377,6 @@ const PassowrdSettings = () => {
       newPassword: '',
       confirmPassword: '',
     })
-    // Handle password change logic here
   }
 
   return (
@@ -487,10 +492,6 @@ export default function SettingsPage() {
             Security
           </button>
         )}
-
-        <button className="w-[200px] xl:py-4 xl:px-6 p-2  rounded-2xl border-1 border-gray-700 text-xs xl:text-md hover:scale-99 hover:bg-[#2b3036b7] duration-300 cursor-pointer">
-          Game Settings
-        </button>
       </div>
       {/* right side */}
       <div className="h-full w-full xl:w-[50%]">

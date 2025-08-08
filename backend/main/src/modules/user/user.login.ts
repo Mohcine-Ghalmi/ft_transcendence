@@ -136,7 +136,7 @@ async function googleRegister(req: FastifyRequest, rep: FastifyReply) {
 
       existingUser = await createUser({
         email: email,
-        username: name || `${given_name} ${family_name}`,
+        username: `${given_name}${family_name}`,
         avatar: fileName || 'default.avif',
         type: 1,
         password: '',
@@ -183,7 +183,7 @@ export async function fortyTwoRegister(req: FastifyRequest, rep: FastifyReply) {
       await downloadAndSaveImage(image?.link, fileName)
       existingUser = await createUser({
         email: email,
-        username: usual_full_name || `${first_name} ${last_name}`,
+        username: `${first_name}${last_name}`,
         avatar: fileName || 'default.avif',
         type: 2,
         password: '',
@@ -216,7 +216,15 @@ export async function registerHandler(
 ) {
   try {
     const body = req.body
-    console.log('Registering user:', body)
+    if (
+      body.username &&
+      (body.username.length < 3 || body.username.length > 20)
+    ) {
+      return rep.code(400).send({
+        status: false,
+        message: 'Username must be at least 3 characters long',
+      })
+    }
 
     const newUser = await getUserByEmail(body.email)
     if (newUser)

@@ -19,7 +19,11 @@ const Notification = ({ user }) => {
   if (!user) return null
 
   const handleClick = () => {
-    if (!socketInstance) return
+    if (!socketInstance?.connected) {
+      toast.error('Not connected to server')
+      return
+    }
+
 
     switch (status) {
       case '':
@@ -28,22 +32,29 @@ const Notification = ({ user }) => {
         break
 
       case 'PENDING':
-        if (!user.fromEmail) return
+        if (!user.fromEmail) {
+          toast.warning('Cannot accept your own friend request')
+          return
+        }
         if (user.fromEmail !== me.email) {
           setStatus('ACCEPTED')
           socketInstance.emit('acceptFriend', user.email)
+        } else {
+          toast.info('Friend request already sent')
         }
         break
 
       case 'REJECTED':
-        if (!user.fromEmail) return
+        if (!user.fromEmail) {
+          toast.warning('Cannot retry friend request yet')
+          return
+        }
         setStatus('PENDING')
-        socketInstance.emit('rejectFriend', user.email)
+        socketInstance.emit('addFriend', user.email)
         break
 
       case 'ACCEPTED':
-        // socketInstance.emit('removeFriend', user.email)
-        // setStatus('')
+        handleChatWithuser()
         break
 
       default:
@@ -54,19 +65,19 @@ const Notification = ({ user }) => {
   const getButtonText = () => {
     switch (status) {
       case 'PENDING':
-        if (!user.fromEmail) return 'Invite Sent'
-        return user.fromEmail === me.email ? 'Invite Sent' : 'Accept'
+        if (!user?.fromEmail) return 'Invite Sent'
+        return user.fromEmail === me?.email ? 'Invite Sent' : 'Accept'
       case 'ACCEPTED':
         return 'Friends'
       case 'REJECTED':
-        return 'rejected'
+        return 'Rejected'
       default:
         return 'Add Friend'
     }
   }
 
   const isButtonDisabled = () => {
-    return status === 'PENDING' && user.fromEmail === me.email
+    return status === 'PENDING' && user?.fromEmail === me?.email
   }
 
   const handleChatWithuser = () => {

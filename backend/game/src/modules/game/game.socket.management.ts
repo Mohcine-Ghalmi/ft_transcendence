@@ -7,10 +7,10 @@ import {
 } from './game.socket.types'
 import { cleanupGame, saveMatchHistory, emitToUsers } from './game.socket.utils'
 import { getTournamentHostEmail } from './game.socket.tournament'
-import { 
-  activeGameSessions, 
-  userGameSessions, 
-  cleanupUserSession, 
+import {
+  activeGameSessions,
+  userGameSessions,
+  cleanupUserSession,
   addUserToGameSession,
   reconnectUserToGameSession,
   socketToUser,
@@ -32,10 +32,10 @@ export const handleGameManagement: GameSocketHandler = (
       const currentGameId = getUserCurrentGame(userEmail);
       if (currentGameId) {
         const gameRoom = gameRooms.get(currentGameId);
-        
+
         if (gameRoom && (gameRoom.status === 'in_progress' || gameRoom.status === 'accepted')) {
           const conflict = checkGameSessionConflict(userEmail, currentGameId, socket.id);
-          
+
           if (conflict.hasConflict && conflict.conflictType === 'same_game_different_session') {
             socket.emit('GameSessionConflict', {
               type: 'same_game_multiple_sessions',
@@ -45,7 +45,7 @@ export const handleGameManagement: GameSocketHandler = (
             });
             return;
           }
-          
+
           if (reconnectUserToGameSession(userEmail, currentGameId, socket.id)) {
             const gameState = activeGames.get(currentGameId);
             if (gameState) {
@@ -54,11 +54,11 @@ export const handleGameManagement: GameSocketHandler = (
                 gameState: gameState
               });
             }
-            
-            const otherPlayerEmail = gameRoom.hostEmail === userEmail 
-              ? gameRoom.guestEmail 
+
+            const otherPlayerEmail = gameRoom.hostEmail === userEmail
+              ? gameRoom.guestEmail
               : gameRoom.hostEmail;
-            
+
             const otherPlayerSockets = await getSocketIds(otherPlayerEmail, 'sockets') || [];
             io.to(otherPlayerSockets).emit('PlayerReconnected', {
               gameId: currentGameId,
@@ -74,7 +74,7 @@ export const handleGameManagement: GameSocketHandler = (
   socket.on('CheckGameSession', async (data: { gameId: string; playerEmail: string }) => {
     try {
       const { gameId, playerEmail } = data
-  
+
       if (!gameId || !playerEmail) {
         return socket.emit('GameSessionResponse', {
           status: 'error',
@@ -82,9 +82,9 @@ export const handleGameManagement: GameSocketHandler = (
           canPlay: false,
         })
       }
-      
+
       const socketUserEmail = (socket as any).userEmail
-  
+
       if (!socketUserEmail || socketUserEmail !== playerEmail) {
         return socket.emit('GameSessionResponse', {
           status: 'error',
@@ -95,7 +95,7 @@ export const handleGameManagement: GameSocketHandler = (
 
       socketToUser.set(socket.id, playerEmail);
       const conflict = checkGameSessionConflict(playerEmail, gameId, socket.id);
-      
+
       if (conflict.hasConflict) {
         if (conflict.conflictType === 'same_game_different_session') {
           return socket.emit('GameSessionResponse', {
@@ -109,7 +109,7 @@ export const handleGameManagement: GameSocketHandler = (
           const cleanedGames = forceCleanupUserFromAllGames(playerEmail);
         }
       }
-  
+
       socket.emit('GameSessionResponse', {
         status: 'success',
         message: 'Session available.',
@@ -127,7 +127,7 @@ export const handleGameManagement: GameSocketHandler = (
   socket.on('CheckGameAuthorization', async (data: { gameId: string; playerEmail: string }) => {
     try {
       const { gameId, playerEmail } = data
-  
+
       if (!gameId || !playerEmail) {
         return socket.emit('GameAuthorizationResponse', {
           status: 'error',
@@ -135,9 +135,9 @@ export const handleGameManagement: GameSocketHandler = (
           authorized: false,
         })
       }
-  
+
       const socketUserEmail = (socket as any).userEmail
-  
+
       if (!socketUserEmail || socketUserEmail !== playerEmail) {
         return socket.emit('GameAuthorizationResponse', {
           status: 'error',
@@ -153,7 +153,7 @@ export const handleGameManagement: GameSocketHandler = (
         if (conflict.conflictType === 'same_game_different_session') {
           const gameSessions = activeGameSessions.get(gameId) || new Set();
           const otherSessions = new Set([...gameSessions].filter(sid => sid !== socket.id));
-          
+
           let hasActiveOtherSessions = false;
           for (const sessionId of otherSessions) {
             const sessionUser = socketToUser.get(sessionId);
@@ -165,7 +165,7 @@ export const handleGameManagement: GameSocketHandler = (
               }
             }
           }
-          
+
           if (hasActiveOtherSessions) {
             return socket.emit('GameAuthorizationResponse', {
               status: 'error',
@@ -179,7 +179,7 @@ export const handleGameManagement: GameSocketHandler = (
           const cleanedGames = forceCleanupUserFromAllGames(playerEmail);
         }
       }
-  
+
       const gameRoom = gameRooms.get(gameId)
       if (!gameRoom) {
         return socket.emit('GameAuthorizationResponse', {
@@ -188,7 +188,7 @@ export const handleGameManagement: GameSocketHandler = (
           authorized: false,
         })
       }
-  
+
       if (gameRoom.status === 'in_progress') {
         if (
           gameRoom.hostEmail !== playerEmail &&
@@ -211,10 +211,10 @@ export const handleGameManagement: GameSocketHandler = (
         }
 
         addUserToGameSession(playerEmail, gameId, socket.id)
-        const otherPlayerEmail = gameRoom.hostEmail === playerEmail 
-          ? gameRoom.guestEmail 
+        const otherPlayerEmail = gameRoom.hostEmail === playerEmail
+          ? gameRoom.guestEmail
           : gameRoom.hostEmail;
-        
+
         const otherPlayerSockets = await getSocketIds(otherPlayerEmail, 'sockets') || [];
         if (otherPlayerSockets.length > 0) {
           io.to(otherPlayerSockets).emit('PlayerReconnected', {
@@ -240,7 +240,7 @@ export const handleGameManagement: GameSocketHandler = (
         socket.join(`game:${gameId}`)
         return
       }
-  
+
       if (gameRoom.status === 'canceled' || gameRoom.status === 'completed') {
         return socket.emit('GameAuthorizationResponse', {
           status: 'error',
@@ -248,11 +248,11 @@ export const handleGameManagement: GameSocketHandler = (
           authorized: false,
         })
       }
-  
+
       const isAuthorized =
         gameRoom.hostEmail === playerEmail ||
         gameRoom.guestEmail === playerEmail
-  
+
       if (isAuthorized) {
         if (gameRoom.tournamentId) {
           if (gameRoom.status === 'waiting') {
@@ -267,7 +267,7 @@ export const handleGameManagement: GameSocketHandler = (
         }
         addUserToGameSession(playerEmail, gameId, socket.id)
       }
-  
+
       socket.emit('GameAuthorizationResponse', {
         status: 'success',
         message: isAuthorized
@@ -505,7 +505,6 @@ export const handleGameManagement: GameSocketHandler = (
             })
           }
         } catch (error) {
-          console.error('Error handling tournament forfeit:', error)
         }
       }
 
@@ -619,7 +618,7 @@ export const handleGameManagement: GameSocketHandler = (
 
   socket.on('gameHeartbeat', (data: { gameId: string; playerEmail: string }) => {
     const { gameId, playerEmail } = data;
-    
+
     if (gameId && playerEmail) {
       const currentGameId = getUserCurrentGame(playerEmail);
       if (currentGameId === gameId) {
@@ -628,18 +627,18 @@ export const handleGameManagement: GameSocketHandler = (
     }
   });
 
-  // socket.on('ResolveSessionConflict', async (data: { 
+  // socket.on('ResolveSessionConflict', async (data: {
   //   action: 'force_takeover' | 'cancel' | 'cleanup_others';
   //   gameId: string;
   //   playerEmail: string;
   // }) => {
   //   try {
   //     const { action, gameId, playerEmail } = data;
-      
+
   //     if (action === 'force_takeover') {
   //       const cleanedGames = forceCleanupUserFromAllGames(playerEmail);
   //       addUserToGameSession(playerEmail, gameId, socket.id);
-        
+
   //       socket.emit('SessionConflictResolved', {
   //         status: 'success',
   //         action: 'takeover_completed',
@@ -657,9 +656,9 @@ export const handleGameManagement: GameSocketHandler = (
   //           }
   //         }
   //       }
-        
+
   //       addUserToGameSession(playerEmail, gameId, socket.id);
-        
+
   //       socket.emit('SessionConflictResolved', {
   //         status: 'success',
   //         action: 'cleanup_completed',

@@ -51,7 +51,6 @@ export async function getIsBlockedROUTE(
       'SELECT * FROM Block WHERE (blockedBy = ? OR blockedUser = ?)'
     )
     const data = sql.all(myEmail, myEmail)
-    console.log('getIsBlockedROUTE : ', data)
 
     return rep.code(200).send(data)
   } catch (err: any) {
@@ -222,7 +221,6 @@ export async function getFriend(
       isBlockedByHim,
     }
   } catch (err: any) {
-    console.log('Error in get Friend : ', err.message)
     return null
   }
 }

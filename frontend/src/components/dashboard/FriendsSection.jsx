@@ -23,19 +23,20 @@ export const FriendsSection = () => {
     if (!socket) return
 
     const handleGameInviteDeclined = (data) => {
-      console.log('Game invite declined:', data)
       const declinedByEmail = data.declinedBy || data.guestEmail
-      
+
       if (declinedByEmail) {
         // Find the friend who declined
-        const declinedFriend = friends.find(friend => friend.email === declinedByEmail)
+        const declinedFriend = friends.find(
+          (friend) => friend.email === declinedByEmail
+        )
         const friendName = declinedFriend?.username || declinedByEmail
-        
+
         // Show toast notification
         toast.error(`${friendName} declined your challenge`)
-        
+
         // Reset challenge button
-        setChallengingFriends(prev => {
+        setChallengingFriends((prev) => {
           const newSet = new Set(prev)
           newSet.delete(declinedByEmail)
           return newSet
@@ -44,19 +45,21 @@ export const FriendsSection = () => {
     }
 
     const handleGameInviteTimeout = (data) => {
-      console.log('Game invite timeout:', data)
       const guestEmail = data.guestEmail
-      
+
       if (guestEmail) {
         // Find the friend who timed out
-        const timeoutFriend = friends.find(friend => friend.email === guestEmail)
-        const friendName = timeoutFriend?.username || data.guestName || guestEmail
-        
+        const timeoutFriend = friends.find(
+          (friend) => friend.email === guestEmail
+        )
+        const friendName =
+          timeoutFriend?.username || data.guestName || guestEmail
+
         // Show toast notification
         toast.warning(`Challenge to ${friendName} timed out`)
-        
+
         // Reset challenge button for this specific friend
-        setChallengingFriends(prev => {
+        setChallengingFriends((prev) => {
           const newSet = new Set(prev)
           newSet.delete(guestEmail)
           return newSet
@@ -69,7 +72,6 @@ export const FriendsSection = () => {
     }
 
     const handleGameInviteCanceled = (data) => {
-      console.log('Game invite canceled:', data)
       // This handles when someone else cancels the invite
       toast.info('Game invitation was canceled')
       setChallengingFriends(new Set())
@@ -97,12 +99,11 @@ export const FriendsSection = () => {
   const handleChallenge = async (friend) => {
     // Prevent multiple clicks for the same friend
     if (challengingFriends.has(friend.email)) {
-      console.log('Already challenging this friend, please wait...')
       return
     }
 
     // Add friend to challenging set
-    setChallengingFriends(prev => new Set([...prev, friend.email]))
+    setChallengingFriends((prev) => new Set([...prev, friend.email]))
 
     try {
       const success = await challengePlayer(
@@ -119,7 +120,7 @@ export const FriendsSection = () => {
         // Callback to handle status changes
         (email, status) => {
           if (status === 'idle') {
-            setChallengingFriends(prev => {
+            setChallengingFriends((prev) => {
               const newSet = new Set(prev)
               newSet.delete(email)
               return newSet
@@ -130,7 +131,7 @@ export const FriendsSection = () => {
 
       if (!success) {
         // Remove from challenging set if failed immediately
-        setChallengingFriends(prev => {
+        setChallengingFriends((prev) => {
           const newSet = new Set(prev)
           newSet.delete(friend.email)
           return newSet
@@ -138,9 +139,8 @@ export const FriendsSection = () => {
       }
       // Note: Don't automatically remove on success - let the callback handle it
     } catch (error) {
-      console.error('Error challenging friend:', error)
       // Remove from challenging set on error
-      setChallengingFriends(prev => {
+      setChallengingFriends((prev) => {
         const newSet = new Set(prev)
         newSet.delete(friend.email)
         return newSet
@@ -154,7 +154,7 @@ export const FriendsSection = () => {
         Friends
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
-        {friends ? (
+        {friends.length > 0 ? (
           friends.map((friend, index) => {
             const isOnline = onlineUsers.includes(friend.email)
             const isChallenging = challengingFriends.has(friend.email)

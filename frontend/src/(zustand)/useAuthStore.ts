@@ -93,14 +93,15 @@ interface UserState {
   isLoading: boolean
   user: any | null
   socketConnected: boolean
-  onlineUsers: string[] // lasdj@gmail.com asdasd@gaialcom
+  onlineUsers: string[]
   checkAuth: () => Promise<boolean>
   register: (data: any) => Promise<boolean>
   login: (data: any) => Promise<boolean>
   logout: () => Promise<void>
   connectSocket: () => void
   disconnectSocket: () => void
-  // googleLogin: (data: any) => Promise<void>
+  forceDisconnect: () => void
+  isAuthSocketConnected: () => boolean
   notifications: any
   setNotifations: (data: any) => void
   seachedUsers: any
@@ -142,7 +143,8 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       const data: UserDetails = res.data
       get().setUserDetails(data)
     } catch (err) {
-      console.log(err)
+      get().setUserDetails(null)
+      toast.error('Failed to fetch user details')
     }
   },
 
@@ -166,7 +168,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     } catch (err) {
       get().setUser(null)
       get().logout()
-      console.log(err)
+      toast.error('Failed to fetch user data')
     }
   },
   checkAuth: async () => {
@@ -187,7 +189,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
       return false
     } catch (err) {
-      console.error('Auth check failed:', err)
       set({ user: null, isAuthenticated: false })
       localStorage.removeItem('accessToken')
       return false
@@ -204,7 +205,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
       const res = await axiosInstance.post(`/v2/api/users/register`, data)
-      console.log(res)
 
       if (!res.data) {
         toast.warning('Registration failed')
@@ -220,8 +220,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       get().connectSocket()
       return true
     } catch (err: any) {
-      console.log(err)
-
       toast.warning(err.response?.data?.message || err.message)
       return false
     } finally {
@@ -237,8 +235,8 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     try {
       const res = await axiosInstance.post(`/users/changePassword`, data)
       if (res?.status === 200) {
-        toast.success('Password changed successfully!')
-        return true
+        toast.success(res.data.message)
+        return res.data.status
       } else {
         toast.warning(res.data?.message || 'Password change failed')
         return false
@@ -261,7 +259,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string
       )
       const res = await axiosInstance.post(`/v2/api/users/login`, data)
-      console.log(res.data)
 
       const { status, accessToken, ...user } = res.data
       if (!status) {
@@ -274,7 +271,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         return true
       }
     } catch (err: any) {
-      console.log(err)
       toast.warning(err.response?.data?.message || err.message)
       return false
     } finally {
@@ -291,7 +287,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
         toast.warning(res.data?.message || 'Logout failed')
       }
     } catch (err) {
-      console.error('Logout failed:', err)
       toast.warning('Logout failed')
     } finally {
       get().disconnectSocket()
@@ -309,18 +304,24 @@ export const useAuthStore = create<UserState>()((set, get) => ({
   },
 
   connectSocket: () => {
-    if (socketInstance?.connected) return
-    const { user } = get()
+    if (socketInstance?.connected) {
+      return
+    }
 
-    if (!user) return
+    const { user } = get()
+    if (!user) {
+      return
+    }
 
     if (socketInstance) {
+      socketInstance.removeAllListeners()
       socketInstance.off('connect')
       socketInstance.off('disconnect')
       socketInstance.off('connect_error')
       socketInstance.off('getOnlineUsers')
-      useGameStore.getState().disconnectSocket()
+      useGameStore.getState().forceDisconnect()
       socketInstance.disconnect()
+      socketInstance = null
     }
     const cryptedMail = CryptoJs.AES.encrypt(
       user.email,
@@ -330,7 +331,13 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     socketInstance = io('/', {
       path: '/user-service/socket.io',
       withCredentials: true,
-      reconnection: false,
+      reconnection: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 60000,
+      forceNew: true,
+      transports: ['websocket', 'polling'],
       query: { cryptedMail },
     })
 
@@ -343,12 +350,11 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       set({ onlineUsers })
     }
 
-    const onDisconnect = () => {
+    const onDisconnect = (reason: string) => {
       set({ socketConnected: false })
     }
 
     const onConnectError = (err: Error) => {
-      console.log('Socket connection error:', err.message)
       set({ socketConnected: false })
       get().logout()
     }
@@ -383,7 +389,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
             desc: notifications?.desc,
             senderEmail: notifications.senderEmail,
           }
-          console.log('friendNotification : ', friendNotification)
 
           if (friendNotification?.desc) {
             const {
@@ -417,9 +422,7 @@ export const useAuthStore = create<UserState>()((set, get) => ({
                       : tmp
                   )
                 : []
-            console.log('searchedUsersGlobal : ', searchedUsersGlobal)
 
-            console.log('updatedUsers : ', updatedUsers)
             setRandomFriendsSuggestion(updatedUsersRandom)
             setSearchedUsersGlobal(updatedUsers)
           }
@@ -435,45 +438,6 @@ export const useAuthStore = create<UserState>()((set, get) => ({
 
     const onsearchResults = (seachedUsers: any) => {
       set({ seachedUsers })
-    }
-
-    const onaddFriendResponse = (data: any) => {
-      if (data.status === 'error') {
-        toast.warning(data.message)
-      } else {
-        if (data?.desc) {
-          const {
-            searchedUsersGlobal,
-            setSearchedUsersGlobal,
-            randomFriendsSuggestions,
-            setRandomFriendsSuggestion,
-          } = useSearchStore.getState()
-
-          const updatedUsers =
-            searchedUsersGlobal.length > 0
-              ? searchedUsersGlobal.map((tmp) =>
-                  tmp.email === data.hisEmail
-                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-                    : tmp
-                )
-              : []
-
-          const updatedUsersRandom =
-            randomFriendsSuggestions.length > 0
-              ? randomFriendsSuggestions.map((tmp) =>
-                  tmp.email === data.hisEmail
-                    ? { ...tmp, status: data.desc, fromEmail: data.hisEmail }
-                    : tmp
-                )
-              : []
-          console.log('searchedUsersGlobal : ', searchedUsersGlobal)
-
-          console.log('updatedUsers : ', updatedUsers)
-          setRandomFriendsSuggestion(updatedUsersRandom)
-          setSearchedUsersGlobal(updatedUsers)
-        }
-        toast.success(data.message)
-      }
     }
 
     const onBlockResponse = (data) => {
@@ -511,6 +475,57 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       }
     }
 
+    const onaddFriendResponse = (data: any) => {
+      if (data.status === 'error') {
+        toast.warning(data.message)
+      } else {
+        if (data?.desc && data?.hisEmail) {
+          const { searchedUsersGlobal, setSearchedUsersGlobal } =
+            useSearchStore.getState()
+          const { randomFriendsSuggestions, setRandomFriendsSuggestion } =
+            useSearchStore.getState()
+
+          const updatedUsers = searchedUsersGlobal.map((tmp) =>
+            tmp.email === data.hisEmail
+              ? {
+                  ...tmp,
+                  status: data.desc,
+                  fromEmail: data.fromEmail || data.hisEmail,
+                }
+              : tmp
+          )
+          const updatedUsersRandom = randomFriendsSuggestions.map((tmp) =>
+            tmp.email === data.hisEmail
+              ? {
+                  ...tmp,
+                  status: data.desc,
+                  fromEmail: data.fromEmail || data.hisEmail,
+                }
+              : tmp
+          )
+
+          setRandomFriendsSuggestion(updatedUsersRandom)
+          setSearchedUsersGlobal(updatedUsers)
+
+          // Remove friend request notification when accepted or rejected
+          if (data.desc === 'ACCEPTED' || data.desc === 'REJECTED') {
+            const currentNotifications = get().notifications || []
+            const filteredNotifications = currentNotifications.filter(
+              (notification) =>
+                !(
+                  notification.type === 'friend_request' &&
+                  notification.senderEmail === data.hisEmail
+                )
+            )
+            set({ notifications: filteredNotifications })
+          }
+        }
+        if (data.message) {
+          toast.success(data.message)
+        }
+      }
+    }
+
     socketInstance.on('connect', onConnect)
     socketInstance.on('getOnlineUsers', onOnlineUsers)
     socketInstance.on('disconnect', onDisconnect)
@@ -518,22 +533,25 @@ export const useAuthStore = create<UserState>()((set, get) => ({
     //
     socketInstance.on('searchResults', onsearchResults)
     socketInstance.on('friendResponse', onaddFriendResponse)
+
     socketInstance.on('blockResponse', onBlockResponse)
 
     //
     socketInstance.on('newNotification', onNewNotification)
     socketInstance.on('error-in-connection', (data) => {
-      console.log('Socket connection error:', data)
-
+      console.error('Auth socket error-in-connection:', data.message)
       toast.error(data.message || 'Socket connection error')
-      get().disconnectSocket()
+      get().forceDisconnect()
       get().logout()
     })
   },
 
   disconnectSocket: () => {
-    useGameStore.getState().disconnectSocket()
+    useGameStore.getState().forceDisconnect()
+
     if (socketInstance) {
+      set({ socketConnected: false })
+
       socketInstance.off('connect')
       socketInstance.off('disconnect')
       socketInstance.off('connect_error')
@@ -541,14 +559,35 @@ export const useAuthStore = create<UserState>()((set, get) => ({
       socketInstance.off('newNotification')
       socketInstance.off('error-in-connection')
       socketInstance.off('InviteToGameResponse')
-
       socketInstance.off('searchResults')
       socketInstance.off('friendResponse')
+      socketInstance.off('blockResponse')
+
+      socketInstance.removeAllListeners()
+      socketInstance.disconnect()
+
+      socketInstance = null
+    }
+  },
+
+  forceDisconnect: () => {
+    useGameStore.getState().forceDisconnect()
+
+    if (socketInstance) {
+      set({ socketConnected: false })
+
+      socketInstance.io.reconnection(false)
+
+      socketInstance.removeAllListeners()
 
       socketInstance.disconnect()
+
       socketInstance = null
-      set({ socketConnected: false })
     }
+  },
+
+  isAuthSocketConnected: () => {
+    return socketInstance?.connected || false
   },
 
   hasStoredToken: () => {

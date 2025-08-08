@@ -18,19 +18,16 @@ export default function LoginPage() {
     password: '',
   })
 
-  // Email validation function
   const isValidEmail = (email: any) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return emailRegex.test(email)
   }
 
-  // Password validation function (minimum 8 characters, at least one letter and one number)
   const isValidPassword = (password: any) => {
     const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/
     return passwordRegex.test(password)
   }
 
-  // Handle input changes and clear errors
   const handleemailChange = (e: any) => {
     setemail(e.target.value)
     if (errors.email) {
@@ -54,14 +51,12 @@ export default function LoginPage() {
       password: '',
     }
 
-    // Validate email
     if (!email.trim()) {
       newErrors.email = 'Email is required'
     } else if (!isValidEmail(email)) {
       newErrors.email = 'Please enter a valid email address'
     }
 
-    // Validate password
     if (!password.trim()) {
       newErrors.password = 'Password is required'
     } else if (!isValidPassword(password)) {
@@ -69,17 +64,14 @@ export default function LoginPage() {
         'Password must be at least 8 characters with letters and numbers'
     }
 
-    // Set errors if any
     if (newErrors.email || newErrors.password) {
       setErrors(newErrors)
       return
     }
 
-    // If validation passes, proceed with login
     await login({ email, password }).then((res) => {
       if (res) router.push('/dashboard')
     })
-    // Add your login logic here
   }
 
   //
@@ -151,17 +143,6 @@ export default function LoginPage() {
                 }`}
               />
               <CustomError message={errors.password} isTouched={1} />
-            </div>
-
-            {/* Forgot Password */}
-            <div className="text-left">
-              <button
-                type="button"
-                onClick={() => setShowRestpassword(true)}
-                className="text-gray-400 text-sm hover:text-gray-300 transition-colors"
-              >
-                Forgot Password?
-              </button>
             </div>
 
             {/* Login Button */}

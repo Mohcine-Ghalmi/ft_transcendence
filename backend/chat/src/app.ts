@@ -161,11 +161,10 @@ async function startServer() {
       origin: (origin: string | undefined, cb: any) => {
         const allowedOrigins = [
           process.env.FRONT_END_URL,
-          process.env.MAIN_BACKEND_URL,
+          process.env.CHAT_BACKEND_URL,
           process.env.GAME_BACKEND_URL,
-          'http://nginx',
-          'https://nginx',
-          'http://frontend:3000',
+          process.env.CHAT_BACKEND_URL_PATH,
+          process.env.GAME_BACKEND_URL_PATH,
         ].filter(Boolean) as string[]
 
         if (!origin || allowedOrigins.includes(origin)) {

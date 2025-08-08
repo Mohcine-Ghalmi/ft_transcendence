@@ -20,8 +20,6 @@ services:
     image: redis:v0.1
     container_name: redis
     restart: always
-    # ports:
-    #   - '7001:6379'
     networks:
       - ft_transcendence
     healthcheck:
@@ -38,6 +36,8 @@ services:
     env_file:
       - ./backend/.env
     volumes:
+      - ./backend/main:/app
+      - /app/node_modules
       - sqlite_storage:/db
     depends_on:
       sqlite:

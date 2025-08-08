@@ -95,7 +95,7 @@ const WaitingPage = ({
   gameId,
 }) => {
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+    <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
       <div className="w-full max-w-4xl text-center">
         <h1 className="text-4xl md:text-5xl font-bold mb-12 text-white">
           Game Ready!
@@ -212,7 +212,7 @@ export default function OnlineMatch() {
   const [friends, setFriends] = useState([])
   const [gameId, setGameId] = useState(null)
   const [isInviting, setIsInviting] = useState(false)
-  const [gameState, setGameState] = useState('idle') 
+  const [gameState, setGameState] = useState('idle')
   const [isHost, setIsHost] = useState(false)
   const [sessionConflict, setSessionConflict] = useState(false)
   const [currentSessionGameId, setCurrentSessionGameId] = useState(null)
@@ -367,13 +367,7 @@ export default function OnlineMatch() {
           gameId,
           hostEmail: user.email,
         })
-      } else if (
-        !isHost &&
-        gameId &&
-        receivedInvite &&
-        socket &&
-        user?.email
-      ) {
+      } else if (!isHost && gameId && receivedInvite && socket && user?.email) {
         handleGuestLeaveWaiting()
       }
     }
@@ -849,21 +843,23 @@ export default function OnlineMatch() {
 
   useEffect(() => {
     if (!user?.email) return
-    
+
     const updateInvitedPlayers = () => {
       const invited = getInvitedPlayersEmails(user.email)
       setInvitedPlayersEmails(invited)
     }
-    
+
     updateInvitedPlayers()
     const interval = setInterval(updateInvitedPlayers, 1000)
-    
+
     return () => clearInterval(interval)
   }, [user?.email])
-  
+
   const filteredPlayers = friends.filter((player) => {
-    const invitedPlayersEmails = getInvitedPlayersEmails(user?.email);
-    const matchesSearch = player.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const invitedPlayersEmails = getInvitedPlayersEmails(user?.email)
+    const matchesSearch = player.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase())
     const isNotInvited = !invitedPlayersEmails.includes(player.email)
     return matchesSearch && isNotInvited
   })
@@ -947,7 +943,7 @@ export default function OnlineMatch() {
         </div>
       )}
 
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-8vh)] px-4">
         <div className="w-full max-w-7xl">
           {!gameAccepted && gameState === 'idle' && (
             <h1 className="text-center text-4xl md:text-5xl font-bold mb-8">

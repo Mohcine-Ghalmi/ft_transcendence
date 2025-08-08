@@ -112,11 +112,14 @@ async function registerPlugins() {
         process.env.FRONT_END_URL,
         process.env.CHAT_BACKEND_URL,
         process.env.GAME_BACKEND_URL,
-        'http://chat-service:5006',
-        'http://game-service:5007',
-        'http://nginx',
-        'https://nginx',
-        'http://frontend:3000',
+        process.env.CHAT_BACKEND_URL_PATH,
+        process.env.GAME_BACKEND_URL_PATH,
+        'https://api.intra.42.fr',
+        'https:/nginx',
+        'http:/nginx',
+        'http:/frontend:3000',
+        'https://accounts.google.com',
+        'https://oauth2.googleapis.com',
       ].filter(Boolean) as string[]
 
       if (!origin || allowedOrigins.includes(origin)) {
@@ -168,7 +171,9 @@ async function registerPlugins() {
       },
     },
     startRedirectPath: '/login/42',
-    callbackUri: 'http://localhost:5005/login/42/callback',
+    callbackUri: process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/login/42/callback`
+      : 'https://e3r10p6.1337.ma/login/42/callback',
   })
   await server.register(fastifyOauth2, {
     name: 'googleOAuth2',
@@ -181,7 +186,9 @@ async function registerPlugins() {
       auth: fastifyOauth2.GOOGLE_CONFIGURATION,
     },
     startRedirectPath: '/login/google',
-    callbackUri: 'http://localhost:5005/login/google/callback',
+    callbackUri: process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/login/google/callback`
+      : 'https://e3r10p6.1337.ma/login/google/callback',
   })
 
   await server.register(rateLimit, {

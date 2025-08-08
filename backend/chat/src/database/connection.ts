@@ -9,8 +9,6 @@ export function initializeDatabase(): Database.Database {
   }
 
   try {
-    console.log('process.env.DATABASE_URL =>', process.env.DATABASE_URL)
-
     const databaseUrl = process.env.DATABASE_URL || '/db/database.db'
     const dbPath = databaseUrl.startsWith('/')
       ? databaseUrl
@@ -22,10 +20,8 @@ export function initializeDatabase(): Database.Database {
 
     db.pragma('foreign_keys = ON')
 
-    console.log('Database connected successfully')
     return db
   } catch (error: unknown) {
-    console.error('Failed to initialize database:', error)
     process.exit(1)
   }
 }
@@ -33,7 +29,6 @@ export function initializeDatabase(): Database.Database {
 export function closeDatabase(): void {
   if (db) {
     db.close()
-    console.log('Database connection closed')
   }
 }
 

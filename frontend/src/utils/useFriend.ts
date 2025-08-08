@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useChatStore } from '@/(zustand)/useChatStore'
 import { socketInstance, useAuthStore } from '@/(zustand)/useAuthStore'
+import { useSearchStore } from '@/(zustand)/useSearchStore'
+import { toast } from 'react-toastify'
 
 export const useFriend = (user) => {
   const [status, setStatus] = useState('')
-  const { user: me } = useAuthStore()
+  const { setNotifations, notifications, user: me } = useAuthStore()
   const { setSelectedConversationId } = useChatStore()
   const router = useRouter()
 
@@ -14,7 +16,15 @@ export const useFriend = (user) => {
   }, [user?.status])
 
   const handleFriendAction = () => {
-    if (!socketInstance || !user) return
+    if (!socketInstance?.connected) {
+      toast.error('Not connected to server')
+      return
+    }
+
+    if (!user) {
+      toast.error('User not found')
+      return
+    }
 
     switch (status) {
       case '':
@@ -23,23 +33,29 @@ export const useFriend = (user) => {
         break
 
       case 'PENDING':
-        if (!user.fromEmail) return
-        if (user.fromEmail !== me.email) {
+        if (!user.fromEmail) {
+          toast.warning('Cannot accept your own friend request')
+          return
+        }
+        if (user.fromEmail !== me?.email) {
           setStatus('ACCEPTED')
           socketInstance.emit('acceptFriend', user.email)
+        } else {
+          toast.info('Friend request already sent')
         }
         break
 
       case 'REJECTED':
-        if (!user.fromEmail) return
+        if (!user.fromEmail) {
+          toast.warning('Cannot retry friend request yet')
+          return
+        }
         setStatus('PENDING')
-        socketInstance.emit('rejectFriend', user.email)
+        socketInstance.emit('addFriend', user.email)
         break
 
       case 'ACCEPTED':
-        // Handle accepted state if needed
-        // socketInstance.emit('removeFriend', user.email)
-        // setStatus('')
+        handleChatWithUser()
         break
 
       default:

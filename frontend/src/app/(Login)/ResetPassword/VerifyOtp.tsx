@@ -65,11 +65,9 @@ export default function VerifyOtp({ email }) {
           setotp('')
         }
       } catch (err) {
-        console.log(err)
       } finally {
         setIsLoading(false)
       }
-      console.log('otp reset successfully')
     }, 100)
   }
 

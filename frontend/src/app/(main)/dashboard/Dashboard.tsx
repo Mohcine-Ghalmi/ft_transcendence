@@ -1,9 +1,7 @@
 'use client'
-import { friends, friendSuggestions } from '../../../data/mockData'
 import { ProfileSection } from '../../../components/dashboard/ProfileSection'
 import { GameModeCards } from '../../../components/dashboard/GameModeCards'
 import { FriendsSection } from '../../../components/dashboard/FriendsSection'
-import { FriendSuggestions } from '../../../components/dashboard/FriendSuggestions'
 import { StatisticsChart } from '../../../components/dashboard/StatisticsChart'
 import { useEffect } from 'react'
 import { useSearchStore } from '@/(zustand)/useSearchStore'
@@ -33,9 +31,9 @@ export default function PingPongDashboard() {
           <div className="xl:col-span-2 space-y-4 sm:space-y-6">
             <ProfileSection />
             <GameModeCards />
-            <div className="flex xl:flex-row flex-col w-full gap-4">
+            <div className="flex w-full gap-4">
               <MatchHistory />
-              <FriendSuggestions />
+              {/* <FriendSuggestions /> */}
             </div>
             <FriendsSection />
           </div>

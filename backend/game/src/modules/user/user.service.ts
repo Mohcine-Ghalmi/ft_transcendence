@@ -12,7 +12,6 @@ export async function getUserByEmail(email: string) {
     })
     return res.data || null
   } catch (err: any) {
-    console.error('Error fetching user by email:', err.message)
     return null
   }
 }
@@ -24,7 +23,6 @@ export const getIsBlocked = async (myEmail: string) => {
     })
     return res.data || null
   } catch (err) {
-    console.log(err)
     return null
   }
 }
@@ -41,7 +39,6 @@ export async function getFriend(
     })
     return res.data || null
   } catch (err: any) {
-    console.error('Error fetching friend:', err.message)
     return null
   }
 }

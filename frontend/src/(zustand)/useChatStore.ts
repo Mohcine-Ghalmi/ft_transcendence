@@ -222,6 +222,7 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
       path: '/chat-service/socket.io',
       withCredentials: true,
       reconnection: false,
+      transports: ['websocket', 'polling'],
       query: { cryptedMail },
     })
 
@@ -265,7 +266,6 @@ export const useChatStore = create<ChatStoreType>()((set, get) => ({
     }
 
     const onConnectError = (err: Error) => {
-      console.error('Chat socket: Connection error:', err)
       toast.warning('Failed To Connect To the Chat Server')
       setTimeout(() => {
         window.location.href = `${FRONT_END}/`

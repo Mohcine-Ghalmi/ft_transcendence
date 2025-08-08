@@ -330,7 +330,6 @@ export function setupChatNamespace(chatNamespace: Namespace) {
 
     socket.on('disconnect', () => {
       if (!me || !me.email) {
-        console.error('Failed to decrypt user email from cryptedMail')
         return
       }
       removeSocketId(me.email, socket.id, 'chat')

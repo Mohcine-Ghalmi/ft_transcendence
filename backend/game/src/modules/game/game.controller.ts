@@ -31,20 +31,19 @@ export async function gameRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Querystring: GetMatchHistoryParams }>, reply: FastifyReply) => {
       try {
         const { email } = request.query
-        
+
         const user = await getUserByEmail(email)
         if (!user) {
           return reply.status(404).send({ error: 'User not found' })
         }
-        
+
         const matchHistory = await getMatchHistoryByUser(email, 50)
-        
+
         return reply.send({
           success: true,
           data: matchHistory
         })
       } catch (error) {
-        console.error('Error fetching match history:', error)
         return reply.status(500).send({ error: 'Internal server error' })
       }
     }
@@ -66,14 +65,14 @@ export async function gameRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Querystring: GetPlayerStatsParams }>, reply: FastifyReply) => {
       try {
         const { email } = request.query
-        
+
         const user = await getUserByEmail(email)
         if (!user) {
           return reply.status(404).send({ error: 'User not found' })
         }
-        
+
         const stats = await getPlayerStats(email)
-        
+
         return reply.send({
           success: true,
           data: stats
@@ -100,7 +99,7 @@ export async function gameRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Querystring: GetTournamentParticipantParams }>, reply: FastifyReply) => {
       try {
         const { email } = request.query
-        
+
         const user = await getUserByEmail(email)
         if (!user) {
           return reply.status(404).send({ error: 'User not found' })
@@ -129,4 +128,4 @@ export async function gameRoutes(fastify: FastifyInstance) {
       }
     }
   )
-} 
+}

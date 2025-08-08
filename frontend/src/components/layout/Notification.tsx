@@ -4,13 +4,16 @@ import { Bell, Check, MessageCircle, X } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
+import { toast } from 'react-toastify'
 
 export const NotificationItem = ({
   notification,
   onAction,
+  onRemoveNotification,
 }: {
   notification: AppNotification | any
   onAction: (id: number, action: string) => void
+  onRemoveNotification?: (senderEmail: string) => void
 }) => {
   const [acceptBtn, setAcceptBtn] = useState('Accept')
 
@@ -18,7 +21,7 @@ export const NotificationItem = ({
     switch (type) {
       case 'friend_request':
       case 'game_invitation':
-        return null // Will show user avatar
+        return null
       case 'tournament':
         return (
           <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
@@ -34,14 +37,23 @@ export const NotificationItem = ({
   const handleAction = (action: string, hisEmail: string, type: string) => {
     switch (action) {
       case 'friend_request':
-        if (!socketInstance?.connected) break
+        if (!socketInstance?.connected) {
+          toast.error('Not connected to server')
+          break
+        }
         if (type === 'decline') {
           socketInstance.emit('rejectFriend', hisEmail)
           setAcceptBtn('Declined')
+          if (onRemoveNotification) {
+            onRemoveNotification(hisEmail)
+          }
           break
         }
         socketInstance.emit('acceptFriend', hisEmail)
         setAcceptBtn('Accepted')
+        if (onRemoveNotification) {
+          onRemoveNotification(hisEmail)
+        }
         break
 
       case 'game_invitation':
@@ -58,10 +70,16 @@ export const NotificationItem = ({
 
   return (
     <div
-      onClick={() => onAction(notification.userId, 'message')}
-      className={`p-4 border-b border-gray-800 last:border-b-0 hover:bg-gray-800/30 transition-colors ${
-        notification.unread ? 'bg-gray-800/20' : ''
-      }`}
+      onClick={() => {
+        if (notification.type === 'message') {
+          onAction(notification.userId, 'message')
+        }
+      }}
+      className={`p-4 border-b border-gray-800 last:border-b-0 transition-colors ${
+        notification.type === 'message'
+          ? 'hover:bg-gray-800/30 cursor-pointer'
+          : ''
+      } ${notification.unread ? 'bg-gray-800/20' : ''}`}
     >
       <div className="flex items-start gap-3">
         {/* Avatar or Icon */}
@@ -89,7 +107,7 @@ export const NotificationItem = ({
                 {notification.title}
               </h4>
               <p className="text-gray-400 text-sm leading-relaxed">
-                {notification.message.substring(0, 50) + '...'}
+                {notification.message.substring(0, 40) + '...'}
               </p>
             </div>
 
@@ -98,31 +116,33 @@ export const NotificationItem = ({
           </div>
 
           {/* Action Buttons */}
-          {(notification.type === 'friend_request' ||
-            notification.type === 'game_invitation') &&
+          {notification.type === 'friend_request' &&
             notification.status !== 'accepted' &&
-            notification.status !== 'declined' && (
+            notification.status !== 'declined' &&
+            acceptBtn === 'Accept' && (
               <div className="flex gap-2 mt-3">
                 <button
-                  onClick={() =>
+                  onClick={(e) => {
+                    e.stopPropagation()
                     handleAction(
                       notification.type,
                       notification.senderEmail,
                       'accept'
                     )
-                  }
+                  }}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors"
                 >
                   Accept
                 </button>
                 <button
-                  onClick={() =>
+                  onClick={(e) => {
+                    e.stopPropagation()
                     handleAction(
                       notification.type,
                       notification.senderEmail,
                       'decline'
                     )
-                  }
+                  }}
                   className="px-4 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded-md transition-colors"
                 >
                   Decline
@@ -130,11 +150,27 @@ export const NotificationItem = ({
               </div>
             )}
 
-          {/* Status Text for accepted notifications */}
-          {notification.status === 'accepted' && (
+          {/* Status Text for accepted/rejected notifications */}
+          {(notification.type === 'friend_accepted' ||
+            notification.type === 'friend_rejected' ||
+            notification.status === 'accepted' ||
+            acceptBtn === 'Accepted' ||
+            acceptBtn === 'Declined') && (
             <div className="mt-2">
-              <span className="text-green-400 text-xs font-medium bg-green-400/10 px-2 py-1 rounded-md">
-                Accepted
+              <span
+                className={`text-xs font-medium px-2 py-1 rounded-md ${
+                  notification.type === 'friend_accepted' ||
+                  notification.status === 'accepted' ||
+                  acceptBtn === 'Accepted'
+                    ? 'text-green-400 bg-green-400/10'
+                    : 'text-red-400 bg-red-400/10'
+                }`}
+              >
+                {notification.type === 'friend_accepted' ||
+                notification.status === 'accepted' ||
+                acceptBtn === 'Accepted'
+                  ? 'Accepted'
+                  : 'Declined'}
               </span>
             </div>
           )}
@@ -199,6 +235,18 @@ export const NotificationDropdown = ({
     }
   }
 
+  const handleRemoveNotification = (senderEmail: string) => {
+    const currentNotifications = notifications || []
+    const filteredNotifications = currentNotifications.filter(
+      (notification) =>
+        !(
+          notification.type === 'friend_request' &&
+          notification.senderEmail === senderEmail
+        )
+    )
+    setNotifations(filteredNotifications)
+  }
+
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
@@ -251,6 +299,7 @@ export const NotificationDropdown = ({
                   key={idx}
                   notification={notification}
                   onAction={handleNotificationAction}
+                  onRemoveNotification={handleRemoveNotification}
                 />
               ))}
             </div>

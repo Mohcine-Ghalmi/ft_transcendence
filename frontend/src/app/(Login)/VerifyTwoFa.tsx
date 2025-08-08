@@ -80,14 +80,12 @@ const VerifyTwoFa = () => {
         token: code,
         email,
       })
-      console.log(res.data)
       const { accessToken, ...user } = res.data
       localStorage.setItem('accessToken', accessToken)
       setUser(user)
       setHidePopUp(false)
       router.push('/dashboard')
     } catch (error) {
-      console.error('Error verifying 2FA code:', error)
       toast.warning('Verification failed. Please try again.')
     } finally {
       setIsLoading(false)
