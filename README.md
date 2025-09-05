@@ -43,15 +43,8 @@ The project is modular, with separate services for chat, game, and main applicat
 
 ## Architecture
 
-```
-+-------------------+      +---------------------------+      +-------------------+
-|    Frontend       | <--> |           Backend         | <--> |    Databases      |
-|  (Next.js, React) |      |   (Node.js, TS,Fastify)   |      | (Redis, SQLite)   |
-+-------------------+      +---------------------------+      +-------------------+
-			|                        |                        |
-			|                        |                        |
-			+---- Docker Compose ----+------------------------+
-```
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/76da35f3-aaf2-46c2-ab35-0657897cf6f3" />
+
 
 - **frontend/**: Next.js app for UI
 - **backend/**: Contains chat, game, and main services (Node.js/TypeScript)
